@@ -3,7 +3,6 @@ import {
   GiBowArrow,
   GiStopSign,
   GiCheckedShield,
-  GiCube,
   GiCrosshair,
   GiLinkedRings,
   GiExplosionRays,
@@ -16,6 +15,7 @@ import {
   GiPathDistance,
   GiFamilyTree
 } from 'react-icons/gi';
+import { FaLayerGroup } from 'react-icons/fa6';
 import { controller, type CommandResult } from './graph/controller';
 import type { UIState } from './store';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from './views';
@@ -40,7 +40,7 @@ const viewCommand = (from: ViewId): CommandDef => {
     key: 'V',
     name: 'View',
     hint: `${verb} the ${to.label} view: ${to.tagline.toLowerCase()}.`,
-    Icon: GiCube,
+    Icon: FaLayerGroup,
     run: () => controller.cycleView()
   };
 };

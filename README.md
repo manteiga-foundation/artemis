@@ -87,6 +87,11 @@ A and S hold the top row and V the middle row in every view, as drawn in the ske
 
 Also: `1-5` / `Left` / `Right` lenses, `Esc` cancel, `M` mute.
 
+Hotkeys reach the console from inside the website too: in the owned browser an init script in
+every frame forwards plain keys (not while typing in a field) to the console, so `V` works after
+clicking into the page. An external browser cannot hear keys inside a cross-origin frame; the
+command card then says "Keyboard is in the page. Click the console to use hotkeys."
+
 ## Tests
 
 - `tests/target.test.ts` — website normalisation (bare domains, rejected schemes) and engaging the console with and without a valid address.
@@ -94,7 +99,7 @@ Also: `1-5` / `Left` / `Right` lenses, `Esc` cancel, `M` mute.
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, Depth and Route, Page subgraph (BFS) and framing, minimap context.
 - `tests/integration.test.ts` — real Chromium against an isolated Vite server: the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V walks Browser -> Page -> Cosmos -> Browser, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
-- `tests/owned-browser.test.ts` — CSP/cookie rewriting; a framable site goes live in an ordinary browser and fills the slot; a site refusing framing stays blank there and works, with its session, in the owned browser.
+- `tests/owned-browser.test.ts` — CSP/cookie rewriting; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page.
 
 ## Browser view: the real website
 
@@ -140,5 +145,5 @@ streamed alternative is kept in `docs/spikes/001-live-browser-view.md`.
 ## Credits
 
 - Sounds: Arwes project UI sounds (MIT), from `github.com/arwes/arwes/static/assets/sounds`.
-- Icons: Game-icons.net (CC BY 3.0) via `react-icons/gi`. Attribution is required if distributed.
+- Icons: Game-icons.net (CC BY 3.0) via `react-icons/gi`; the View glyph (stacked layers) is Font Awesome Free (CC BY 4.0) via `react-icons/fa6`. Attribution is required if distributed.
 - Fonts: Titillium Web and JetBrains Mono (SIL OFL) via Fontsource.

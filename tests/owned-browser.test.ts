@@ -95,6 +95,13 @@ describe('the browser view shows the real website', () => {
       expect(box.y + box.height).toBeGreaterThanOrEqual(900 - 2);
       await page.waitForFunction(() => document.querySelector('.browser-state')?.textContent?.includes('LIVE'), null, { timeout: 5000 });
       expect(await page.locator('.browser-state').textContent()).toContain('EXTERNAL');
+
+      // Clicking into the page moves the keyboard into a cross-origin frame the console cannot
+      // reach from an external browser: say so, and recover when the console is clicked.
+      await frame.locator('body').click();
+      await page.waitForFunction(() => document.querySelector('.cmd-hint')?.textContent?.includes('Keyboard is in the page'), null, { timeout: 3000 });
+      await page.locator('.hud-header').click();
+      await page.waitForFunction(() => !document.querySelector('.cmd-hint')?.textContent?.includes('Keyboard is in the page'), null, { timeout: 3000 });
     } finally {
       await page.close();
     }
@@ -125,6 +132,12 @@ describe('the browser view shows the real website', () => {
       await frame.getByText('Fixture site').waitFor({ timeout: 10000 });
       await frame.getByRole('link', { name: 'second page' }).click();
       await frame.getByText('cookie: yes').waitFor({ timeout: 10000 });
+
+      // The keyboard is now inside the page; V must still switch views in the owned browser.
+      await frame.locator('body').click();
+      await page.keyboard.press('v');
+      await page.waitForFunction('window.__artemis().view === "page"', null, { timeout: 4000 });
+      expect(await page.locator('.cmd-hint').textContent()).not.toContain('Keyboard is in the page');
     } finally {
       await owned.close();
     }

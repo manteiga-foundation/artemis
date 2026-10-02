@@ -36,6 +36,8 @@ export interface UIState {
   currentPage: number;
   /** Connection depth shown in the Page view. */
   pageHops: 1 | 2;
+  /** True while keyboard focus is inside the framed website. */
+  keyboardInPage: boolean;
   paused: boolean;
   simRunning: boolean;
   linksOn: boolean;
@@ -60,6 +62,7 @@ let state: UIState = {
   lens: 'overview',
   currentPage: 0,
   pageHops: 1,
+  keyboardInPage: false,
   paused: false,
   simRunning: false,
   linksOn: true,

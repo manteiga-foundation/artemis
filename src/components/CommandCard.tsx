@@ -5,6 +5,7 @@ import { CMD_PRESS_EVENT, useCommandFlash, useIlluminator } from '../hooks';
 import { useStore } from '../store';
 import { useSfx } from '../sfx';
 import { VIEW_BY_ID } from '../views';
+import { isOwnedBrowser } from '../owned';
 
 export function runCommand(cmd: CommandDef, play: ReturnType<typeof useSfx>) {
   const r = cmd.run();
@@ -57,8 +58,15 @@ export function CommandCard() {
   const panelRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<CommandDef | null>(null);
   const view = useStore((s) => s.view);
+  const keyboardInPage = useStore((s) => s.keyboardInPage);
   const commands = commandsFor(view);
   useIlluminator(panelRef);
+  // In an external browser the console cannot hear keys pressed inside the framed website.
+  const hint = hover
+    ? hover.hint
+    : keyboardInPage && !isOwnedBrowser()
+      ? 'Keyboard is in the page. Click the console to use hotkeys.'
+      : 'Hover a command or press its hotkey.';
 
   return (
     <Animator combine manager="stagger" duration={{ stagger: 0.035 }}>
@@ -83,7 +91,7 @@ export function CommandCard() {
             <CommandButton key={`${view}-${c.key}`} cmd={c} onHover={setHover} />
           ))}
         </div>
-        <div className="cmd-hint">{hover ? hover.hint : 'Hover a command or press its hotkey.'}</div>
+        <div className={`cmd-hint${keyboardInPage && !hover && !isOwnedBrowser() ? ' is-warn' : ''}`}>{hint}</div>
       </Animated>
     </Animator>
   );

@@ -4,6 +4,7 @@ import { attach, controller, installFakeWindow, restoreWindow } from './harness'
 import { commandsFor, commandByKey } from '../src/commands';
 import { pageSubgraph } from '../src/graph/data';
 import { VIEWS } from '../src/views';
+import { FaLayerGroup } from 'react-icons/fa6';
 
 const initialState = getState();
 
@@ -49,6 +50,8 @@ describe('the command card adapts to the view', () => {
     expect(getState().view).toBe('page');
     expect(commandByKey('page', 'V')!.hint).toContain('Cosmos');
     expect(commandByKey('cosmos', 'V')!.hint).toContain('Browser');
+    // Layered panels, not a cube: the glyph reads as "stacked views" at a glance.
+    for (const view of VIEWS) expect(commandByKey(view.id, 'V')!.Icon).toBe(FaLayerGroup);
   });
 
   test('cosmos no longer has a Vision command; Focus owns fitting the network', () => {

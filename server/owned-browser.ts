@@ -80,6 +80,22 @@ export const withOwnedFlag = (appUrl: string): string => {
   return u.href;
 };
 
+/**
+ * Runs in every frame of the owned browser. Inside the framed website (not the top-level console)
+ * it forwards plain hotkeys to the console, except while the person is typing in a field, so V and
+ * the other commands keep working after clicking into the page. The page still receives the key.
+ */
+export const FRAME_KEY_FORWARDER = `(() => {
+  if (window.top === window) return;
+  window.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (e.key.length !== 1 && e.key !== 'Escape' && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    try { window.top.postMessage({ type: 'artemis:key', key: e.key }, '*'); } catch {}
+  }, true);
+})();`;
+
 /** Launch the owned Chromium with Artemis as its only page. */
 export async function ownBrowser(o: OwnBrowserOptions): Promise<OwnedBrowser> {
   const url = withOwnedFlag(o.appUrl);
@@ -93,6 +109,7 @@ export async function ownBrowser(o: OwnBrowserOptions): Promise<OwnedBrowser> {
     ignoreDefaultArgs: ['--enable-automation']
   });
   await context.route('**/*', unframe);
+  await context.addInitScript(FRAME_KEY_FORWARDER);
 
   let page: Page;
   if (headless) {
