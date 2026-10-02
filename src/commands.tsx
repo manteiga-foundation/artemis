@@ -18,7 +18,7 @@ import {
 } from 'react-icons/gi';
 import { controller, type CommandResult } from './graph/controller';
 import type { UIState } from './store';
-import { VIEW_BY_ID, nextView, type ViewId } from './views';
+import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from './views';
 
 export interface CommandDef {
   key: string; // hotkey (single uppercase letter)
@@ -35,10 +35,11 @@ export interface CommandDef {
 
 const viewCommand = (from: ViewId): CommandDef => {
   const to = VIEW_BY_ID.get(nextView(from))!;
+  const verb = viewDepth(to.id) > viewDepth(from) ? 'Pull back to' : 'Return to';
   return {
     key: 'V',
     name: 'View',
-    hint: `Dive to the ${to.label} view: ${to.tagline.toLowerCase()}.`,
+    hint: `${verb} the ${to.label} view: ${to.tagline.toLowerCase()}.`,
     Icon: GiCube,
     run: () => controller.cycleView()
   };

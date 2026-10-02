@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { getState, setState } from '../src/store';
 import { attach, controller, installFakeWindow, restoreWindow } from './harness';
+import { engageConsole } from '../src/session';
 
 const initialState = getState();
 
@@ -19,28 +20,34 @@ afterEach(() => {
 });
 
 describe('views and lenses in the store', () => {
-  test('the console starts in the cosmos view with the overview lens and no transition running', () => {
+  test('the entry screen sits over the cosmos; engaging lands in the browser view with no transition', () => {
     const s = getState();
     expect(s.view).toBe('cosmos');
+    expect(s.stageView).toBe('cosmos');
     expect(s.lens).toBe('overview');
     expect(s.viewTransition).toBeNull();
+    engageConsole('example.com');
+    expect(getState().view).toBe('browser');
+    expect(getState().stageView).toBe('browser');
+    expect(getState().viewTransition).toBeNull();
   });
 
-  test('V dives from cosmos into page, recording an inward transition and announcing the view', () => {
+  test('V pulls back from browser to page, recording an outward transition and announcing the view', () => {
     attach();
+    setState({ view: 'browser', stageView: 'browser' });
     const r = controller.cycleView();
     expect(r.ok).toBe(true);
     expect(getState().view).toBe('page');
-    expect(getState().viewTransition).toMatchObject({ from: 'cosmos', to: 'page', dir: 'in' });
+    expect(getState().viewTransition).toMatchObject({ from: 'browser', to: 'page', dir: 'out' });
     expect(getState().status).toBe('View: Page. Page and its connections.');
   });
 
-  test('wrapping from browser back to cosmos is an outward transition', () => {
+  test('wrapping from cosmos back into the browser is an inward transition', () => {
     attach();
-    setState({ view: 'browser' });
+    setState({ view: 'cosmos', stageView: 'cosmos' });
     controller.cycleView();
-    expect(getState().view).toBe('cosmos');
-    expect(getState().viewTransition?.dir).toBe('out');
+    expect(getState().view).toBe('browser');
+    expect(getState().viewTransition?.dir).toBe('in');
   });
 
   test('switching directly to the current view is a no-op without a transition', () => {

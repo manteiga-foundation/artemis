@@ -39,14 +39,16 @@ describe('the command card adapts to the view', () => {
     }
   });
 
-  test('V is the View command and dives to the next view', () => {
+  test('V is the View command: browser pulls back to page, page to cosmos, cosmos returns to the browser', () => {
     attach();
-    const v = commandByKey('cosmos', 'V')!;
+    setState({ view: 'browser', stageView: 'browser' });
+    const v = commandByKey('browser', 'V')!;
     expect(v.name).toBe('View');
     expect(v.hint).toContain('Page');
     v.run();
     expect(getState().view).toBe('page');
-    expect(commandByKey('page', 'V')!.hint).toContain('Browser');
+    expect(commandByKey('page', 'V')!.hint).toContain('Cosmos');
+    expect(commandByKey('cosmos', 'V')!.hint).toContain('Browser');
   });
 
   test('cosmos no longer has a Vision command; Focus owns fitting the network', () => {

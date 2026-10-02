@@ -488,7 +488,7 @@ class GraphController {
     return this.done({ ok: true, message: `View: ${spec.label}. ${spec.tagline}.`, sfx: 'info' });
   }
 
-  /** V: dive one view inward, wrapping from the browser back out to the cosmos. */
+  /** V: pull back one view, wrapping from the cosmos back into the browser. */
   cycleView(): CommandResult {
     return this.setView(nextView(getState().view));
   }

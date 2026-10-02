@@ -2,8 +2,8 @@
 //
 // A view is the console's mode: what fills the stage, which commands the card offers, which
 // palette every Arwes frame and the WebGL graph use. Views are ordered by depth, nearest first:
-// the browser (the page itself), the page (one page and its connections), the cosmos (everything).
-// V dives inward (cosmos -> page -> browser) and wraps back out.
+// the browser (the page itself, the home view), the page (one page and its connections), the
+// cosmos (everything). V pulls back one step (browser -> page -> cosmos) and wraps back in.
 //
 // Not to be confused with lenses (Overview, Clusters, ...), which are perspectives within a view.
 
@@ -27,11 +27,11 @@ export const VIEW_BY_ID = new Map(VIEWS.map((v) => [v.id, v]));
 /** 0 = nearest (browser), 2 = farthest (cosmos). */
 export const viewDepth = (id: ViewId): number => VIEWS.findIndex((v) => v.id === id);
 
-/** The view V dives into: one step nearer, wrapping from browser back out to cosmos. */
-export const nextView = (id: ViewId): ViewId => VIEWS[(viewDepth(id) - 1 + VIEWS.length) % VIEWS.length].id;
+/** The view V goes to: one step farther out, wrapping from the cosmos back into the browser. */
+export const nextView = (id: ViewId): ViewId => VIEWS[(viewDepth(id) + 1) % VIEWS.length].id;
 
-/** One step farther, wrapping from cosmos to browser. */
-export const prevView = (id: ViewId): ViewId => VIEWS[(viewDepth(id) + 1) % VIEWS.length].id;
+/** One step nearer, wrapping from the browser out to the cosmos. */
+export const prevView = (id: ViewId): ViewId => VIEWS[(viewDepth(id) - 1 + VIEWS.length) % VIEWS.length].id;
 
 // ---------------------------------------------------------------- palettes
 // Each ramp was derived from the Egyptian blue ramp by rotating hue in OKLCH at equal lightness

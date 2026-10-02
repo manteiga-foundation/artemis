@@ -8,12 +8,12 @@ describe('views', () => {
     expect(viewDepth('cosmos')).toBe(2);
   });
 
-  test('V dives inward from cosmos to page to browser, then wraps back out to cosmos', () => {
-    expect(nextView('cosmos')).toBe('page');
-    expect(nextView('page')).toBe('browser');
-    expect(nextView('browser')).toBe('cosmos');
-    expect(prevView('cosmos')).toBe('browser');
-    expect(prevView('browser')).toBe('page');
+  test('V pulls back from browser to page to cosmos, then wraps back into the browser', () => {
+    expect(nextView('browser')).toBe('page');
+    expect(nextView('page')).toBe('cosmos');
+    expect(nextView('cosmos')).toBe('browser');
+    expect(prevView('browser')).toBe('cosmos');
+    expect(prevView('cosmos')).toBe('page');
   });
 
   test('each view carries its label and a palette with the approved base, line and accent', () => {

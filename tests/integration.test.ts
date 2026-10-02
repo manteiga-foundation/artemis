@@ -55,13 +55,16 @@ const visible = (page: Page, name: string) => page.getByRole('button', { name })
 /** Counts elements regardless of animation visibility. */
 const anyCount = (page: Page, role: 'button' | 'tablist', name: string) => page.getByRole(role, { name, includeHidden: true }).count();
 
-test('V walks cosmos -> page -> browser -> cosmos, recolouring the console and swapping its commands', async () => {
+test('after engaging, the console is in the browser view; V walks browser -> page -> cosmos -> browser', async () => {
   const { page, errors } = await engaged();
   try {
-    expect(await page.getAttribute('.app', 'data-view')).toBe('cosmos');
-    expect(await cssVar(page, '--base')).toBe('#1034a6');
-    expect(await anyCount(page, 'button', 'View (V)')).toBe(1);
+    expect(await page.getAttribute('.app', 'data-view')).toBe('browser');
+    expect(await cssVar(page, '--base')).toBe('#005d2c');
+    expect(await page.locator('.browser-surface').count()).toBe(1);
+    expect(await anyCount(page, 'button', 'Annotate (A)')).toBe(1);
     expect(await anyCount(page, 'button', 'Vision (V)')).toBe(0);
+    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(0);
+    expect(await page.locator('.graph-layer').isVisible()).toBe(false);
 
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().view === "page"');
@@ -72,22 +75,20 @@ test('V walks cosmos -> page -> browser -> cosmos, recolouring the console and s
     await visible(page, 'Depth (D)');
     expect(await anyCount(page, 'tablist', 'Lenses')).toBe(1);
     expect(await page.locator('.hud-header').textContent()).toContain('PAGE');
+    expect(await page.locator('.graph-layer').isVisible()).toBe(true);
+
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos"');
+    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
+    expect(await cssVar(page, '--base')).toBe('#1034a6');
+    await visible(page, 'Disperse (D)');
+    expect(await page.locator('.browser-surface').count()).toBe(0);
 
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().view === "browser"');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     expect(await cssVar(page, '--base')).toBe('#005d2c');
     expect(await page.locator('.browser-surface').count()).toBe(1);
-    await visible(page, 'Annotate (A)');
-    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(0);
-    expect(await page.locator('.graph-layer').isVisible()).toBe(false);
-
-    await page.keyboard.press('v');
-    await page.waitForFunction('window.__artemis().view === "cosmos"');
-    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
-    expect(await cssVar(page, '--base')).toBe('#1034a6');
-    expect(await page.locator('.browser-surface').count()).toBe(0);
-    expect(await page.locator('.graph-layer').isVisible()).toBe(true);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
@@ -100,8 +101,8 @@ test('the dive is a staged depth animation: the old view leaves before the new o
     await page.keyboard.press('v');
     // Immediately after the keypress the store is already on page, but the stage still shows cosmos.
     expect(await page.getAttribute('.app', 'data-view')).toBe('page');
-    expect(await page.getAttribute('.stage', 'data-shown')).toBe('cosmos');
-    expect(await page.getAttribute('.stage', 'data-dir')).toBe('in');
+    expect(await page.getAttribute('.stage', 'data-shown')).toBe('browser');
+    expect(await page.getAttribute('.stage', 'data-dir')).toBe('out');
     expect(await page.evaluate('document.querySelector(".stage").getAnimations().length')).toBeGreaterThan(0);
     await page.waitForFunction('document.querySelector(".stage").dataset.shown === "page"', { timeout: 4000 });
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
@@ -124,16 +125,18 @@ test('with reduced motion the switch still completes and clears its transition',
   }
 }, 30000);
 
-test('lenses keep working from the keyboard inside the cosmos and page views', async () => {
+test('lenses keep working from the keyboard inside the page and cosmos views', async () => {
   const { page, errors } = await engaged();
   try {
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     await page.keyboard.press('3');
     expect(await page.getByRole('tab', { name: /Hubs/ }).getAttribute('aria-selected')).toBe('true');
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     await page.keyboard.press('4');
     expect(await page.getByRole('tab', { name: /Routes/ }).getAttribute('aria-selected')).toBe('true');
-    expect(await stateOf(page)).toMatchObject({ view: 'page', lens: 'routes' });
+    expect(await stateOf(page)).toMatchObject({ view: 'cosmos', lens: 'routes' });
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
@@ -169,10 +172,7 @@ test('the entry screen asks for the website and nothing starts until a valid one
     expect(await page.locator('.hud-header').textContent()).toContain('shop.example.co.uk');
 
     await visible(page, 'View (V)');
-    await page.keyboard.press('v');
-    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
-    await page.keyboard.press('v');
-    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
+    expect(await stateOf(page)).toMatchObject({ view: 'browser' });
     expect(await page.locator('.browser-url').textContent()).toBe('https://shop.example.co.uk/checkout');
     expect(errors).toEqual([]);
   } finally {

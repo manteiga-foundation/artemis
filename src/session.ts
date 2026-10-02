@@ -16,13 +16,18 @@ export function engageConsole(input: string): boolean {
     }));
     return false;
   }
+  // The entry screen sits over the cosmos; the console itself opens in the browser view, directly.
   setState((s) => ({
     engaged: true,
     targetUrl,
+    view: 'browser',
+    stageView: 'browser',
+    viewTransition: null,
     status: `Console online. Reviewing ${hostOf(targetUrl)}.`,
     statusTone: 'ok',
     statusId: s.statusId + 1
   }));
+  controller.applyLens();
   controller.main?.fitView(900, 0.16, false);
   window.setTimeout(() => controller.syncMini(true), 400);
   return true;
