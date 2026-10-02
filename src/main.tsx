@@ -7,11 +7,15 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import './styles.css';
 import { App } from './App';
+import { DebugPage } from './debug/DebugPage';
 import { getState } from './store';
 
 // Development only: expose the live store to browser tests and screenshot scripts. Importing
 // `/src/store.ts` from outside would create a second instance once Vite has HMR history.
 if (import.meta.env.DEV) (window as unknown as { __artemis: typeof getState }).__artemis = getState;
 
+// /debug is a page of its own for trying things in isolation (sounds first).
+const page = location.pathname.replace(/\/+$/, '') === '/debug' ? <DebugPage /> : <App />;
+
 // Arwes does not support React strict mode, so the app is mounted without <StrictMode>.
-createRoot(document.getElementById('root')!).render(<App />);
+createRoot(document.getElementById('root')!).render(page);

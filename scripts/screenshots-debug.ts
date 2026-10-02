@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const port = process.argv[2] ?? '5173';
+const out = process.argv[3] ?? 'docs/screenshots';
+const browser = await chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto(`http://127.0.0.1:${port}/debug`, { waitUntil: 'networkidle' });
+await page.waitForTimeout(1800);
+await page.screenshot({ path: `${out}/debug.png` });
+await page.screenshot({ path: `${out}/debug-full.png`, fullPage: true });
+await browser.close();
+console.log('debug screenshots written');

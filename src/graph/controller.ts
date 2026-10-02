@@ -6,7 +6,8 @@ import { getState, setState, type LensId } from '../store';
 import { graphPixelRatio } from '../quality';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from '../views';
 
-export type Sfx = 'click' | 'info' | 'error' | 'type' | 'intro' | 'hover';
+import type { Sfx } from '../sounds';
+export type { Sfx } from '../sounds';
 export interface CommandResult {
   ok: boolean;
   message: string;

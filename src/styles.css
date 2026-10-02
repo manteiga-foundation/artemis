@@ -1077,3 +1077,197 @@ kbd {
     height: 214px;
   }
 }
+
+/* ---------------------------------------------------------------- /debug page */
+
+/* The console locks body scrolling; the debug page is an ordinary scrolling document. */
+html:has(.debug),
+html:has(.debug) body,
+html:has(.debug) #root {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+}
+
+.debug {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 18px 28px 72px;
+  color: var(--frost);
+  background:
+    radial-gradient(ellipse at 50% -20%, color-mix(in srgb, var(--deep) 70%, transparent), transparent 60%),
+    var(--bg);
+  font: 14px/1.45 var(--font);
+}
+
+.debug-header,
+.debug-section {
+  --arwes-frames-bg-color: color-mix(in srgb, var(--deep) 55%, transparent);
+  --arwes-frames-line-color: color-mix(in srgb, var(--azure) 75%, transparent);
+  --arwes-frames-deco-color: var(--mist);
+  --arwes-frames-line-filter: drop-shadow(0 0 3px color-mix(in srgb, var(--azure) 50%, transparent));
+}
+
+.debug-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  margin-bottom: 22px;
+}
+
+.debug-header > :not(.frame) {
+  position: relative;
+}
+
+.debug-h1 {
+  margin: 0;
+  font: 600 15px var(--font);
+  letter-spacing: 0.3em;
+  color: var(--white);
+}
+
+.debug-link {
+  font: 500 11px var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sky);
+  text-decoration: none;
+}
+
+.debug-link:hover {
+  color: var(--white);
+}
+
+.debug-main {
+  display: grid;
+  gap: 24px;
+  max-width: 1320px;
+}
+
+.debug-section {
+  position: relative;
+  padding: 18px 22px 20px;
+}
+
+.debug-section > :not(.frame) {
+  position: relative;
+}
+
+.debug-h2 {
+  margin: 0 0 6px;
+  font: 600 12px var(--font);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--azure);
+}
+
+.debug-note {
+  margin: 0 0 14px;
+  max-width: 96ch;
+  color: var(--mist);
+}
+
+.debug-volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font: 500 11px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sky);
+}
+
+.debug-volume input {
+  width: 220px;
+  accent-color: var(--azure);
+}
+
+.debug-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.debug-table th {
+  padding: 6px 10px;
+  text-align: left;
+  font: 600 10px var(--font);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--sky);
+  border-bottom: 1px solid color-mix(in srgb, var(--azure) 45%, transparent);
+}
+
+.debug-table td {
+  padding: 8px 10px;
+  vertical-align: middle;
+  border-bottom: 1px solid color-mix(in srgb, var(--azure) 16%, transparent);
+}
+
+.debug-table tr:hover td {
+  background: color-mix(in srgb, var(--base) 16%, transparent);
+}
+
+.debug-desc {
+  color: var(--frost);
+}
+
+.debug-mono {
+  font: 500 12px var(--mono);
+  color: var(--white);
+}
+
+.debug-dim {
+  color: var(--sky);
+}
+
+.debug-btn {
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.2;
+  padding: 5px 14px;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--white);
+  background: color-mix(in srgb, var(--base) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--azure) 60%, transparent);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.debug-btn:hover {
+  background: color-mix(in srgb, var(--base) 65%, transparent);
+}
+
+.debug-btn.is-primary {
+  background: color-mix(in srgb, var(--royal) 70%, transparent);
+}
+
+.debug-select {
+  vertical-align: middle;
+  min-width: 180px;
+  padding: 5px 8px;
+  font: 500 12px var(--mono);
+  color: var(--white);
+  background: color-mix(in srgb, var(--bg2) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--azure) 50%, transparent);
+}
+
+.debug-actions-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.debug-suggestions {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border-left: 2px solid var(--azure);
+  white-space: pre-wrap;
+}

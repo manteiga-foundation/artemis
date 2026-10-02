@@ -1,51 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useBleeps, type BleepsProviderSettings } from '@arwes/react';
-import { controller, type Sfx } from './graph/controller';
+import { useBleeps } from '@arwes/react';
+import { controller } from './graph/controller';
 import { getState, useStore } from './store';
+import { FALLBACK_FILE, MIN_INTERVAL, type Sfx } from './sounds';
 
-const src = (name: string) => [
-  { src: `/assets/sounds/${name}.webm`, type: 'audio/webm' },
-  { src: `/assets/sounds/${name}.mp3`, type: 'audio/mpeg' }
-];
-
-// Sound assets are the official Arwes UI sounds (github.com/arwes/arwes, static/assets/sounds).
-export const bleepsSettings: BleepsProviderSettings<Sfx> = {
-  master: { volume: 0.8 },
-  common: { preload: true },
-  categories: {
-    transition: { volume: 0.55 },
-    interaction: { volume: 0.5 },
-    notification: { volume: 0.7 }
-  },
-  bleeps: {
-    intro: { category: 'transition', sources: src('intro') },
-    type: { category: 'transition', sources: src('type'), volume: 0.5 },
-    click: { category: 'interaction', sources: src('click') },
-    hover: { category: 'interaction', sources: src('click'), volume: 0.18 },
-    info: { category: 'notification', sources: src('info') },
-    error: { category: 'notification', sources: src('error') }
-  }
-};
-
-const MIN_INTERVAL: Record<Sfx, number> = {
-  intro: 500,
-  type: 90,
-  click: 35,
-  hover: 110,
-  info: 120,
-  error: 150
-};
+export { bleepsSettings, type Sfx } from './sounds';
 
 // Fallback path: plain <audio> elements, used only if the Web Audio bleep is unavailable.
 const fallbackCache = new Map<Sfx, HTMLAudioElement>();
-const fallbackFile: Record<Sfx, string> = {
-  intro: 'intro',
-  type: 'type',
-  click: 'click',
-  hover: 'click',
-  info: 'info',
-  error: 'error'
-};
 
 export function useSfx() {
   const bleeps = useBleeps<Sfx>();
@@ -66,7 +28,7 @@ export function useSfx() {
       }
       let el = fallbackCache.get(name);
       if (!el) {
-        el = new Audio(`/assets/sounds/${fallbackFile[name]}.mp3`);
+        el = new Audio(`/assets/sounds/${FALLBACK_FILE[name]}.mp3`);
         el.volume = name === 'hover' ? 0.15 : 0.5;
         fallbackCache.set(name, el);
       }
