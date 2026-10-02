@@ -55,6 +55,7 @@ export function Header() {
   const nodes = useStore((s) => s.nodeCount);
   const links = useStore((s) => s.linkCount);
   const muted = useStore((s) => s.muted);
+  const panelsHidden = useStore((s) => s.panelsHidden);
   const tel = useTelemetry(simRunning);
   const play = useSfx();
 
@@ -106,6 +107,19 @@ export function Header() {
         <div className={`sim-badge ${paused ? 'is-halted' : simRunning ? 'is-active' : ''}`}>
           <span className="dot" /> SIM {simLabel}
         </div>
+
+        <button
+          className={`panel-toggle${panelsHidden ? ' is-off' : ''}`}
+          aria-label="Panels (C)"
+          aria-pressed={!panelsHidden}
+          title={panelsHidden ? 'Show the panels (C)' : 'Hide the panels (C)'}
+          onClick={() => {
+            setState({ panelsHidden: !panelsHidden });
+            play('click');
+          }}
+        >
+          <span className="dot" /> PANELS {panelsHidden ? 'OFF' : 'ON'}
+        </button>
 
         <button
           className={`icon-btn ${muted ? 'is-off' : ''}`}

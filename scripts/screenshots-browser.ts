@@ -20,6 +20,10 @@ try {
   await page.waitForTimeout(3500);
   await page.screenshot({ path: `${out}/browser-live.png` });
   console.log('state:', await page.locator('.browser-state').textContent());
+  await page.keyboard.press('c');
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${out}/browser-panels-off.png` });
+  console.log('panels:', await page.getByRole('button', { name: 'Panels (C)' }).textContent());
 } finally {
   await owned.close();
   await rm(profile, { recursive: true, force: true });

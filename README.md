@@ -85,7 +85,9 @@ A and S hold the top row and V the middle row in every view, as drawn in the ske
 | R | Regenerate topology | Route: path to the core (toggle) | Reload |
 | X | Clear selection, holds, targeting | Clear | Clear annotations |
 
-Also: `1-5` / `Left` / `Right` lenses, `Esc` cancel, `M` mute.
+Also: `C` hides and shows the bottom panels in every view (the header stays, with a `PANELS ON/OFF`
+switch for when C was pressed by mistake; handy for reading a page in the Browser view), `1-5` /
+`Left` / `Right` lenses, `Esc` cancel, `M` mute.
 
 Hotkeys reach the console from inside the website too: in the owned browser an init script in
 every frame forwards plain keys (not while typing in a field) to the console, so `V` works after
@@ -98,7 +100,7 @@ command card then says "Keyboard is in the page. Click the console to use hotkey
 - `tests/views.test.ts` — view order, dive direction, palettes carry the approved values and the same tokens.
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, Depth and Route, Page subgraph (BFS) and framing, minimap context.
-- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V walks Browser -> Page -> Cosmos -> Browser, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
+- `tests/integration.test.ts` — real Chromium against an isolated Vite server: C folds the panels away and back in every view, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V walks Browser -> Page -> Cosmos -> Browser, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
 - `tests/owned-browser.test.ts` — CSP/cookie rewriting; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page. Links aimed at the top window or a new tab, and redirects, stay inside the frame and land on the final address with no extra window.
 
 ## Browser view: the real website

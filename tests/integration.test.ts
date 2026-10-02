@@ -95,6 +95,49 @@ test('after engaging, the console is in the browser view; V walks browser -> pag
   }
 }, 40000);
 
+test('C hides and shows the panels in every view; the header switch does the same', async () => {
+  const { page, errors } = await engaged();
+  try {
+    const card = page.locator('.command-card');
+    const toggle = page.getByRole('button', { name: 'Panels (C)' });
+    await toggle.waitFor({ state: 'visible' });
+    expect(await toggle.textContent()).toContain('ON');
+
+    // Browser view: C folds the bottom panels away; the header (with the switch) stays.
+    await page.keyboard.press('c');
+    await page.waitForFunction('window.__artemis().panelsHidden === true');
+    await card.waitFor({ state: 'hidden', timeout: 4000 });
+    expect(await page.locator('.hud-header').isVisible()).toBe(true);
+    expect(await toggle.textContent()).toContain('OFF');
+    await page.keyboard.press('c');
+    await page.waitForFunction('window.__artemis().panelsHidden === false');
+    await card.waitFor({ state: 'visible', timeout: 4000 });
+
+    // The header switch, for when C was pressed by mistake.
+    await toggle.click();
+    await page.waitForFunction('window.__artemis().panelsHidden === true');
+    await card.waitFor({ state: 'hidden', timeout: 4000 });
+    await toggle.click();
+    await page.waitForFunction('window.__artemis().panelsHidden === false');
+    await card.waitFor({ state: 'visible', timeout: 4000 });
+
+    // Works in the other views too, and a view change does not bring the panels back by itself.
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "page" && window.__artemis().viewTransition === null', { timeout: 5000 });
+    await page.keyboard.press('c');
+    await page.waitForFunction('window.__artemis().panelsHidden === true');
+    await card.waitFor({ state: 'hidden', timeout: 4000 });
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 5000 });
+    expect(await card.isVisible()).toBe(false);
+    await page.keyboard.press('c');
+    await card.waitFor({ state: 'visible', timeout: 4000 });
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('the dive is a staged depth animation: the old view leaves before the new one is shown', async () => {
   const { page, errors } = await engaged();
   try {

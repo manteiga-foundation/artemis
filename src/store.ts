@@ -38,6 +38,8 @@ export interface UIState {
   pageHops: 1 | 2;
   /** True while keyboard focus is inside the framed website. */
   keyboardInPage: boolean;
+  /** Bottom panels folded away (C); the header stays so they can be brought back. */
+  panelsHidden: boolean;
   paused: boolean;
   simRunning: boolean;
   linksOn: boolean;
@@ -63,6 +65,7 @@ let state: UIState = {
   currentPage: 0,
   pageHops: 1,
   keyboardInPage: false,
+  panelsHidden: false,
   paused: false,
   simRunning: false,
   linksOn: true,

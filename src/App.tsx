@@ -49,6 +49,11 @@ function Hotkeys() {
         setState({ muted: !s.muted });
         return true;
       }
+      if (k === 'C') {
+        setState({ panelsHidden: !s.panelsHidden });
+        play('click');
+        return true;
+      }
       if (k === 'Escape') {
         const r = controller.cancel();
         if (r) play(r.sfx ?? 'click');
@@ -96,6 +101,7 @@ export function App() {
   const view = useStore((s) => s.view);
   const stageView = useStore((s) => s.stageView);
   const diving = useStore((s) => s.viewTransition !== null);
+  const panelsHidden = useStore((s) => s.panelsHidden);
   // While the stage still shows the outgoing view, the HUD folds away; it reassembles,
   // recoloured, once the stage has swapped.
   const hudActive = engaged && !(diving && stageView !== view);
@@ -111,11 +117,14 @@ export function App() {
           <Animator active={hudActive} combine manager="stagger">
             <div className={`hud${hudActive ? ' is-on' : ''}`}>
               <Header />
-              <div className="hud-bottom">
-                <MiniMap />
-                <Console />
-                <CommandCard />
-              </div>
+              {/* The bottom panels have their own root so C can fold them while the header stays. */}
+              <Animator root active={hudActive && !panelsHidden} combine manager="stagger">
+                <div className="hud-bottom" data-hidden={panelsHidden || undefined}>
+                  <MiniMap />
+                  <Console />
+                  <CommandCard />
+                </div>
+              </Animator>
             </div>
           </Animator>
           <BootOverlay />

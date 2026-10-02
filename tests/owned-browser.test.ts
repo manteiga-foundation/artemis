@@ -142,6 +142,8 @@ describe('the browser view shows the real website', () => {
       await page.keyboard.press('v');
       await page.waitForFunction('window.__artemis().view === "page"', null, { timeout: 4000 });
       expect(await page.locator('.cmd-hint').textContent()).not.toContain('Keyboard is in the page');
+      await page.keyboard.press('c');
+      await page.waitForFunction('window.__artemis().panelsHidden === true', null, { timeout: 4000 });
     } finally {
       await owned.close();
     }
