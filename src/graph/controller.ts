@@ -1,5 +1,5 @@
 import { Graph, type GraphConfig } from '@cosmos.gl/graph';
-import { generateNetwork, linksForChain, pathToCore, type NetworkData } from './data';
+import { generateNetwork, linksForChain, linksWithin, pageSubgraph, pathToCore, type NetworkData } from './data';
 import { EG, SECTOR_HUES, mix, rgba, type RGBA } from '../theme';
 import { getState, setState, type LensId } from '../store';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from '../views';
@@ -45,7 +45,7 @@ class GraphController {
   tickRate = 0; // simulation ticks per second (measured)
 
   constructor() {
-    setState({ nodeCount: this.data.count, linkCount: this.data.linkCount });
+    setState({ nodeCount: this.data.count, linkCount: this.data.linkCount, currentPage: this.data.relays[0] });
     window.setInterval(() => {
       this.tickRate = this.tickCount;
       this.tickCount = 0;
@@ -325,13 +325,27 @@ class GraphController {
   }
 
   // ---------------------------------------------------------------- lens + selection
+  /** The node at the centre of the Page view: the selection if any, else the browser's page. */
+  pageFocus(): number {
+    const s = getState();
+    return s.selected ?? s.currentPage;
+  }
+
   applyLens() {
     const s = getState();
     const d = this.data;
     let highlightedPointIndices: number[] | undefined;
     let highlightedLinkIndices: number[] | undefined;
 
-    if (s.selected !== null) {
+    if (s.view === 'page') {
+      // One page and its connections: everything else is hidden, not greyed.
+      // Under the Routes lens the page's path back to the core is included.
+      const focus = this.pageFocus();
+      let nodes = pageSubgraph(d, focus, s.pageHops);
+      if (s.lens === 'routes') nodes = [...new Set([...nodes, ...pathToCore(d, focus)])].sort((x, y) => x - y);
+      highlightedPointIndices = nodes;
+      highlightedLinkIndices = linksWithin(d, nodes);
+    } else if (s.selected !== null) {
       if (s.lens === 'routes') {
         const chain = pathToCore(d, s.selected);
         highlightedPointIndices = chain;
@@ -354,10 +368,13 @@ class GraphController {
       highlightedPointIndices = [...ends];
     }
 
+    const inPage = s.view === 'page';
     const partial: GraphConfig = {
       renderLinks: s.linksOn,
       curvedLinks: s.lens === 'routes',
-      focusedPointIndex: s.selected ?? undefined,
+      pointGreyoutOpacity: inPage ? 0 : 0.1,
+      linkGreyoutOpacity: inPage ? 0 : 0.04,
+      focusedPointIndex: inPage ? this.pageFocus() : s.selected ?? undefined,
       highlightedPointIndices,
       highlightedLinkIndices,
       outlinedPointIndices: s.lens === 'anomalies' ? d.anomalies : s.pinned.length ? s.pinned : undefined
@@ -435,6 +452,13 @@ class GraphController {
     const dir = viewDepth(to) < viewDepth(from) ? 'in' : 'out';
     const id = ++this.transitionSeq;
     setState({ view: to, viewTransition: { from, to, dir, id } });
+    this.applyLens();
+    if (to === 'page') {
+      const focus = this.pageFocus();
+      this.main?.zoomToPointByIndex(focus, 900, Math.max(3, this.main.getZoomLevel()), false);
+    } else if (to === 'cosmos') {
+      this.main?.fitView(900, 0.18, false);
+    }
     const spec = VIEW_BY_ID.get(to)!;
     return this.done({ ok: true, message: `View: ${spec.label}. ${spec.tagline}.`, sfx: 'info' });
   }
@@ -512,6 +536,26 @@ class GraphController {
     return this.done({ ok: true, message: `Focused on ${this.data.meta[idx].id}.`, sfx: 'click' });
   }
 
+  /** Page view: toggle the connection depth between one and two hops. */
+  depth(): CommandResult {
+    const pageHops = getState().pageHops === 1 ? 2 : 1;
+    setState({ pageHops });
+    this.applyLens();
+    return this.done({ ok: true, message: pageHops === 2 ? 'Depth: two hops. Connections of connections shown.' : 'Depth: one hop. Direct connections only.', sfx: 'click' });
+  }
+
+  /** Page view: toggle the Routes lens, which adds the page's path back to the core. */
+  route(): CommandResult {
+    const on = getState().lens !== 'routes';
+    this.setLens(on ? 'routes' : 'overview');
+    return this.done({ ok: true, message: on ? 'Route traced to the core.' : 'Route hidden.', sfx: 'click' });
+  }
+
+  /** Browser view commands exist as interface placeholders until the live page attaches. */
+  placeholder(name: string): CommandResult {
+    return this.done({ ok: true, message: `${name}: interface placeholder. Functionality attaches with the live page.`, sfx: 'click' });
+  }
+
   links(): CommandResult {
     const linksOn = !getState().linksOn;
     setState({ linksOn });
@@ -542,7 +586,8 @@ class GraphController {
       targetMode: false,
       paused: false,
       nodeCount: this.data.count,
-      linkCount: this.data.linkCount
+      linkCount: this.data.linkCount,
+      currentPage: this.data.relays[0]
     });
     for (const [g, scale] of [
       [this.main, 1],

@@ -202,3 +202,41 @@ export function linksForChain(data: NetworkData, chain: number[]): number[] {
   }
   return out;
 }
+
+/**
+ * The Page view's subgraph: the focus node plus every node within `hops` links of it,
+ * as a sorted list of indices. Breadth-first over the undirected link list.
+ */
+export function pageSubgraph(data: NetworkData, focus: number, hops: 1 | 2): number[] {
+  const seen = new Set<number>([focus]);
+  let frontier = [focus];
+  for (let h = 0; h < hops && frontier.length; h++) {
+    const next: number[] = [];
+    const inFrontier = new Set(frontier);
+    const { links } = data;
+    for (let l = 0; l < links.length; l += 2) {
+      const a = links[l];
+      const b = links[l + 1];
+      if (inFrontier.has(a) && !seen.has(b)) {
+        seen.add(b);
+        next.push(b);
+      } else if (inFrontier.has(b) && !seen.has(a)) {
+        seen.add(a);
+        next.push(a);
+      }
+    }
+    frontier = next;
+  }
+  return [...seen].sort((x, y) => x - y);
+}
+
+/** Indices of links whose both ends are in the given node set. */
+export function linksWithin(data: NetworkData, nodes: number[]): number[] {
+  const set = new Set(nodes);
+  const out: number[] = [];
+  const { links } = data;
+  for (let l = 0; l < links.length; l += 2) {
+    if (set.has(links[l]) && set.has(links[l + 1])) out.push(l / 2);
+  }
+  return out;
+}

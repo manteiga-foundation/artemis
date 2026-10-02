@@ -28,6 +28,10 @@ export interface UIState {
   view: ViewId;
   viewTransition: ViewTransition | null;
   lens: LensId;
+  /** Node index of the page the browser is on; the centre of the Page view. */
+  currentPage: number;
+  /** Connection depth shown in the Page view. */
+  pageHops: 1 | 2;
   paused: boolean;
   simRunning: boolean;
   linksOn: boolean;
@@ -48,6 +52,8 @@ let state: UIState = {
   view: 'cosmos',
   viewTransition: null,
   lens: 'overview',
+  currentPage: 0,
+  pageHops: 1,
   paused: false,
   simRunning: false,
   linksOn: true,

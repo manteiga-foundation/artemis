@@ -8,7 +8,7 @@ import { MiniMap } from './components/MiniMap';
 import { Console, stepLens } from './components/Console';
 import { CommandCard, runCommand } from './components/CommandCard';
 import { BootOverlay, useEngage } from './components/BootOverlay';
-import { COMMAND_BY_KEY } from './commands';
+import { commandByKey } from './commands';
 import { controller } from './graph/controller';
 import { LENSES, getState, setState, useStore } from './store';
 import { SfxBridge, bleepsSettings, useSfx } from './sfx';
@@ -33,7 +33,7 @@ function Hotkeys() {
       }
 
       const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-      const cmd = COMMAND_BY_KEY.get(k);
+      const cmd = commandByKey(s.view, k);
       if (cmd) {
         e.preventDefault();
         runCommand(cmd, play);

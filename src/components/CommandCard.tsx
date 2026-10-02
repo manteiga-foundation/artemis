@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
 import { Animated, Animator, FrameKranox, FrameOctagon } from '@arwes/react';
-import { COMMANDS, type CommandDef } from '../commands';
+import { commandsFor, type CommandDef } from '../commands';
 import { CMD_PRESS_EVENT, useCommandFlash, useIlluminator } from '../hooks';
 import { useStore } from '../store';
 import { useSfx } from '../sfx';
+import { VIEW_BY_ID } from '../views';
 
 export function runCommand(cmd: CommandDef, play: ReturnType<typeof useSfx>) {
   const r = cmd.run();
@@ -55,6 +56,8 @@ function CommandButton({ cmd, onHover }: { cmd: CommandDef; onHover: (c: Command
 export function CommandCard() {
   const panelRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<CommandDef | null>(null);
+  const view = useStore((s) => s.view);
+  const commands = commandsFor(view);
   useIlluminator(panelRef);
 
   return (
@@ -71,13 +74,13 @@ export function CommandCard() {
                 {hover.name.toUpperCase()} <kbd>{hover.key}</kbd>
               </>
             ) : (
-              '3 x 3'
+              VIEW_BY_ID.get(view)!.label.toUpperCase()
             )}
           </span>
         </div>
-        <div className="cmd-grid">
-          {COMMANDS.map((c) => (
-            <CommandButton key={c.key} cmd={c} onHover={setHover} />
+        <div className="cmd-grid" data-view-commands={view}>
+          {commands.map((c) => (
+            <CommandButton key={`${view}-${c.key}`} cmd={c} onHover={setHover} />
           ))}
         </div>
         <div className="cmd-hint">{hover ? hover.hint : 'Hover a command or press its hotkey.'}</div>
