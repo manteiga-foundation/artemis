@@ -41,7 +41,7 @@ async function engaged(reducedMotion = false): Promise<{ page: Page; errors: str
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
-  await page.evaluate('import("/src/store.ts").then(m => { window.__artemis = m.getState; })');
+  await page.waitForFunction('typeof window.__artemis === "function"');
   await page.getByRole('textbox', { name: 'Website' }).fill('example.com');
   await page.getByRole('button', { name: 'Engage', exact: true }).click();
   await page.waitForFunction('window.__artemis().engaged === true');
@@ -150,7 +150,7 @@ test('the entry screen asks for the website and nothing starts until a valid one
   page.on('pageerror', (e) => errors.push(e.message));
   try {
     await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
-    await page.evaluate('import("/src/store.ts").then(m => { window.__artemis = m.getState; })');
+  await page.waitForFunction('typeof window.__artemis === "function"');
     const field = page.getByRole('textbox', { name: 'Website' });
     const engage = page.getByRole('button', { name: 'Engage', exact: true });
     await field.waitFor({ state: 'visible' });

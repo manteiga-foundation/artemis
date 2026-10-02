@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
     "test": "bun test tests",
     "build": "bun run check && vite build",
-    "preview": "vite preview --host 127.0.0.1 --port 4173"
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "artemis": "bun run scripts/artemis.ts"
   },
   "dependencies": {
     "@arwes/react": "1.0.0-alpha.23",

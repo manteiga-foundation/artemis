@@ -101,8 +101,9 @@ kbd {
   visibility: hidden;
 }
 
-/* Placeholder for the live page. */
-.browser-surface {
+/* The website slot fills the stage between the header and the bottom panels. (`.panel` sets
+   position: relative later in this sheet; the compound selector keeps the absolute placement.) */
+.browser-surface.panel {
   position: absolute;
   inset: 44px 14px 300px;
   z-index: 2;
@@ -145,6 +146,33 @@ kbd {
   font: 600 10px var(--mono);
   letter-spacing: 0.18em;
   color: var(--alert);
+}
+
+.browser-state.is-live {
+  color: var(--mist);
+}
+
+.browser-frame {
+  position: relative;
+  display: block;
+  flex: 1;
+  align-self: stretch;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.slot-footnote {
+  margin: 6px 0 0;
+  font: 10px var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--sky);
+  text-align: left;
+}
+
+.slot-footnote code {
+  color: var(--white);
 }
 
 .browser-slot {
