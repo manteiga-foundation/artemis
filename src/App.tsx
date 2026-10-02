@@ -5,12 +5,12 @@ import { GraphCanvas } from './components/GraphCanvas';
 import { HubLabels } from './components/HubLabels';
 import { Header } from './components/Header';
 import { MiniMap } from './components/MiniMap';
-import { Console, stepView } from './components/Console';
+import { Console, stepLens } from './components/Console';
 import { CommandCard, runCommand } from './components/CommandCard';
 import { BootOverlay, useEngage } from './components/BootOverlay';
 import { COMMAND_BY_KEY } from './commands';
 import { controller } from './graph/controller';
-import { VIEWS, getState, setState, useStore } from './store';
+import { LENSES, getState, setState, useStore } from './store';
 import { SfxBridge, bleepsSettings, useSfx } from './sfx';
 
 function Hotkeys() {
@@ -41,14 +41,14 @@ function Hotkeys() {
       }
       if (k === 'ArrowLeft' || k === 'ArrowRight') {
         e.preventDefault();
-        controller.setView(stepView(k === 'ArrowLeft' ? -1 : 1));
+        controller.setLens(stepLens(k === 'ArrowLeft' ? -1 : 1));
         play('click');
         return;
       }
-      if (/^[1-9]$/.test(k) && Number(k) <= VIEWS.length) {
-        const v = VIEWS[Number(k) - 1].id;
-        if (v !== s.view) {
-          controller.setView(v);
+      if (/^[1-9]$/.test(k) && Number(k) <= LENSES.length) {
+        const v = LENSES[Number(k) - 1].id;
+        if (v !== s.lens) {
+          controller.setLens(v);
           play('click');
         }
         return;

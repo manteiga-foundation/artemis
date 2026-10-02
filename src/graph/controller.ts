@@ -1,7 +1,8 @@
 import { Graph, type GraphConfig } from '@cosmos.gl/graph';
 import { generateNetwork, linksForChain, pathToCore, type NetworkData } from './data';
 import { EG, SECTOR_HUES, mix, rgba, type RGBA } from '../theme';
-import { getState, setState, type ViewId } from '../store';
+import { getState, setState, type LensId } from '../store';
+import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from '../views';
 
 export type Sfx = 'click' | 'info' | 'error' | 'type' | 'intro' | 'hover';
 export interface CommandResult {
@@ -72,11 +73,11 @@ class GraphController {
   }
 
   // ---------------------------------------------------------------- colours
-  private pointColor(i: number, view: ViewId): RGBA {
+  private pointColor(i: number, lens: LensId): RGBA {
     const m = this.data.meta[i];
-    if (view === 'anomalies' && this.anomalySet.has(i)) return rgba(EG.alert);
+    if (lens === 'anomalies' && this.anomalySet.has(i)) return rgba(EG.alert);
     if (m.tier === 'core') return WHITE;
-    if (view === 'clusters') {
+    if (lens === 'clusters') {
       const hue = rgba(SECTOR_HUES[m.sector]);
       if (m.tier === 'sector') return mix(hue, WHITE, 0.35);
       if (m.tier === 'relay') return mix(hue, WHITE, 0.1);
@@ -89,23 +90,23 @@ class GraphController {
 
   private anomalySet = new Set<number>();
 
-  private pointColors(view: ViewId): Float32Array {
+  private pointColors(lens: LensId): Float32Array {
     const { count } = this.data;
     const out = new Float32Array(count * 4);
-    for (let i = 0; i < count; i++) out.set(this.pointColor(i, view), i * 4);
+    for (let i = 0; i < count; i++) out.set(this.pointColor(i, lens), i * 4);
     return out;
   }
 
-  private linkColors(view: ViewId): Float32Array {
+  private linkColors(lens: LensId): Float32Array {
     const { linkKinds, links, meta } = this.data;
     const out = new Float32Array(linkKinds.length * 4);
     for (let l = 0; l < linkKinds.length; l++) {
       const kind = linkKinds[l];
       let c: RGBA;
-      if (view === 'clusters' && kind !== 'trunk' && kind !== 'backbone' && kind !== 'cross') {
+      if (lens === 'clusters' && kind !== 'trunk' && kind !== 'backbone' && kind !== 'cross') {
         const s = meta[links[l * 2 + 1]].sector;
         c = rgba(SECTOR_HUES[Math.max(0, s)], kind === 'branch' ? 0.6 : 0.26);
-      } else if (view === 'routes' && kind === 'cross') {
+      } else if (lens === 'routes' && kind === 'cross') {
         c = rgba(EG.mist, 0.95);
       } else {
         switch (kind) {
@@ -254,13 +255,13 @@ class GraphController {
   }
 
   private loadInto(g: Graph, sizeScale: number) {
-    const view = getState().view;
+    const lens = getState().lens;
     this.anomalySet = new Set(this.data.anomalies);
     g.setPointPositions(new Float32Array(this.data.positions));
     g.setLinks(this.data.links);
-    g.setPointColors(this.pointColors(view));
+    g.setPointColors(this.pointColors(lens));
     g.setPointSizes(this.pointSizes(sizeScale));
-    g.setLinkColors(this.linkColors(view));
+    g.setLinkColors(this.linkColors(lens));
     g.setLinkWidths(this.linkWidths().map((w) => w * (sizeScale < 1 ? 0.6 : 1)));
     if (sizeScale === 1) {
       // Pull each sector toward a fixed slot on a hexagonal ring so the overview keeps
@@ -323,15 +324,15 @@ class GraphController {
     return out;
   }
 
-  // ---------------------------------------------------------------- view + selection
-  applyView() {
+  // ---------------------------------------------------------------- lens + selection
+  applyLens() {
     const s = getState();
     const d = this.data;
     let highlightedPointIndices: number[] | undefined;
     let highlightedLinkIndices: number[] | undefined;
 
     if (s.selected !== null) {
-      if (s.view === 'routes') {
+      if (s.lens === 'routes') {
         const chain = pathToCore(d, s.selected);
         highlightedPointIndices = chain;
         highlightedLinkIndices = linksForChain(d, chain);
@@ -339,11 +340,11 @@ class GraphController {
         const neighbours = this.main?.getNeighboringPointIndices(s.selected) ?? [];
         highlightedPointIndices = [s.selected, ...neighbours];
       }
-    } else if (s.view === 'hubs') {
+    } else if (s.lens === 'hubs') {
       highlightedPointIndices = d.hubs;
-    } else if (s.view === 'anomalies') {
+    } else if (s.lens === 'anomalies') {
       highlightedPointIndices = d.anomalies;
-    } else if (s.view === 'routes') {
+    } else if (s.lens === 'routes') {
       highlightedLinkIndices = [...d.crossLinks, ...d.linkKinds.flatMap((k, i) => (k === 'backbone' ? [i] : []))];
       const ends = new Set<number>();
       highlightedLinkIndices.forEach((l) => {
@@ -355,15 +356,15 @@ class GraphController {
 
     const partial: GraphConfig = {
       renderLinks: s.linksOn,
-      curvedLinks: s.view === 'routes',
+      curvedLinks: s.lens === 'routes',
       focusedPointIndex: s.selected ?? undefined,
       highlightedPointIndices,
       highlightedLinkIndices,
-      outlinedPointIndices: s.view === 'anomalies' ? d.anomalies : s.pinned.length ? s.pinned : undefined
+      outlinedPointIndices: s.lens === 'anomalies' ? d.anomalies : s.pinned.length ? s.pinned : undefined
     };
 
-    const pc = this.pointColors(s.view);
-    const lc = this.linkColors(s.view);
+    const pc = this.pointColors(s.lens);
+    const lc = this.linkColors(s.lens);
     for (const g of [this.main, this.mini]) {
       if (!g) continue;
       g.setPointColors(pc);
@@ -379,7 +380,7 @@ class GraphController {
       const base = [this.data.core, ...this.data.sectors];
       this.main.trackPointPositionsByIndices(index === null ? base : [...base, index]);
     }
-    this.applyView();
+    this.applyLens();
   }
 
   private handlePointClick(index: number) {
@@ -417,11 +418,35 @@ class GraphController {
     setState((s) => ({ status: message, statusTone: tone, statusId: s.statusId + 1 }));
   }
 
-  setView(view: ViewId) {
-    setState({ view });
-    this.applyView();
-    const label = view.charAt(0).toUpperCase() + view.slice(1);
-    this.status(`View: ${label}.`, 'info');
+  setLens(lens: LensId) {
+    setState({ lens });
+    this.applyLens();
+    const label = lens.charAt(0).toUpperCase() + lens.slice(1);
+    this.status(`Lens: ${label}.`, 'info');
+  }
+
+  // ---------------------------------------------------------------- views
+  private transitionSeq = 0;
+
+  /** Switch to another view. The transition record drives the stage's depth animation. */
+  setView(to: ViewId): CommandResult {
+    const from = getState().view;
+    if (to === from) return { ok: false, message: `Already in the ${VIEW_BY_ID.get(to)!.label} view.`, sfx: 'error' };
+    const dir = viewDepth(to) < viewDepth(from) ? 'in' : 'out';
+    const id = ++this.transitionSeq;
+    setState({ view: to, viewTransition: { from, to, dir, id } });
+    const spec = VIEW_BY_ID.get(to)!;
+    return this.done({ ok: true, message: `View: ${spec.label}. ${spec.tagline}.`, sfx: 'info' });
+  }
+
+  /** V: dive one view inward, wrapping from the browser back out to the cosmos. */
+  cycleView(): CommandResult {
+    return this.setView(nextView(getState().view));
+  }
+
+  /** Called by the stage when its animation ends; ignores transitions already superseded. */
+  endViewTransition(id: number) {
+    if (getState().viewTransition?.id === id) setState({ viewTransition: null });
   }
 
   // ---------------------------------------------------------------- commands
@@ -462,7 +487,7 @@ class GraphController {
     const list = [...set];
     setState({ pinned: list });
     this.main?.setPinnedPoints(list.length ? list : null);
-    this.applyView();
+    this.applyLens();
     return this.done({ ok: true, message: pinned ? `${id} released.` : `${id} holding position.`, sfx: 'click' });
   }
 
@@ -479,7 +504,9 @@ class GraphController {
       g.zoomToPointByIndex(s.selected, 800, Math.max(4, g.getZoomLevel()), false, false);
       return this.done({ ok: true, message: `Focused on ${this.data.meta[s.selected].id}.`, sfx: 'click' });
     }
-    this.hubCycle = (this.hubCycle + 1) % this.data.sectors.length;
+    // Tour the sectors; the step after the last sector fits the whole network (the old Vision).
+    this.hubCycle = (this.hubCycle + 1) % (this.data.sectors.length + 1);
+    if (this.hubCycle === this.data.sectors.length) return this.vision();
     const idx = this.data.sectors[this.hubCycle];
     g.zoomToPointByIndex(idx, 800, 2.2, true, false);
     return this.done({ ok: true, message: `Focused on ${this.data.meta[idx].id}.`, sfx: 'click' });
@@ -488,7 +515,7 @@ class GraphController {
   links(): CommandResult {
     const linksOn = !getState().linksOn;
     setState({ linksOn });
-    this.applyView();
+    this.applyLens();
     return this.done({ ok: true, message: linksOn ? 'Links visible.' : 'Links hidden.', sfx: 'click' });
   }
 
@@ -526,7 +553,7 @@ class GraphController {
       this.loadInto(g, scale);
     }
     this.main?.trackPointPositionsByIndices([this.data.core, ...this.data.sectors]);
-    this.applyView();
+    this.applyLens();
     this.needsFit = true;
     this.main?.start(1);
     window.setTimeout(() => this.syncMini(true), 60);

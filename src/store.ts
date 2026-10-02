@@ -1,8 +1,12 @@
 import { useSyncExternalStore } from 'react';
+import type { ViewId } from './views';
 
-export type ViewId = 'overview' | 'clusters' | 'hubs' | 'routes' | 'anomalies';
+export type { ViewId } from './views';
 
-export const VIEWS: { id: ViewId; label: string }[] = [
+/** A lens is a perspective within a view: same graph, different emphasis. Keys 1-5. */
+export type LensId = 'overview' | 'clusters' | 'hubs' | 'routes' | 'anomalies';
+
+export const LENSES: { id: LensId; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'clusters', label: 'Clusters' },
   { id: 'hubs', label: 'Hubs' },
@@ -10,10 +14,20 @@ export const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'anomalies', label: 'Anomalies' }
 ];
 
+/** A view switch in flight. `dir` is the camera's motion: 'in' dives toward the page, 'out' pulls back. */
+export interface ViewTransition {
+  from: ViewId;
+  to: ViewId;
+  dir: 'in' | 'out';
+  id: number;
+}
+
 export interface UIState {
   engaged: boolean;
   muted: boolean;
   view: ViewId;
+  viewTransition: ViewTransition | null;
+  lens: LensId;
   paused: boolean;
   simRunning: boolean;
   linksOn: boolean;
@@ -31,7 +45,9 @@ export interface UIState {
 let state: UIState = {
   engaged: false,
   muted: false,
-  view: 'overview',
+  view: 'cosmos',
+  viewTransition: null,
+  lens: 'overview',
   paused: false,
   simRunning: false,
   linksOn: true,

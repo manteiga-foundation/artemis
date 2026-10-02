@@ -1,33 +1,33 @@
 import { Animated, Animator, FrameOctagon, Text } from '@arwes/react';
 import { controller } from '../graph/controller';
-import { VIEWS, getState, useStore, type ViewId } from '../store';
+import { LENSES, getState, useStore, type LensId } from '../store';
 import { useSfx } from '../sfx';
 
-export function stepView(dir: 1 | -1): ViewId {
-  const i = VIEWS.findIndex((v) => v.id === getState().view);
-  return VIEWS[(i + dir + VIEWS.length) % VIEWS.length].id;
+export function stepLens(dir: 1 | -1): LensId {
+  const i = LENSES.findIndex((v) => v.id === getState().lens);
+  return LENSES[(i + dir + LENSES.length) % LENSES.length].id;
 }
 
-// Tab strip styled after the ZKN reference (chamfered end caps, active tab with underline,
-// dashed rail, << >> steppers), recoloured to Egyptian blue.
+// Lens strip styled after the ZKN reference (chamfered end caps, active tab with underline,
+// dashed rail, << >> steppers). Colours come from the active view's palette variables.
 export function TabStrip() {
-  const view = useStore((s) => s.view);
+  const lens = useStore((s) => s.lens);
   const play = useSfx();
 
-  const go = (id: ViewId) => {
-    if (id === getState().view) return;
-    controller.setView(id);
+  const go = (id: LensId) => {
+    if (id === getState().lens) return;
+    controller.setLens(id);
     play('click');
   };
 
   return (
-    <div className="tabstrip" role="tablist" aria-label="Views">
-      <button type="button" className="tab-arrow" aria-label="Previous view" onClick={() => go(stepView(-1))}>
+    <div className="tabstrip" role="tablist" aria-label="Lenses">
+      <button type="button" className="tab-arrow" aria-label="Previous lens" onClick={() => go(stepLens(-1))}>
         {'<<'}
       </button>
       <div className="tabs">
-        {VIEWS.map((v, i) => {
-          const active = v.id === view;
+        {LENSES.map((v, i) => {
+          const active = v.id === lens;
           return (
             <Animator key={v.id}>
               <Animated className="tab-cell" animated={['fade', ['y', 8, 0]]}>
@@ -42,7 +42,7 @@ export function TabStrip() {
                   <FrameOctagon
                     className="frame"
                     leftTop={i === 0}
-                    rightTop={i === VIEWS.length - 1}
+                    rightTop={i === LENSES.length - 1}
                     rightBottom={false}
                     leftBottom={false}
                     squareSize={10}
@@ -58,7 +58,7 @@ export function TabStrip() {
           );
         })}
       </div>
-      <button type="button" className="tab-arrow" aria-label="Next view" onClick={() => go(stepView(1))}>
+      <button type="button" className="tab-arrow" aria-label="Next lens" onClick={() => go(stepLens(1))}>
         {'>>'}
       </button>
       <div className="tab-rail" aria-hidden />
