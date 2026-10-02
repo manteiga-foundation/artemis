@@ -138,6 +138,22 @@ test('C hides and shows the panels in every view; the header switch does the sam
   }
 }, 40000);
 
+test('the header shows real resource readouts: FPS from the page; machine CPU only in the owned browser', async () => {
+  const { page, errors } = await engaged();
+  try {
+    const stat = (label: string) => page.locator('.stat', { has: page.locator('.stat-label', { hasText: new RegExp(`^${label}$`) }) }).locator('.stat-value');
+    await page.waitForFunction(() => /^\d+$/.test(document.querySelector('.stat-fps .stat-value')?.textContent ?? ''), null, { timeout: 5000 });
+    expect(Number(await stat('FPS').textContent())).toBeGreaterThan(0);
+    expect(await stat('CPU').textContent()).toBe('--');
+    expect(await stat('ARTEMIS').textContent()).toBe('--');
+    expect(await page.locator('.stat-cpu').getAttribute('title')).toContain('owned browser');
+    expect(await page.locator('.stat', { hasText: 'T/S' }).count()).toBe(0);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('the dive is a staged depth animation: the old view leaves before the new one is shown', async () => {
   const { page, errors } = await engaged();
   try {

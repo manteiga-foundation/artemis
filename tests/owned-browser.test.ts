@@ -144,6 +144,14 @@ describe('the browser view shows the real website', () => {
       expect(await page.locator('.cmd-hint').textContent()).not.toContain('Keyboard is in the page');
       await page.keyboard.press('c');
       await page.waitForFunction('window.__artemis().panelsHidden === true', null, { timeout: 4000 });
+
+      // Machine readouts arrive from the Bun side: CPU of the machine and of Artemis' own processes.
+      await page.waitForFunction('typeof window.__artemis().machine?.cpuPct === "number"', null, { timeout: 8000 });
+      const m = (await page.evaluate('window.__artemis().machine')) as { cpuPct: number; memUsedPct: number; artemisCpuPct: number; artemisProcesses: number };
+      expect(m.cpuPct).toBeGreaterThanOrEqual(0);
+      expect(m.memUsedPct).toBeGreaterThan(0);
+      expect(m.artemisProcesses).toBeGreaterThan(0);
+      expect(await page.locator('.stat-cpu .stat-value').textContent()).toMatch(/^\d+%$/);
     } finally {
       await owned.close();
     }

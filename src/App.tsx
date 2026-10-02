@@ -13,6 +13,7 @@ import { LENSES, getState, setState, useStore } from './store';
 import { SfxBridge, bleepsSettings, useSfx } from './sfx';
 import { paletteStyle } from './views';
 import { FRAME_KEY_MESSAGE, isOwnedBrowser } from './owned';
+import { usePerfSampler } from './metrics';
 
 function Hotkeys() {
   const play = useSfx();
@@ -102,6 +103,7 @@ export function App() {
   const stageView = useStore((s) => s.stageView);
   const diving = useStore((s) => s.viewTransition !== null);
   const panelsHidden = useStore((s) => s.panelsHidden);
+  usePerfSampler(engaged);
   // While the stage still shows the outgoing view, the HUD folds away; it reassembles,
   // recoloured, once the stage has swapped.
   const hudActive = engaged && !(diving && stageView !== view);

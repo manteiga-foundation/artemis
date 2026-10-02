@@ -419,6 +419,10 @@ kbd {
   color: var(--white);
 }
 
+.stat.is-warn .stat-value {
+  color: var(--alert);
+}
+
 .stats-sep {
   width: 1px;
   height: 14px;

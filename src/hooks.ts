@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { createEffectIlluminator } from '@arwes/react';
 import { useStore } from './store';
 import { PALETTES, rgbaCss } from './views';
@@ -22,40 +22,6 @@ export function useClock() {
     return () => window.clearInterval(t);
   }, []);
   return now;
-}
-
-export interface Telemetry {
-  ts: number;
-  ns: number;
-  rs: number;
-  history: number[];
-}
-
-/**
- * Placeholder telemetry feed for the header counters (T/S, N/S, R/S).
- * Values are simulated with a bounded random walk; replace with a real source.
- */
-export function useTelemetry(active: boolean): Telemetry {
-  const ref = useRef<Telemetry>({ ts: 1240, ns: 38, rs: 812, history: Array(48).fill(1240) });
-  const [, force] = useState(0);
-  useEffect(() => {
-    const walk = (v: number, lo: number, hi: number, step: number) =>
-      Math.min(hi, Math.max(lo, v + (Math.random() - 0.5) * step));
-    const t = window.setInterval(() => {
-      const cur = ref.current;
-      // Livelier feed while the layout simulation is running.
-      const ts = walk(cur.ts, 400, 2400, active ? 320 : 120);
-      ref.current = {
-        ts,
-        ns: walk(cur.ns, 4, 96, 14),
-        rs: walk(cur.rs, 200, 1400, 150),
-        history: [...cur.history.slice(1), ts]
-      };
-      force((n) => n + 1);
-    }, 700);
-    return () => window.clearInterval(t);
-  }, [active]);
-  return ref.current;
 }
 
 /** Fires when a command hotkey is pressed so its button can flash. */

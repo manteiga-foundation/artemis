@@ -3,6 +3,7 @@ import { generateNetwork, linksForChain, linksWithin, pageSubgraph, pathToCore, 
 import { EG, SECTOR_HUES, mix, rgba, type RGBA } from '../theme';
 import { PALETTES, type Palette } from '../views';
 import { getState, setState, type LensId } from '../store';
+import { graphPixelRatio } from '../quality';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from '../views';
 
 export type Sfx = 'click' | 'info' | 'error' | 'type' | 'intro' | 'hover';
@@ -195,6 +196,7 @@ class GraphController {
       fitViewPadding: 0.18,
       fitViewDuration: 700,
       attribution: '',
+      pixelRatio: graphPixelRatio(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight, window.devicePixelRatio),
       onPointClick: (index) => this.handlePointClick(index),
       onBackgroundClick: () => this.handleBackgroundClick(),
       onZoom: () => this.emitViewport(),

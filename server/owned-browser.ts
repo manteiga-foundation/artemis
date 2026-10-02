@@ -6,6 +6,7 @@
 // frame-ancestors) and make the site's cookies usable inside a cross-site frame (SameSite=None).
 // Only documents loaded into sub-frames are touched; Artemis's own requests pass through.
 import { chromium, type BrowserContext, type Page, type Request, type Route } from 'playwright';
+import { startMachineFeed } from './machine';
 
 export const OWNED_FLAG = 'owned';
 
@@ -151,5 +152,15 @@ export async function ownBrowser(o: OwnBrowserOptions): Promise<OwnedBrowser> {
     page = context.pages()[0] ?? (await context.waitForEvent('page'));
     if (page.url() === 'about:blank') await page.goto(url);
   }
-  return { context, page, close: () => context.close() };
+  // Machine and Artemis-process figures for the header readouts (CPU, ARTEMIS, MEM).
+  const stopFeed = startMachineFeed(page, o.userDataDir);
+  context.on('close', stopFeed);
+  return {
+    context,
+    page,
+    close: async () => {
+      stopFeed();
+      await context.close();
+    }
+  };
 }

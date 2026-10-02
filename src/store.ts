@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { ViewId } from './views';
+import type { MachineStats, PerfStats } from './metrics';
 
 export type { ViewId } from './views';
 
@@ -40,6 +41,10 @@ export interface UIState {
   keyboardInPage: boolean;
   /** Bottom panels folded away (C); the header stays so they can be brought back. */
   panelsHidden: boolean;
+  /** The page's own performance (src/metrics.ts); null until the first sample. */
+  perf: PerfStats | null;
+  /** Machine and Artemis-process figures from the owned browser; null elsewhere. */
+  machine: MachineStats | null;
   paused: boolean;
   simRunning: boolean;
   linksOn: boolean;
@@ -66,6 +71,8 @@ let state: UIState = {
   pageHops: 1,
   keyboardInPage: false,
   panelsHidden: false,
+  perf: null,
+  machine: null,
   paused: false,
   simRunning: false,
   linksOn: true,
