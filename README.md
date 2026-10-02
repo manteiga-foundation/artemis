@@ -19,9 +19,9 @@ bun run scripts/screenshots.ts 5173        # documentation screenshots from a ru
 bun run scripts/screenshots-entry.ts 5173  # entry screen states
 ```
 
-The entry screen asks which website is under review. Type a domain or URL (`example.com`,
-`https://app.example.com/start`; bare domains become `https://`, only http/https are accepted) and
-press **Engage** or Enter. Nothing starts without a valid address; the host then shows in the header,
+The entry screen ("Web Application Intelligent Console") asks for the web app under review. Type
+a domain or URL (`example.com`, `https://app.example.com/start`; bare domains become `https://`,
+only http/https are accepted) and press **Engage** or Enter. Nothing starts without a valid address; the host then shows in the header,
 the Browser view address line and the console readouts. Browsers only allow audio after a user
 gesture, so the console assembles and the intro sound plays at that moment.
 
@@ -99,9 +99,10 @@ Also: `1-5` / `Left` / `Right` lenses, `Esc` cancel, `M` mute.
 ## Browser view: the real website
 
 The website under review loads in a sandboxed `<iframe>` (no `allow-top-navigation`, so a
-frame-busting site cannot take over the console) that fills the stage between the header and the
-bottom panels. The bar above it shows the address and the state: `EXTERNAL` or `OWNED`, then
-`CONNECTING` / `LIVE`.
+frame-busting site cannot take over the console) that fills the stage edge to edge, from a glass
+address strip under the header down to the bottom of the screen; the bottom panels float over the
+page on a soft scrim that keeps them legible. The strip shows the address and the state:
+`EXTERNAL` or `OWNED`, then `CONNECTING` / `LIVE`.
 
 - **External browser** (`bun run dev`, your own Chrome): works for sites that allow framing;
   sites sending `X-Frame-Options` or CSP `frame-ancestors` stay blank, and a footnote says so.

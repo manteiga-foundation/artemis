@@ -101,29 +101,45 @@ kbd {
   visibility: hidden;
 }
 
-/* The website slot fills the stage between the header and the bottom panels. (`.panel` sets
-   position: relative later in this sheet; the compound selector keeps the absolute placement.) */
-.browser-surface.panel {
+/* The website fills the stage from under the header to the bottom edge; the bottom panels float
+   over it. A scrim keeps the bottom HUD legible over any page. */
+.stage .browser-surface {
   position: absolute;
-  inset: 44px 14px 300px;
+  inset: 44px 0 0;
   z-index: 2;
   display: flex;
   flex-direction: column;
-  padding: 10px 14px 14px;
-  --arwes-frames-line-color: var(--azure);
-  --arwes-frames-deco-color: var(--mist);
-  --arwes-frames-bg-color: color-mix(in srgb, var(--deep) 45%, transparent);
 }
 
+.stage[data-shown='browser']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 340px;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--bg) 55%, transparent) 40%,
+    color-mix(in srgb, var(--bg) 90%, transparent) 100%
+  );
+}
+
+/* Address strip: glass over the top of the page. */
 .browser-bar {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 14px;
   height: 28px;
-  padding: 0 10px;
-  margin-bottom: 10px;
+  padding: 0 24px;
   font: 500 12px var(--mono);
   color: var(--frost);
+  background: color-mix(in srgb, var(--bg2) 74%, transparent);
+  backdrop-filter: blur(6px);
   border-bottom: 1px solid color-mix(in srgb, var(--azure) 55%, transparent);
 }
 
@@ -142,37 +158,22 @@ kbd {
   color: var(--white);
 }
 
+.browser-hint {
+  font: 10px var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--sky);
+  white-space: nowrap;
+}
+
 .browser-state {
   font: 600 10px var(--mono);
   letter-spacing: 0.18em;
   color: var(--alert);
+  white-space: nowrap;
 }
 
 .browser-state.is-live {
   color: var(--mist);
-}
-
-.browser-frame {
-  position: relative;
-  display: block;
-  flex: 1;
-  align-self: stretch;
-  min-height: 0;
-  width: 100%;
-  border: 0;
-  background: #fff;
-}
-
-.slot-footnote {
-  margin: 6px 0 0;
-  font: 10px var(--mono);
-  letter-spacing: 0.03em;
-  color: var(--sky);
-  text-align: left;
-}
-
-.slot-footnote code {
-  color: var(--white);
 }
 
 .browser-slot {
@@ -183,15 +184,20 @@ kbd {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  text-align: center;
   background:
     repeating-linear-gradient(0deg, transparent 0 47px, color-mix(in srgb, var(--azure) 14%, transparent) 47px 48px),
     repeating-linear-gradient(90deg, transparent 0 47px, color-mix(in srgb, var(--azure) 14%, transparent) 47px 48px),
     color-mix(in srgb, var(--bg) 55%, transparent);
-  --arwes-frames-line-color: color-mix(in srgb, var(--azure) 70%, transparent);
-  --arwes-frames-deco-color: var(--sky);
-  --arwes-frames-bg-color: transparent;
+}
+
+.browser-frame {
+  display: block;
+  flex: 1;
+  align-self: stretch;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: #fff;
 }
 
 .slot-title {
@@ -200,19 +206,6 @@ kbd {
   padding-left: 0.5em;
   color: var(--mist);
   text-shadow: 0 0 14px color-mix(in srgb, var(--azure) 70%, transparent);
-}
-
-.slot-note {
-  margin: 0;
-  max-width: 46ch;
-  font: 13px var(--font);
-  color: var(--frost);
-}
-
-.slot-dim {
-  font: 11px var(--mono);
-  letter-spacing: 0.04em;
-  color: var(--sky);
 }
 
 .view-badge {

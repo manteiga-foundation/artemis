@@ -69,7 +69,7 @@ export function BootOverlay() {
           </Animator>
           <Animator>
             <Text as="p" className="boot-sub">
-              Product understanding console. Which website are we reviewing?
+              Web Application Intelligent Console
             </Text>
           </Animator>
           <Animator>
@@ -77,7 +77,7 @@ export function BootOverlay() {
               <FocusWhenEntered target={inputRef} />
               <FrameUnderline className="frame" strokeWidth={1} squareSize={8} />
               <label className="boot-label" htmlFor={TARGET_FIELD_ID}>
-                Website
+                Web App
               </label>
               <input
                 id={TARGET_FIELD_ID}
@@ -87,7 +87,7 @@ export function BootOverlay() {
                 inputMode="url"
                 autoComplete="url"
                 spellCheck={false}
-                placeholder="example.com or https://app.example.com/start"
+                placeholder="example.com"
                 value={value}
                 aria-invalid={rejected && !valid}
                 onChange={(e) => {
@@ -113,7 +113,7 @@ export function BootOverlay() {
             <Text as="p" className={`boot-note${rejected && !valid ? ' is-warn' : ''}`}>
               {rejected && !valid
                 ? 'Enter a web address such as example.com to begin.'
-                : 'Audio starts after engagement. Press Enter to begin.'}
+                : 'Press Enter to begin'}
             </Text>
           </Animator>
         </form>

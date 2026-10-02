@@ -13,7 +13,7 @@ const owned = await ownBrowser({ appUrl: `http://127.0.0.1:${port}`, userDataDir
 try {
   const { page } = owned;
   await page.waitForLoadState('networkidle');
-  await page.getByRole('textbox', { name: 'Website' }).fill(target);
+  await page.getByRole('textbox', { name: 'Web App' }).fill(target);
   await page.getByRole('button', { name: 'Engage', exact: true }).click();
   const frame = page.frameLocator('.browser-surface iframe');
   await frame.locator('body').waitFor({ timeout: 20000 });

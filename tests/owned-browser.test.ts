@@ -71,7 +71,7 @@ describe('response rewriting', () => {
 
 async function engageWith(page: import('playwright').Page, target: string) {
   await page.waitForFunction('typeof window.__artemis === "function"');
-  await page.getByRole('textbox', { name: 'Website' }).fill(target);
+  await page.getByRole('textbox', { name: 'Web App' }).fill(target);
   await page.getByRole('button', { name: 'Engage', exact: true }).click();
   await page.waitForFunction('window.__artemis().engaged === true');
 }
@@ -85,10 +85,14 @@ describe('the browser view shows the real website', () => {
       const frame = page.frameLocator('.browser-surface iframe');
       await frame.getByText('Fixture site').waitFor({ timeout: 10000 });
       expect(await page.getAttribute('.browser-surface iframe', 'sandbox')).not.toContain('allow-top-navigation');
-      // The frame fills the slot between the header and the bottom panels, not a default 150px.
-      const box = await page.locator('.browser-surface iframe').boundingBox();
-      expect(box!.height).toBeGreaterThan(400);
-      expect(box!.width).toBeGreaterThan(1200);
+      // The frame fills the stage: full width, from under the header down behind the bottom panels.
+      const box = (await page.locator('.browser-surface iframe').boundingBox())!;
+      const card = (await page.locator('.command-card').boundingBox())!;
+      const header = (await page.locator('.hud-header').boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(1440);
+      expect(box.y).toBeLessThanOrEqual(header.y + header.height + 40);
+      expect(box.y + box.height).toBeGreaterThan(card.y + 100);
+      expect(box.y + box.height).toBeGreaterThanOrEqual(900 - 2);
       await page.waitForFunction(() => document.querySelector('.browser-state')?.textContent?.includes('LIVE'), null, { timeout: 5000 });
       expect(await page.locator('.browser-state').textContent()).toContain('EXTERNAL');
     } finally {

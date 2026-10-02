@@ -6,7 +6,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1800);
 await page.screenshot({ path: `${out}/entry.png` });
-const field = page.getByRole('textbox', { name: 'Website' });
+const field = page.getByRole('textbox', { name: 'Web App' });
 await field.fill('not a website');
 await page.keyboard.press('Enter');
 await page.waitForTimeout(500);

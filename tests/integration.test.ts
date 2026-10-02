@@ -42,7 +42,7 @@ async function engaged(reducedMotion = false): Promise<{ page: Page; errors: str
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
   await page.waitForFunction('typeof window.__artemis === "function"');
-  await page.getByRole('textbox', { name: 'Website' }).fill('example.com');
+  await page.getByRole('textbox', { name: 'Web App' }).fill('example.com');
   await page.getByRole('button', { name: 'Engage', exact: true }).click();
   await page.waitForFunction('window.__artemis().engaged === true');
   // Arwes staggers the HUD in with visibility:hidden; wait for the card to be usable.
@@ -151,7 +151,7 @@ test('the entry screen asks for the website and nothing starts until a valid one
   try {
     await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
   await page.waitForFunction('typeof window.__artemis === "function"');
-    const field = page.getByRole('textbox', { name: 'Website' });
+    const field = page.getByRole('textbox', { name: 'Web App' });
     const engage = page.getByRole('button', { name: 'Engage', exact: true });
     await field.waitFor({ state: 'visible' });
     await page.waitForFunction((id) => document.activeElement?.id === id, 'target-url', { timeout: 5000 });

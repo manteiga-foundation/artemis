@@ -18,7 +18,7 @@ async function open(width: number, height: number): Promise<Page> {
   return page;
 }
 const engage = async (page: Page) => {
-  await page.getByRole('textbox', { name: 'Website' }).fill(site);
+  await page.getByRole('textbox', { name: 'Web App' }).fill(site);
   await page.getByRole('button', { name: 'Engage', exact: true }).click();
   await page.waitForFunction('window.__artemis().engaged === true');
 };
