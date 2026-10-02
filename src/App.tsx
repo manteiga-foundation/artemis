@@ -1,8 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { Animator, AnimatorGeneralProvider, BleepsProvider } from '@arwes/react';
 import { Background } from './components/Background';
-import { GraphCanvas } from './components/GraphCanvas';
-import { HubLabels } from './components/HubLabels';
+import { Stage } from './components/Stage';
 import { Header } from './components/Header';
 import { MiniMap } from './components/MiniMap';
 import { Console, stepLens } from './components/Console';
@@ -12,6 +11,7 @@ import { commandByKey } from './commands';
 import { controller } from './graph/controller';
 import { LENSES, getState, setState, useStore } from './store';
 import { SfxBridge, bleepsSettings, useSfx } from './sfx';
+import { paletteStyle } from './views';
 
 function Hotkeys() {
   const play = useSfx();
@@ -71,18 +71,23 @@ function Hotkeys() {
 
 export function App() {
   const engaged = useStore((s) => s.engaged);
+  const view = useStore((s) => s.view);
+  const stageView = useStore((s) => s.stageView);
+  const diving = useStore((s) => s.viewTransition !== null);
+  // While the stage still shows the outgoing view, the HUD folds away; it reassembles,
+  // recoloured, once the stage has swapped.
+  const hudActive = engaged && !(diving && stageView !== view);
 
   return (
     <AnimatorGeneralProvider duration={{ enter: 0.4, exit: 0.3, stagger: 0.06 }}>
       <BleepsProvider {...bleepsSettings}>
         <SfxBridge />
         <Hotkeys />
-        <div className="app">
+        <div className="app" data-view={view} data-shown={stageView} style={paletteStyle(stageView) as CSSProperties}>
           <Background />
-          <GraphCanvas />
-          <HubLabels />
-          <Animator active={engaged} combine manager="stagger">
-            <div className={`hud${engaged ? ' is-on' : ''}`}>
+          <Stage />
+          <Animator active={hudActive} combine manager="stagger">
+            <div className={`hud${hudActive ? ' is-on' : ''}`}>
               <Header />
               <div className="hud-bottom">
                 <MiniMap />

@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { createEffectIlluminator } from '@arwes/react';
+import { useStore } from './store';
+import { PALETTES, rgbaCss } from './views';
 
-/** Arwes illuminator effect: a soft radial glow that follows the pointer inside a container. */
-export function useIlluminator(ref: RefObject<HTMLElement>, color = 'hsl(225 90% 60% / 9%)', size = 260) {
+/** Arwes illuminator effect: a soft radial glow in the shown view's hue that follows the pointer. */
+export function useIlluminator(ref: RefObject<HTMLElement>, size = 260) {
+  const view = useStore((s) => s.stageView);
+  const color = rgbaCss(PALETTES[view].azure, 0.11);
   useEffect(() => {
     const container = ref.current;
     if (!container) return;

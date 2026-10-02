@@ -1,6 +1,7 @@
 import { Graph, type GraphConfig } from '@cosmos.gl/graph';
 import { generateNetwork, linksForChain, linksWithin, pageSubgraph, pathToCore, type NetworkData } from './data';
 import { EG, SECTOR_HUES, mix, rgba, type RGBA } from '../theme';
+import { PALETTES, type Palette } from '../views';
 import { getState, setState, type LensId } from '../store';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from '../views';
 
@@ -15,8 +16,6 @@ type SfxListener = (sfx: Sfx) => void;
 type Listener = () => void;
 
 const BASE_REPULSION = 0.9;
-const WHITE = rgba(EG.white);
-const BG = rgba(EG.bg);
 
 const LINK_WIDTH: Record<string, number> = {
   trunk: 2.4,
@@ -73,32 +72,41 @@ class GraphController {
   }
 
   // ---------------------------------------------------------------- colours
-  private pointColor(i: number, lens: LensId): RGBA {
+  /** Palette of the view the stage is showing: the graph recolours at the dive's midpoint. */
+  private palette(): Palette {
+    return PALETTES[getState().stageView];
+  }
+
+  private pointColor(i: number, lens: LensId, P: Palette, white: RGBA, bg: RGBA): RGBA {
     const m = this.data.meta[i];
-    if (lens === 'anomalies' && this.anomalySet.has(i)) return rgba(EG.alert);
-    if (m.tier === 'core') return WHITE;
+    if (lens === 'anomalies' && this.anomalySet.has(i)) return rgba(P.alert);
+    if (m.tier === 'core') return white;
     if (lens === 'clusters') {
       const hue = rgba(SECTOR_HUES[m.sector]);
-      if (m.tier === 'sector') return mix(hue, WHITE, 0.35);
-      if (m.tier === 'relay') return mix(hue, WHITE, 0.1);
-      return mix(hue, BG, 0.18 + m.jitter * 0.22);
+      if (m.tier === 'sector') return mix(hue, white, 0.35);
+      if (m.tier === 'relay') return mix(hue, white, 0.1);
+      return mix(hue, bg, 0.18 + m.jitter * 0.22);
     }
-    if (m.tier === 'sector') return rgba('#9db4f8');
-    if (m.tier === 'relay') return rgba(EG.azure);
-    return mix(rgba(EG.royal), rgba('#5a7ff0'), m.jitter * 0.8);
+    if (m.tier === 'sector') return mix(rgba(P.sky), white, 0.35);
+    if (m.tier === 'relay') return rgba(P.azure);
+    return mix(rgba(P.royal), rgba(P.sky), m.jitter * 0.55);
   }
 
   private anomalySet = new Set<number>();
 
   private pointColors(lens: LensId): Float32Array {
     const { count } = this.data;
+    const P = this.palette();
+    const white = rgba(P.white);
+    const bg = rgba(P.bg);
     const out = new Float32Array(count * 4);
-    for (let i = 0; i < count; i++) out.set(this.pointColor(i, lens), i * 4);
+    for (let i = 0; i < count; i++) out.set(this.pointColor(i, lens, P, white, bg), i * 4);
     return out;
   }
 
   private linkColors(lens: LensId): Float32Array {
     const { linkKinds, links, meta } = this.data;
+    const P = this.palette();
     const out = new Float32Array(linkKinds.length * 4);
     for (let l = 0; l < linkKinds.length; l++) {
       const kind = linkKinds[l];
@@ -107,26 +115,26 @@ class GraphController {
         const s = meta[links[l * 2 + 1]].sector;
         c = rgba(SECTOR_HUES[Math.max(0, s)], kind === 'branch' ? 0.6 : 0.26);
       } else if (lens === 'routes' && kind === 'cross') {
-        c = rgba(EG.mist, 0.95);
+        c = rgba(P.mist, 0.95);
       } else {
         switch (kind) {
           case 'trunk':
-            c = rgba(EG.mist, 0.85);
+            c = rgba(P.mist, 0.85);
             break;
           case 'backbone':
-            c = rgba(EG.sky, 0.55);
+            c = rgba(P.sky, 0.55);
             break;
           case 'branch':
-            c = rgba(EG.azure, 0.6);
+            c = rgba(P.azure, 0.6);
             break;
           case 'cross':
-            c = rgba(EG.azure, 0.35);
+            c = rgba(P.azure, 0.35);
             break;
           case 'mesh':
-            c = rgba(EG.royal, 0.2);
+            c = rgba(P.royal, 0.2);
             break;
           default:
-            c = rgba(EG.royal, 0.3);
+            c = rgba(P.royal, 0.3);
         }
       }
       out.set(c, l * 4);
@@ -369,7 +377,11 @@ class GraphController {
     }
 
     const inPage = s.view === 'page';
+    const P = this.palette();
     const partial: GraphConfig = {
+      hoveredPointRingColor: P.mist,
+      focusedPointRingColor: P.white,
+      outlinedPointRingColor: P.alert,
       renderLinks: s.linksOn,
       curvedLinks: s.lens === 'routes',
       pointGreyoutOpacity: inPage ? 0 : 0.1,
@@ -382,13 +394,27 @@ class GraphController {
 
     const pc = this.pointColors(s.lens);
     const lc = this.linkColors(s.lens);
-    for (const g of [this.main, this.mini]) {
-      if (!g) continue;
-      g.setPointColors(pc);
-      g.setLinkColors(lc);
-      g.setConfigPartial(partial);
-      g.render();
+    if (this.main) {
+      this.main.setPointColors(pc);
+      this.main.setLinkColors(lc);
+      this.main.setConfigPartial(partial);
+      this.main.render();
     }
+    if (this.mini) {
+      // The minimap always keeps the whole cosmos as context: dim, never hide.
+      this.mini.setPointColors(pc);
+      this.mini.setLinkColors(lc);
+      this.mini.setConfigPartial({ ...partial, pointGreyoutOpacity: 0.15, linkGreyoutOpacity: 0.05 });
+      this.mini.render();
+    }
+  }
+
+  /** Page view camera: frame the page subgraph rather than a single node. */
+  private framePage(duration = 900) {
+    const s = getState();
+    if (s.view !== 'page' || !this.main) return;
+    const nodes = pageSubgraph(this.data, this.pageFocus(), s.pageHops);
+    this.main.fitViewByPointIndices(nodes, duration, 0.3, false);
   }
 
   private select(index: number | null) {
@@ -454,8 +480,7 @@ class GraphController {
     setState({ view: to, viewTransition: { from, to, dir, id } });
     this.applyLens();
     if (to === 'page') {
-      const focus = this.pageFocus();
-      this.main?.zoomToPointByIndex(focus, 900, Math.max(3, this.main.getZoomLevel()), false);
+      this.framePage();
     } else if (to === 'cosmos') {
       this.main?.fitView(900, 0.18, false);
     }
@@ -541,6 +566,7 @@ class GraphController {
     const pageHops = getState().pageHops === 1 ? 2 : 1;
     setState({ pageHops });
     this.applyLens();
+    this.framePage();
     return this.done({ ok: true, message: pageHops === 2 ? 'Depth: two hops. Connections of connections shown.' : 'Depth: one hop. Direct connections only.', sfx: 'click' });
   }
 

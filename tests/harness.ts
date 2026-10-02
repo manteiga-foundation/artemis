@@ -44,6 +44,8 @@ export class Renderer {
   render() { this.renders++; }
   start() {}
   fitView() { this.fits++; }
+  fittedTo: number[] | null = null;
+  fitViewByPointIndices(indices: number[]) { this.fittedTo = [...indices]; }
   getZoomLevel() { return 1; }
   zoomToPointByIndex(i: number) { this.zoomed.push(i); }
 }

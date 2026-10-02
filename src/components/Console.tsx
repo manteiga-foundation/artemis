@@ -70,9 +70,12 @@ export function Console() {
   const status = useStore((s) => s.status);
   const tone = useStore((s) => s.statusTone);
   const selected = useStore((s) => s.selected);
+  const currentPage = useStore((s) => s.currentPage);
   const targetMode = useStore((s) => s.targetMode);
   const pinnedCount = useStore((s) => s.pinned.length);
+  const view = useStore((s) => s.stageView);
   const meta = selected !== null ? controller.data.meta[selected] : null;
+  const pageMeta = controller.data.meta[selected ?? currentPage];
   const seq = useStore((s) => s.statusId);
 
   return (
@@ -86,27 +89,51 @@ export function Console() {
             </Text>
           </Animator>
         </div>
-        <div className="console-readout">
-          <span>
-            <em>SEL</em> {meta ? meta.id : '--'}
-          </span>
-          <span>
-            <em>TIER</em> {meta ? meta.tier.toUpperCase() : '--'}
-          </span>
-          <span>
-            <em>SECTOR</em> {meta ? (meta.sector < 0 ? 'CORE' : String(meta.sector + 1).padStart(2, '0')) : '--'}
-          </span>
-          <span>
-            <em>DEG</em> {meta ? meta.degree : '--'}
-          </span>
-          <span>
-            <em>HOLD</em> {pinnedCount}
-          </span>
-          <span className={targetMode ? 'is-armed' : ''}>
-            <em>MODE</em> {targetMode ? 'TARGET ARMED' : 'IDLE'}
-          </span>
-        </div>
-        <TabStrip />
+        {view === 'browser' ? (
+          // Page facts for the auditor. Placeholders until the live page reports them.
+          <div className="console-readout">
+            <span>
+              <em>URL</em> artemis://{pageMeta.id.toLowerCase()}
+            </span>
+            <span>
+              <em>TITLE</em> --
+            </span>
+            <span>
+              <em>FORMS</em> --
+            </span>
+            <span>
+              <em>LINKS</em> {pageMeta.degree}
+            </span>
+            <span>
+              <em>NOTES</em> 0
+            </span>
+            <span>
+              <em>MODE</em> REVIEW
+            </span>
+          </div>
+        ) : (
+          <div className="console-readout">
+            <span>
+              <em>SEL</em> {meta ? meta.id : '--'}
+            </span>
+            <span>
+              <em>TIER</em> {meta ? meta.tier.toUpperCase() : '--'}
+            </span>
+            <span>
+              <em>SECTOR</em> {meta ? (meta.sector < 0 ? 'CORE' : String(meta.sector + 1).padStart(2, '0')) : '--'}
+            </span>
+            <span>
+              <em>DEG</em> {meta ? meta.degree : '--'}
+            </span>
+            <span>
+              <em>HOLD</em> {pinnedCount}
+            </span>
+            <span className={targetMode ? 'is-armed' : ''}>
+              <em>MODE</em> {targetMode ? 'TARGET ARMED' : 'IDLE'}
+            </span>
+          </div>
+        )}
+        {view !== 'browser' && <TabStrip />}
       </Animated>
     </Animator>
   );

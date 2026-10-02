@@ -3,6 +3,7 @@ import { GiSpeaker, GiSpeakerOff } from 'react-icons/gi';
 import { useClock, useTelemetry } from '../hooks';
 import { setState, useStore } from '../store';
 import { useSfx } from '../sfx';
+import { VIEW_BY_ID } from '../views';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
@@ -46,6 +47,7 @@ function Logo() {
 
 export function Header() {
   const now = useClock();
+  const view = useStore((s) => s.stageView);
   const simRunning = useStore((s) => s.simRunning);
   const paused = useStore((s) => s.paused);
   const nodes = useStore((s) => s.nodeCount);
@@ -69,7 +71,12 @@ export function Header() {
           <Logo />
           <Animator>
             <Text as="span" className="brand-name" manager="decipher" fixed>
-              SCOPE
+              ARTEMIS
+            </Text>
+          </Animator>
+          <Animator>
+            <Text as="span" className="view-badge" manager="decipher" fixed title={VIEW_BY_ID.get(view)!.tagline}>
+              {VIEW_BY_ID.get(view)!.label.toUpperCase()}
             </Text>
           </Animator>
         </div>

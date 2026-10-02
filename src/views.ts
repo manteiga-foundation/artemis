@@ -107,3 +107,17 @@ export const paletteCss = (id: ViewId): string =>
   Object.entries(PALETTES[id])
     .map(([k, v]) => `--${k}: ${v};`)
     .join(' ');
+
+/** The same palette as a React style object, applied on `.app` so every panel inherits it. */
+export const paletteStyle = (id: ViewId): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(PALETTES[id])) out[`--${k}`] = v;
+  out['--eg'] = PALETTES[id].base; // legacy alias used by the original stylesheet
+  return out;
+};
+
+/** `rgba()` string from a palette hex, for canvas-drawn layers that cannot read CSS variables. */
+export const rgbaCss = (hex: string, alpha: number): string => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};

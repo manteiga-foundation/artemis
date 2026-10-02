@@ -98,15 +98,27 @@ describe('page view shows one page and its connections', () => {
     for (const n of one) expect(two).toContain(n);
   });
 
-  test('entering page view hides everything outside the current page subgraph and zooms to the page', () => {
-    const { main } = attach();
+  test('entering page view hides everything outside the current page subgraph and frames that subgraph', () => {
+    const { main, mini } = attach();
     const d = controller.data;
     expect(getState().currentPage).toBe(d.relays[0]);
     controller.setView('page');
-    expect(main.zoomed).toContain(d.relays[0]);
-    expect(main.config.highlightedPointIndices).toEqual(pageSubgraph(d, d.relays[0], 1));
+    const sub = pageSubgraph(d, d.relays[0], 1);
+    expect(main.fittedTo).toEqual(sub);
+    expect(main.config.highlightedPointIndices).toEqual(sub);
     expect(main.config.pointGreyoutOpacity).toBe(0);
     expect(main.config.linkGreyoutOpacity).toBe(0);
+    // The minimap keeps the whole cosmos as context, dimming rather than hiding the rest.
+    expect(mini.config.highlightedPointIndices).toEqual(sub);
+    expect(mini.config.pointGreyoutOpacity).toBeGreaterThan(0);
+  });
+
+  test('changing depth in page view reframes the larger subgraph', () => {
+    const { main } = attach();
+    const d = controller.data;
+    controller.setView('page');
+    controller.depth();
+    expect(main.fittedTo).toEqual(pageSubgraph(d, d.relays[0], 2));
   });
 
   test('a selected node becomes the page in page view, and leaving restores the cosmos greyout', () => {

@@ -27,6 +27,8 @@ export interface UIState {
   muted: boolean;
   view: ViewId;
   viewTransition: ViewTransition | null;
+  /** The view the stage is currently showing; lags `view` until the dive's midpoint. */
+  stageView: ViewId;
   lens: LensId;
   /** Node index of the page the browser is on; the centre of the Page view. */
   currentPage: number;
@@ -51,6 +53,7 @@ let state: UIState = {
   muted: false,
   view: 'cosmos',
   viewTransition: null,
+  stageView: 'cosmos',
   lens: 'overview',
   currentPage: 0,
   pageHops: 1,
