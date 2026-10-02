@@ -14,11 +14,15 @@ bun run check      # TypeScript
 bun run test       # unit tests + Playwright integration tests (isolated Vite server, headless Chromium)
 bun run build      # check + production bundle in dist/
 bun run preview    # serve dist/ at http://127.0.0.1:4173
-bun run scripts/screenshots.ts 5173   # documentation screenshots from a running dev server
+bun run scripts/screenshots.ts 5173        # documentation screenshots from a running dev server
+bun run scripts/screenshots-entry.ts 5173  # entry screen states
 ```
 
-Press **Engage** (or Enter) on the entry screen. Browsers only allow audio after a user gesture,
-so the console assembles and the intro sound plays at that moment.
+The entry screen asks which website is under review. Type a domain or URL (`example.com`,
+`https://app.example.com/start`; bare domains become `https://`, only http/https are accepted) and
+press **Engage** or Enter. Nothing starts without a valid address; the host then shows in the header,
+the Browser view address line and the console readouts. Browsers only allow audio after a user
+gesture, so the console assembles and the intro sound plays at that moment.
 
 ## Vocabulary
 
@@ -83,10 +87,11 @@ Also: `1-5` / `Left` / `Right` lenses, `Esc` cancel, `M` mute.
 
 ## Tests
 
+- `tests/target.test.ts` — website normalisation (bare domains, rejected schemes) and engaging the console with and without a valid address.
 - `tests/views.test.ts` — view order, dive direction, palettes carry the approved values and the same tokens.
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, Depth and Route, Page subgraph (BFS) and framing, minimap context.
-- `tests/integration.test.ts` — real Chromium against an isolated Vite server: V walks the three views, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
+- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the entry screen refuses to start without a website and carries the address into the console; V walks the three views, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
 
 ## Browser view: approach
 

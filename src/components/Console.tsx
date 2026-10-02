@@ -74,6 +74,7 @@ export function Console() {
   const targetMode = useStore((s) => s.targetMode);
   const pinnedCount = useStore((s) => s.pinned.length);
   const view = useStore((s) => s.stageView);
+  const targetUrl = useStore((s) => s.targetUrl);
   const meta = selected !== null ? controller.data.meta[selected] : null;
   const pageMeta = controller.data.meta[selected ?? currentPage];
   const seq = useStore((s) => s.statusId);
@@ -93,7 +94,7 @@ export function Console() {
           // Page facts for the auditor. Placeholders until the live page reports them.
           <div className="console-readout">
             <span>
-              <em>URL</em> artemis://{pageMeta.id.toLowerCase()}
+              <em>URL</em> {targetUrl ?? '--'}
             </span>
             <span>
               <em>TITLE</em> --

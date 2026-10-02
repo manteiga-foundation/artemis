@@ -878,6 +878,77 @@ kbd {
   color: var(--azure);
 }
 
+.boot-note.is-warn {
+  color: var(--alert);
+}
+
+/* Website field on the entry screen. */
+.boot-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  margin: 0 0 22px;
+  padding: 8px 12px 10px;
+  --arwes-frames-line-color: var(--azure);
+  --arwes-frames-deco-color: var(--mist);
+  --arwes-frames-bg-color: color-mix(in srgb, var(--deep) 55%, transparent);
+}
+
+.boot-field:focus-within {
+  --arwes-frames-line-color: var(--mist);
+}
+
+.boot-field > :not(.frame) {
+  position: relative;
+}
+
+.boot-label {
+  font: 600 10px var(--font);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--azure);
+  margin-bottom: 4px;
+}
+
+.boot-input {
+  width: 100%;
+  padding: 4px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--white);
+  font: 500 15px var(--mono);
+  letter-spacing: 0.02em;
+  caret-color: var(--mist);
+}
+
+.boot-input::placeholder {
+  color: color-mix(in srgb, var(--sky) 55%, transparent);
+}
+
+.boot-input[aria-invalid='true'] {
+  color: var(--alert);
+}
+
+.boot-btn:disabled {
+  cursor: not-allowed;
+  color: color-mix(in srgb, var(--sky) 60%, transparent);
+  --arwes-frames-bg-color: color-mix(in srgb, var(--base) 22%, transparent);
+  --arwes-frames-line-color: color-mix(in srgb, var(--azure) 55%, transparent);
+}
+
+.brand-host {
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11px var(--mono);
+  letter-spacing: 0.02em;
+  color: var(--sky);
+}
+
 /* ---------------------------------------------------------------- motion */
 
 @keyframes blink {

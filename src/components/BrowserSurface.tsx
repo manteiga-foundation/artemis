@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import { Animated, Animator, FrameCorners, FrameLines, Text } from '@arwes/react';
-import { controller } from '../graph/controller';
 import { useStore } from '../store';
 import { useIlluminator } from '../hooks';
 
@@ -9,9 +8,7 @@ import { useIlluminator } from '../hooks';
 // be designed and tested independently of the page itself.
 export function BrowserSurface() {
   const ref = useRef<HTMLDivElement>(null);
-  const currentPage = useStore((s) => s.currentPage);
-  const selected = useStore((s) => s.selected);
-  const meta = controller.data.meta[selected ?? currentPage];
+  const targetUrl = useStore((s) => s.targetUrl);
   useIlluminator(ref);
 
   return (
@@ -23,7 +20,7 @@ export function BrowserSurface() {
         <div className="browser-bar">
           <span className="browser-scheme">LIVE PAGE</span>
           <span className="browser-url" title="Address of the page the browser is on">
-            artemis://{meta.id.toLowerCase()}
+            {targetUrl ?? '--'}
           </span>
           <span className="browser-state">DETACHED</span>
         </div>

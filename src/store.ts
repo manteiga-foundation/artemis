@@ -24,6 +24,8 @@ export interface ViewTransition {
 
 export interface UIState {
   engaged: boolean;
+  /** The website under review, canonical http(s) URL. Null until the console is engaged. */
+  targetUrl: string | null;
   muted: boolean;
   view: ViewId;
   viewTransition: ViewTransition | null;
@@ -50,6 +52,7 @@ export interface UIState {
 
 let state: UIState = {
   engaged: false,
+  targetUrl: null,
   muted: false,
   view: 'cosmos',
   viewTransition: null,

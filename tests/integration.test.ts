@@ -42,6 +42,7 @@ async function engaged(reducedMotion = false): Promise<{ page: Page; errors: str
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
   await page.evaluate('import("/src/store.ts").then(m => { window.__artemis = m.getState; })');
+  await page.getByRole('textbox', { name: 'Website' }).fill('example.com');
   await page.getByRole('button', { name: 'Engage', exact: true }).click();
   await page.waitForFunction('window.__artemis().engaged === true');
   // Arwes staggers the HUD in with visibility:hidden; wait for the card to be usable.
@@ -138,3 +139,43 @@ test('lenses keep working from the keyboard inside the cosmos and page views', a
     await page.context().close();
   }
 }, 30000);
+
+test('the entry screen asks for the website and nothing starts until a valid one is given', async () => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  try {
+    await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
+    await page.evaluate('import("/src/store.ts").then(m => { window.__artemis = m.getState; })');
+    const field = page.getByRole('textbox', { name: 'Website' });
+    const engage = page.getByRole('button', { name: 'Engage', exact: true });
+    await field.waitFor({ state: 'visible' });
+    await page.waitForFunction((id) => document.activeElement?.id === id, 'target-url', { timeout: 5000 });
+    expect(await engage.isDisabled()).toBe(true);
+
+    await field.fill('not a website');
+    expect(await engage.isDisabled()).toBe(true);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(300);
+    expect(await stateOf(page)).toMatchObject({ engaged: false, targetUrl: null });
+    expect((await page.locator('.boot-note').textContent()) ?? '').toMatch(/web address/i);
+
+    await field.fill('shop.example.co.uk/checkout');
+    expect(await engage.isDisabled()).toBe(false);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction('window.__artemis().engaged === true');
+    expect(await stateOf(page)).toMatchObject({ targetUrl: 'https://shop.example.co.uk/checkout' });
+    expect(await page.locator('.hud-header').textContent()).toContain('shop.example.co.uk');
+
+    await visible(page, 'View (V)');
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
+    expect(await page.locator('.browser-url').textContent()).toBe('https://shop.example.co.uk/checkout');
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+  }
+}, 40000);

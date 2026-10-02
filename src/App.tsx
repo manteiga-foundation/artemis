@@ -6,7 +6,7 @@ import { Header } from './components/Header';
 import { MiniMap } from './components/MiniMap';
 import { Console, stepLens } from './components/Console';
 import { CommandCard, runCommand } from './components/CommandCard';
-import { BootOverlay, useEngage } from './components/BootOverlay';
+import { BootOverlay, TARGET_FIELD_ID } from './components/BootOverlay';
 import { commandByKey } from './commands';
 import { controller } from './graph/controller';
 import { LENSES, getState, setState, useStore } from './store';
@@ -15,7 +15,6 @@ import { paletteStyle } from './views';
 
 function Hotkeys() {
   const play = useSfx();
-  const engage = useEngage();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -25,10 +24,8 @@ function Hotkeys() {
 
       const s = getState();
       if (!s.engaged) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          engage();
-        }
+        // Nothing starts without a website: keys on the entry screen go to the field.
+        if (e.key === 'Enter' || e.key.length === 1) document.getElementById(TARGET_FIELD_ID)?.focus();
         return;
       }
 
@@ -64,7 +61,7 @@ function Hotkeys() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [play, engage]);
+  }, [play]);
 
   return null;
 }
