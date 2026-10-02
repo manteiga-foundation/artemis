@@ -9,7 +9,9 @@ import { startVite, type ViteServer } from './vite';
 // A fixture "website" on localhost (cross-site to the app on 127.0.0.1).
 //   /open/      frames freely
 //   /locked/    refuses framing (X-Frame-Options + CSP frame-ancestors) and sets a SameSite=Lax
-//               session cookie; /locked/second reports whether that cookie came back.
+//               session cookie; /locked/second reports whether that cookie came back. Like a real
+//               site that notices it is framed, it also carries links that target the top window
+//               and a new tab, and /locked/go redirects to /locked/second?via=go.
 const site = Bun.serve({
   hostname: 'localhost',
   port: 0,
@@ -18,7 +20,7 @@ const site = Bun.serve({
     const html = (body: string) => `<!doctype html><title>Fixture</title><body style="font:20px sans-serif">${body}</body>`;
     if (url.pathname === '/open/') return new Response(html('<h1>Fixture site</h1><p>open</p>'), { headers: { 'content-type': 'text/html' } });
     if (url.pathname === '/locked/') {
-      return new Response(html('<h1>Fixture site</h1><a href="/locked/second">second page</a>'), {
+      return new Response(html('<h1>Fixture site</h1><a href="/locked/second">second page</a> <a href="/locked/second" target="_top">top link</a>'), {
         headers: {
           'content-type': 'text/html',
           'x-frame-options': 'DENY',
@@ -27,9 +29,11 @@ const site = Bun.serve({
         }
       });
     }
+    if (url.pathname === '/locked/go') return Response.redirect(`${url.origin}/locked/second?via=go`, 302);
     if (url.pathname === '/locked/second') {
       const has = (req.headers.get('cookie') ?? '').includes('session=abc');
-      return new Response(html(`<h1>Second</h1><p>cookie: ${has ? 'yes' : 'no'}</p>`), {
+      const via = url.searchParams.get('via');
+      return new Response(html(`<h1>Second</h1><p>cookie: ${has ? 'yes' : 'no'}</p>${via ? `<p>via: ${via}</p>` : ''}<a href="/locked/go" target="_blank">new tab link</a>`), {
         headers: { 'content-type': 'text/html', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" }
       });
     }
@@ -138,6 +142,33 @@ describe('the browser view shows the real website', () => {
       await page.keyboard.press('v');
       await page.waitForFunction('window.__artemis().view === "page"', null, { timeout: 4000 });
       expect(await page.locator('.cmd-hint').textContent()).not.toContain('Keyboard is in the page');
+    } finally {
+      await owned.close();
+    }
+  }, 45000);
+
+  test('in the owned browser, links aimed at the top window or a new tab, and redirects, stay inside the frame', async () => {
+    const owned = await ownBrowser({ appUrl: vite.url, userDataDir: profileDir, headless: true, width: 1440, height: 900 });
+    try {
+      const { page, context } = owned;
+      await page.waitForLoadState('networkidle');
+      await engageWith(page, `${siteUrl}/locked/`);
+      const frame = page.frameLocator('.browser-surface iframe');
+      await frame.getByText('Fixture site').waitFor({ timeout: 10000 });
+
+      // target="_top" would replace the console (the sandbox blocks it); it must navigate the frame.
+      await frame.getByRole('link', { name: 'top link' }).click();
+      await frame.getByText('cookie: yes').waitFor({ timeout: 10000 });
+      expect(page.url()).toContain(vite.url);
+      expect(await page.locator('.app').count()).toBe(1);
+
+      // target="_blank" would open a window outside the console; a redirect must land on the final
+      // address, not show the final page under the redirecting URL.
+      await frame.getByRole('link', { name: 'new tab link' }).click();
+      await frame.getByText('via: go').waitFor({ timeout: 10000 });
+      const siteFrame = page.frames().find((f) => f.url().startsWith(siteUrl));
+      expect(siteFrame?.url()).toBe(`${siteUrl}/locked/second?via=go`);
+      expect(context.pages().length).toBe(1);
     } finally {
       await owned.close();
     }

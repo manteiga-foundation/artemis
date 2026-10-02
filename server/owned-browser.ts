@@ -58,8 +58,23 @@ export async function unframe(route: Route, request: Request): Promise<void> {
   }
   if (!inSubFrame) return route.continue();
 
-  const response = await route.fetch();
+  // Redirects: Chromium does not send the request that follows a redirect back through this
+  // handler, so the final page would arrive unrewritten and be blocked. Instead answer the hop
+  // with a page that performs the redirect itself (keeping any cookies the redirect set); the
+  // follow-up is then a fresh navigation this handler sees.
+  const response = await route.fetch({ maxRedirects: 0 });
   const headers = response.headers();
+  if (headers['set-cookie']) {
+    headers['set-cookie'] = headers['set-cookie'].split('\n').map(crossSiteCookie).join('\n');
+  }
+  if (response.status() >= 300 && response.status() < 400 && headers['location']) {
+    const target = new URL(headers['location'], request.url()).href;
+    const hop: Record<string, string> = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' };
+    if (headers['set-cookie']) hop['set-cookie'] = headers['set-cookie'];
+    const safe = target.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const body = `<!doctype html><meta charset="utf-8"><script>location.replace(${JSON.stringify(target)})</script><noscript><meta http-equiv="refresh" content="0; url=${safe}"></noscript>`;
+    return route.fulfill({ status: 200, headers: hop, body });
+  }
   delete headers['x-frame-options'];
   for (const name of ['content-security-policy', 'content-security-policy-report-only']) {
     if (headers[name] !== undefined) {
@@ -67,9 +82,6 @@ export async function unframe(route: Route, request: Request): Promise<void> {
       if (stripped) headers[name] = stripped;
       else delete headers[name];
     }
-  }
-  if (headers['set-cookie']) {
-    headers['set-cookie'] = headers['set-cookie'].split('\n').map(crossSiteCookie).join('\n');
   }
   await route.fulfill({ response, headers });
 }
@@ -81,12 +93,32 @@ export const withOwnedFlag = (appUrl: string): string => {
 };
 
 /**
- * Runs in every frame of the owned browser. Inside the framed website (not the top-level console)
- * it forwards plain hotkeys to the console, except while the person is typing in a field, so V and
+ * Runs in every frame of the owned browser; does nothing in the top-level console.
+ *
+ * Navigation: a site that notices it is framed often aims its links at the top window
+ * (`target="_top"`, `<base target>`, `window.open(url, '_top')`), which the sandbox blocks because
+ * it would replace the console. Those, and `target="_blank"` links that would open a window
+ * outside the console, are retargeted at the frame itself. Plain `window.open` popups are left alone.
+ *
+ * Hotkeys: plain key presses (not while typing in a field) are forwarded to the console, so V and
  * the other commands keep working after clicking into the page. The page still receives the key.
  */
-export const FRAME_KEY_FORWARDER = `(() => {
+export const FRAME_AGENT = `(() => {
   if (window.top === window) return;
+  const ESCAPING = new Set(['_top', '_parent', '_blank']);
+  const effectiveTarget = (el) => el.getAttribute('target') || document.querySelector('base[target]')?.getAttribute('target') || '';
+  const retarget = (e) => {
+    const el = e.target && e.target.closest ? e.target.closest('a[href], area[href], form') : null;
+    if (el && ESCAPING.has(effectiveTarget(el))) el.setAttribute('target', '_self');
+  };
+  window.addEventListener('click', retarget, true);
+  window.addEventListener('auxclick', retarget, true);
+  window.addEventListener('submit', retarget, true);
+  const open = window.open;
+  window.open = function (url, target, features) {
+    if (target === '_top' || target === '_parent') { if (url) location.assign(String(url)); return null; }
+    return open.call(window, url, target, features);
+  };
   window.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
     const t = e.target;
@@ -109,7 +141,7 @@ export async function ownBrowser(o: OwnBrowserOptions): Promise<OwnedBrowser> {
     ignoreDefaultArgs: ['--enable-automation']
   });
   await context.route('**/*', unframe);
-  await context.addInitScript(FRAME_KEY_FORWARDER);
+  await context.addInitScript(FRAME_AGENT);
 
   let page: Page;
   if (headless) {

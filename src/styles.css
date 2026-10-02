@@ -102,30 +102,13 @@ kbd {
 }
 
 /* The website fills the stage from under the header to the bottom edge; the bottom panels float
-   over it. A scrim keeps the bottom HUD legible over any page. */
+   over it, each on its own glass, so the page beneath stays visible and usable. */
 .stage .browser-surface {
   position: absolute;
   inset: 44px 0 0;
   z-index: 2;
   display: flex;
   flex-direction: column;
-}
-
-.stage[data-shown='browser']::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 340px;
-  z-index: 3;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    color-mix(in srgb, var(--bg) 55%, transparent) 40%,
-    color-mix(in srgb, var(--bg) 90%, transparent) 100%
-  );
 }
 
 /* Address strip: glass over the top of the page. */
@@ -729,6 +712,17 @@ kbd {
 
 .console-readout .is-armed {
   color: var(--alert);
+}
+
+/* Over the live page the console text needs its own backing; the panels already have theirs. */
+.app[data-view='browser'] .console-status,
+.app[data-view='browser'] .console-readout {
+  background: color-mix(in srgb, var(--bg2) 78%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.app[data-view='browser'] .console-readout {
+  padding: 6px 12px;
 }
 
 .tabstrip {

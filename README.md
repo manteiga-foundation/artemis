@@ -99,15 +99,15 @@ command card then says "Keyboard is in the page. Click the console to use hotkey
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, Depth and Route, Page subgraph (BFS) and framing, minimap context.
 - `tests/integration.test.ts` — real Chromium against an isolated Vite server: the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V walks Browser -> Page -> Cosmos -> Browser, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
-- `tests/owned-browser.test.ts` — CSP/cookie rewriting; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page.
+- `tests/owned-browser.test.ts` — CSP/cookie rewriting; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page. Links aimed at the top window or a new tab, and redirects, stay inside the frame and land on the final address with no extra window.
 
 ## Browser view: the real website
 
 The website under review loads in a sandboxed `<iframe>` (no `allow-top-navigation`, so a
 frame-busting site cannot take over the console) that fills the stage edge to edge, from a glass
 address strip under the header down to the bottom of the screen; the bottom panels float over the
-page on a soft scrim that keeps them legible. The strip shows the address and the state:
-`EXTERNAL` or `OWNED`, then `CONNECTING` / `LIVE`.
+page, each on its own glass, so the page stays visible and usable around them. The strip shows the
+address and the state: `EXTERNAL` or `OWNED`, then `CONNECTING` / `LIVE`.
 
 - **External browser** (`bun run dev`, your own Chrome): works for sites that allow framing;
   sites sending `X-Frame-Options` or CSP `frame-ancestors` stay blank, and a footnote says so.
@@ -115,9 +115,13 @@ page on a soft scrim that keeps them legible. The strip shows the address and th
   Chromium that Playwright launches (`server/owned-browser.ts`, profile in `data/browser-profile`).
   For documents loaded into sub-frames Playwright removes `X-Frame-Options` and `frame-ancestors`
   and rewrites `Set-Cookie` to `SameSite=None; Secure`, so any site can be framed and keeps its
-  session while you click through it. Artemis's own requests are untouched. The same Playwright
-  page will provide the DOM, element rectangles, forms and network activity for annotations and
-  flows.
+  session while you click through it. Artemis's own requests are untouched. A small agent runs in
+  every frame of the site: links and forms aimed at the top window or a new tab (`target="_top"`,
+  `_parent`, `_blank`, `<base target>`, `window.open(url, '_top')`), which sites use once they
+  notice they are framed, are retargeted at the frame itself; redirects are replayed as frame
+  navigations so each hop is rewritten and the frame ends on the final address. The same
+  Playwright page will provide the DOM, element rectangles, forms and network activity for
+  annotations and flows.
 
 Proof (`tests/owned-browser.test.ts`): a fixture site that refuses framing and sets a
 `SameSite=Lax` session cookie stays blank in an ordinary browser, and in the owned browser is
