@@ -40,16 +40,15 @@ describe('the command card adapts to the view', () => {
     }
   });
 
-  test('V is the View command: browser pulls back to page, page to cosmos, cosmos returns to the browser', () => {
+  test('V is the View command: the browser pulls back to the cosmos, the cosmos returns to the browser', () => {
     attach();
     setState({ view: 'browser', stageView: 'browser' });
     const v = commandByKey('browser', 'V')!;
     expect(v.name).toBe('View');
-    expect(v.hint).toContain('Page');
+    expect(v.hint).toBe('Pull back to the Cosmos view: entire network.');
     v.run();
-    expect(getState().view).toBe('page');
-    expect(commandByKey('page', 'V')!.hint).toContain('Cosmos');
-    expect(commandByKey('cosmos', 'V')!.hint).toContain('Browser');
+    expect(getState().view).toBe('cosmos');
+    expect(commandByKey('cosmos', 'V')!.hint).toBe('Return to the Browser view: live page.');
     // Layered panels, not a cube: the glyph reads as "stacked views" at a glance.
     for (const view of VIEWS) expect(commandByKey(view.id, 'V')!.Icon).toBe(FaLayerGroup);
   });

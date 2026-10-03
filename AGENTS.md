@@ -21,8 +21,9 @@ Stack: Bun, Vite, React 18, `@arwes/react` (alpha), `@cosmos.gl/graph` (WebGL gr
 
 ## Vocabulary (fixed, use these words)
 
-- **View** - the console's mode: Browser (home after Engage), Page, Cosmos. `V` pulls back
-  Browser -> Page -> Cosmos and wraps back into the Browser.
+- **View** - the console's mode: Browser (home after Engage) and Cosmos are shown; Page is kept
+  in code but hidden (`hidden` in `src/views.ts`). `V` pulls back from the Browser to the Cosmos,
+  landing on the current page (selected, zoomed in on), and returns to the Browser.
 - **Lens** - a perspective inside a view: Overview, Clusters, Hubs, Routes, Anomalies (`1-5`).
 - **Layer** - an independent toggle (Links, labels, annotations).
 - **Command card** - the 3x3 grid; A and S keep the top row, V the middle row, in every view.
@@ -128,7 +129,10 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
 
 ## Where things stand (update when it changes)
 
-Done: three views with palettes and the dive; entry screen with the website field; Browser view
+Done: two shown views (Browser, Cosmos; the Page view hidden, not removed) with palettes and the
+dive; pulling back from the Browser opens the Cosmos on the current page, selected and zoomed in
+on, and an operator camera move cancels the first layout's pending auto-fit; entry screen with the
+website field; Browser view
 showing the real site; the owned browser is the Electron shell (`bun run artemis`): genuine site,
 click pass-through, hotkeys from the site, live address strip, right-click Back/Forward/Reload,
 console reload resumes on the same page; `C` panels fold with header switch; real resource
@@ -140,7 +144,10 @@ remove the framed owned browser (`server/owned-browser.ts`, its tests) once the 
 slot's navy veil over the site as a switchable Layer (kept on for now by the user's choice).
 
 Next: the user is designing more interface elements (node selection, annotations, ...), each
-built with emulated data first. Also pending: apply the user's final sound picks as defaults;
+built with emulated data first. From the user's notes: the current page should follow the
+browser's address (today it is always the first relay, emulated), a simple autopilot browsing,
+and true categorisations for every page (authentication? part of a flow, which step?). Also
+pending: apply the user's final sound picks as defaults;
 Back / Forward / Reload as command-card commands (the right-click menu has them) and page
 title/forms readouts from the site's Playwright page;
-Page view ego layout; annotation overlays anchored to element rects; adaptive graph quality.
+Page view ego layout (when it returns); annotation overlays anchored to element rects; adaptive graph quality.

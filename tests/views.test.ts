@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { VIEWS, VIEW_BY_ID, nextView, prevView, PALETTES, paletteCss, viewDepth } from '../src/views';
+import { VIEWS, VIEW_BY_ID, SHOWN_VIEWS, nextView, prevView, PALETTES, paletteCss, viewDepth } from '../src/views';
 
 describe('views', () => {
   test('three views ordered from nearest (browser) to farthest (cosmos)', () => {
@@ -8,12 +8,19 @@ describe('views', () => {
     expect(viewDepth('cosmos')).toBe(2);
   });
 
-  test('V pulls back from browser to page to cosmos, then wraps back into the browser', () => {
-    expect(nextView('browser')).toBe('page');
-    expect(nextView('page')).toBe('cosmos');
+  test('the Page view is kept but hidden: only the Browser and the Cosmos are shown', () => {
+    expect(VIEW_BY_ID.get('page')?.hidden).toBe(true);
+    expect(SHOWN_VIEWS.map((v) => v.id)).toEqual(['browser', 'cosmos']);
+  });
+
+  test('V pulls back from the browser straight to the cosmos, then returns to the browser', () => {
+    expect(nextView('browser')).toBe('cosmos');
     expect(nextView('cosmos')).toBe('browser');
     expect(prevView('browser')).toBe('cosmos');
-    expect(prevView('cosmos')).toBe('page');
+    expect(prevView('cosmos')).toBe('browser');
+    // Reached only from code while hidden, the Page view still steps out to the cosmos.
+    expect(nextView('page')).toBe('cosmos');
+    expect(prevView('page')).toBe('browser');
   });
 
   test('each view carries its label and a palette with the approved base, line and accent', () => {

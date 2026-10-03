@@ -18,10 +18,12 @@ export class Renderer {
   renders = 0;
   fits = 0;
   zoomed: number[] = [];
+  zoomScales: number[] = [];
   tracked: number[] = [];
   colors: Float32Array<ArrayBufferLike> = new Float32Array();
   linkColors: Float32Array<ArrayBufferLike> = new Float32Array();
   setPointPositions() {}
+  getPointPositions(): number[] { return []; }
   setLinks() {}
   setPointColors(c: Float32Array) { this.colors = c; }
   setLinkColors(c: Float32Array) { this.linkColors = c; }
@@ -47,7 +49,10 @@ export class Renderer {
   fittedTo: number[] | null = null;
   fitViewByPointIndices(indices: number[]) { this.fittedTo = [...indices]; }
   getZoomLevel() { return 1; }
-  zoomToPointByIndex(i: number) { this.zoomed.push(i); }
+  zoomToPointByIndex(i: number, _duration?: number, scale?: number) {
+    this.zoomed.push(i);
+    this.zoomScales.push(scale ?? 1);
+  }
 }
 
 export const attach = () => {

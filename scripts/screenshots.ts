@@ -1,5 +1,5 @@
-// Capture documentation screenshots of the three views (and frames of the dive) from a running dev
-// server: `bun run dev` in one terminal, then `bun run scripts/screenshots.ts [port] [outDir] [site]`.
+// Capture documentation screenshots of the two shown views (and frames of the dive) from a running
+// dev server: `bun run dev` in one terminal, then `bun run scripts/screenshots.ts [port] [outDir] [site]`.
 // For the Browser view with a site that refuses framing, use scripts/screenshots-browser.ts.
 import { chromium, type Page } from 'playwright';
 import { mkdir } from 'node:fs/promises';
@@ -25,7 +25,7 @@ const engage = async (page: Page) => {
 const settled = (page: Page) => page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 5000 });
 const shot = (page: Page, name: string) => page.screenshot({ path: `${out}/${name}.png` });
 
-// Entry screen and the three views at 1440x900, in V order: browser -> page -> cosmos.
+// Entry screen and the two views at 1440x900, in V order: browser -> cosmos (on the current page).
 let page = await open(1440, 900);
 await page.waitForTimeout(1500);
 await shot(page, 'entry');
@@ -34,7 +34,7 @@ await page.waitForTimeout(4000);
 await shot(page, 'browser');
 
 await page.keyboard.press('v');
-// Frames of the dive: leaving (old view falling away), midpoint, arriving.
+// Frames of the dive: leaving (the page falling away), midpoint, arriving on the current page.
 await page.waitForTimeout(260);
 await shot(page, 'dive-1-leaving');
 await page.waitForTimeout(260);
@@ -43,14 +43,15 @@ await page.waitForTimeout(260);
 await shot(page, 'dive-3-arriving');
 await settled(page);
 await page.waitForTimeout(1600);
-await shot(page, 'page');
-await page.keyboard.press('d');
-await page.waitForTimeout(900);
-await shot(page, 'page-depth-2');
+await shot(page, 'cosmos-current-page');
 
-await page.keyboard.press('v');
-await settled(page);
-await page.waitForTimeout(1600);
+// The whole network: clear the selection, then Focus tours the six sectors and fits everything.
+await page.keyboard.press('x');
+for (let i = 0; i < 7; i++) {
+  await page.keyboard.press('f');
+  await page.waitForTimeout(120);
+}
+await page.waitForTimeout(1800);
 await shot(page, 'cosmos');
 await page.close();
 
@@ -62,7 +63,7 @@ await shot(page, 'browser-1280');
 await page.keyboard.press('v');
 await settled(page);
 await page.waitForTimeout(1500);
-await shot(page, 'page-1280');
+await shot(page, 'cosmos-current-page-1280');
 await page.close();
 
 await browser.close();

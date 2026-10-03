@@ -111,15 +111,13 @@ describe('the owned browser is an Electron shell', () => {
       const page = await sitePage(shell, `${siteUrl}/guarded/`);
       await page.getByRole('heading', { name: 'Guarded site' }).waitFor({ timeout: 10000 });
 
-      // V pressed in the page (focus not in a field) pulls back to the Page view; the site view
+      // V pressed in the page (focus not in a field) pulls back to the cosmos; the site view
       // steps aside and comes back, on the same page, when the console returns to the Browser view.
       await page.getByRole('heading', { name: 'Guarded site' }).click();
       await page.keyboard.press('v');
-      await shell.console.waitForFunction('window.__artemis().view === "page"', null, { timeout: 4000 });
+      await shell.console.waitForFunction('window.__artemis().view === "cosmos"', null, { timeout: 4000 });
       await shell.console.waitForFunction('window.__artemis().viewTransition === null', null, { timeout: 4000 });
       expect((await shell.state()).siteVisible).toBe(false);
-      await shell.console.keyboard.press('v');
-      await shell.console.waitForFunction('window.__artemis().viewTransition === null && window.__artemis().view === "cosmos"', null, { timeout: 4000 });
       await shell.console.keyboard.press('v');
       await shell.console.waitForFunction('window.__artemis().viewTransition === null && window.__artemis().view === "browser"', null, { timeout: 4000 });
       for (let i = 0; i < 30 && !(await shell.state()).siteVisible; i++) await Bun.sleep(100);

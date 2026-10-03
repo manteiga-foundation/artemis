@@ -18,6 +18,8 @@ type SfxListener = (sfx: SfxAction) => void;
 type Listener = () => void;
 
 const BASE_REPULSION = 0.9;
+/** Zoom level the camera closes in to when the cosmos opens on the current page. */
+const PAGE_ZOOM = 4;
 
 const LINK_WIDTH: Record<string, number> = {
   trunk: 2.4,
@@ -200,28 +202,12 @@ class GraphController {
       pixelRatio: graphPixelRatio(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight, window.devicePixelRatio),
       onPointClick: (index) => this.handlePointClick(index),
       onBackgroundClick: () => this.handleBackgroundClick(),
+      onZoomStart: (_e, userDriven) => this.zoomStarted(userDriven),
       onZoom: () => this.emitViewport(),
       onZoomEnd: () => this.emitViewport(),
-      onSimulationStart: () => {
-        this.ticksSinceStart = 0;
-        setState({ simRunning: true });
-      },
-      onSimulationTick: () => {
-        this.tickCount++;
-        this.ticksSinceStart++;
-        if (this.needsFit && (this.ticksSinceStart === 90 || this.ticksSinceStart === 240)) {
-          this.main?.fitView(700, 0.16, true);
-        }
-        this.syncMini();
-      },
-      onSimulationEnd: () => {
-        setState({ simRunning: false });
-        if (this.needsFit) {
-          this.needsFit = false;
-          this.main?.fitView(900, 0.16, false);
-        }
-        this.syncMini(true);
-      },
+      onSimulationStart: () => this.layoutStarted(),
+      onSimulationTick: () => this.layoutTick(),
+      onSimulationEnd: () => this.layoutSettled(),
       onSimulationPause: () => setState({ simRunning: false }),
       onSimulationUnpause: () => setState({ simRunning: true }),
       onDragEnd: () => this.syncMini(true),
@@ -282,6 +268,46 @@ class GraphController {
     }
   }
 
+  // ---------------------------------------------------------------- layout and camera lifecycle
+  // A new layout frames itself as it unfolds (ticks 90 and 240, then once settled) so the
+  // network arrives in view. Called by the graph's simulation callbacks.
+
+  layoutStarted() {
+    this.ticksSinceStart = 0;
+    setState({ simRunning: true });
+  }
+
+  layoutTick() {
+    this.tickCount++;
+    this.ticksSinceStart++;
+    if (this.needsFit && (this.ticksSinceStart === 90 || this.ticksSinceStart === 240)) {
+      this.main?.fitView(700, 0.16, true);
+    }
+    this.syncMini();
+  }
+
+  layoutSettled() {
+    setState({ simRunning: false });
+    if (this.needsFit) {
+      this.needsFit = false;
+      this.main?.fitView(900, 0.16, false);
+    }
+    this.syncMini(true);
+  }
+
+  /** The camera starts moving; `userDriven` when the operator wheels or drags the graph. */
+  zoomStarted(userDriven: boolean) {
+    if (userDriven) this.aimed();
+  }
+
+  /**
+   * The operator has pointed the camera somewhere (a command, the minimap, the wheel): the first
+   * layout's pending fits must not take it away again.
+   */
+  private aimed() {
+    this.needsFit = false;
+  }
+
   /** Copy current simulated positions from the main graph into the minimap. */
   syncMini(force = false) {
     const now = performance.now();
@@ -317,6 +343,7 @@ class GraphController {
   /** Centre the main camera on a point clicked inside the minimap. */
   panToMini(x: number, y: number, duration = 250) {
     if (!this.main || !this.mini) return;
+    this.aimed();
     const space = this.mini.screenToSpacePosition([x, y]);
     this.main.setZoomTransformByPointPositions(
       new Float32Array(space),
@@ -416,6 +443,7 @@ class GraphController {
   private framePage(duration = 900) {
     const s = getState();
     if (s.view !== 'page' || !this.main) return;
+    this.aimed();
     const nodes = pageSubgraph(this.data, this.pageFocus(), s.pageHops);
     this.main.fitViewByPointIndices(nodes, duration, 0.3, false);
   }
@@ -436,6 +464,7 @@ class GraphController {
     if (s.targetMode) {
       setState({ targetMode: false });
       this.select(index);
+      this.aimed();
       this.main?.zoomToPointByIndex(index, 900, Math.max(3, this.main.getZoomLevel()), false);
       this.status(`Target locked: ${m.id}. ${m.degree} connections traced.`, 'ok');
       this.emitSfx('notice');
@@ -481,13 +510,21 @@ class GraphController {
     const dir = viewDepth(to) < viewDepth(from) ? 'in' : 'out';
     const id = ++this.transitionSeq;
     setState({ view: to, viewTransition: { from, to, dir, id } });
+    const spec = VIEW_BY_ID.get(to)!;
+    if (to === 'cosmos' && from === 'browser') {
+      // Pulling back from the page itself: the cosmos opens on that page, selected and zoomed in on.
+      const page = getState().currentPage;
+      this.select(page);
+      this.aimed();
+      this.main?.zoomToPointByIndex(page, 900, PAGE_ZOOM, true, false);
+      return this.done({ ok: true, message: `View: ${spec.label}. Current page ${this.data.meta[page].id} selected.`, sfx: 'view-dive' });
+    }
     this.applyLens();
     if (to === 'page') {
       this.framePage();
     } else if (to === 'cosmos') {
       this.main?.fitView(900, 0.18, false);
     }
-    const spec = VIEW_BY_ID.get(to)!;
     return this.done({ ok: true, message: `View: ${spec.label}. ${spec.tagline}.`, sfx: 'view-dive' });
   }
 
@@ -551,6 +588,7 @@ class GraphController {
   focus(): CommandResult {
     const g = this.main;
     if (!g) return { ok: false, message: 'Graph not ready.' };
+    this.aimed();
     const s = getState();
     if (s.selected !== null) {
       g.zoomToPointByIndex(s.selected, 800, Math.max(4, g.getZoomLevel()), false, false);

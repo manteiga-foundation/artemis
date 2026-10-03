@@ -32,14 +32,41 @@ describe('views and lenses in the store', () => {
     expect(getState().viewTransition).toBeNull();
   });
 
-  test('V pulls back from browser to page, recording an outward transition and announcing the view', () => {
+  test('V pulls back from the browser straight to the cosmos, recording an outward transition and announcing the view', () => {
     attach();
     setState({ view: 'browser', stageView: 'browser' });
     const r = controller.cycleView();
     expect(r.ok).toBe(true);
-    expect(getState().view).toBe('page');
-    expect(getState().viewTransition).toMatchObject({ from: 'browser', to: 'page', dir: 'out' });
-    expect(getState().status).toBe('View: Page. Page and its connections.');
+    expect(getState().view).toBe('cosmos');
+    expect(getState().viewTransition).toMatchObject({ from: 'browser', to: 'cosmos', dir: 'out' });
+    expect(getState().status).toBe(`View: Cosmos. Current page ${controller.data.meta[getState().currentPage].id} selected.`);
+  });
+
+  test('pulling back from the browser lands on the current page: selected, in focus and zoomed in on', () => {
+    const { main, mini } = attach();
+    const page = getState().currentPage;
+    const id = controller.data.meta[page].id;
+    setState({ view: 'browser', stageView: 'browser' });
+    controller.cycleView();
+    expect(getState().selected).toBe(page);
+    expect(main.config.focusedPointIndex).toBe(page);
+    expect(main.config.highlightedPointIndices).toContain(page);
+    expect(mini.config.focusedPointIndex).toBe(page);
+    // The camera closes in on the page rather than fitting the whole network.
+    expect(main.zoomed.at(-1)).toBe(page);
+    expect(main.zoomScales.at(-1)).toBeGreaterThanOrEqual(3);
+    expect(main.fits).toBe(0);
+    // Its label rides with it, and the console says where the operator is.
+    expect(main.tracked).toContain(page);
+    expect(getState().status).toContain(id);
+  });
+
+  test('a selection made in the cosmos gives way to the current page on the next pull-back', () => {
+    attach();
+    const page = getState().currentPage;
+    setState({ view: 'browser', stageView: 'browser', selected: controller.data.sectors[2] });
+    controller.cycleView();
+    expect(getState().selected).toBe(page);
   });
 
   test('wrapping from cosmos back into the browser is an inward transition', () => {
@@ -90,5 +117,45 @@ describe('focus absorbs vision', () => {
     expect(main.fits).toBe(1);
     controller.focus();
     expect(main.zoomed[sectors.length]).toBe(sectors[0]);
+  });
+});
+
+describe('the first layout frames itself until the operator aims the camera', () => {
+  /** One whole settling layout, as the graph reports it: start, ticks, end. */
+  const settle = (ticks = 300) => {
+    controller.layoutStarted();
+    for (let i = 0; i < ticks; i++) controller.layoutTick();
+    controller.layoutSettled();
+  };
+
+  test('left alone, a new layout is fitted as it unfolds (ticks 90 and 240) and once settled', () => {
+    const { main } = attach();
+    controller.regenerate();
+    settle();
+    expect(main.fits).toBe(3);
+  });
+
+  test('pulling back onto the current page keeps the camera there while the layout settles', () => {
+    const { main } = attach();
+    controller.regenerate();
+    setState({ view: 'browser', stageView: 'browser' });
+    controller.cycleView();
+    settle();
+    expect(main.fits).toBe(0);
+  });
+
+  test('Focus on a sector, and a zoom or pan by the operator, also cancel the pending fit', () => {
+    let { main } = attach();
+    controller.regenerate();
+    controller.focus();
+    settle();
+    expect(main.fits).toBe(0);
+
+    ({ main } = attach());
+    controller.regenerate();
+    controller.zoomStarted(false); // the controller's own camera moves do not count
+    controller.zoomStarted(true); // the wheel or a drag on the graph
+    settle();
+    expect(main.fits).toBe(0);
   });
 });

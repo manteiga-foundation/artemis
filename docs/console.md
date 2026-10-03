@@ -33,7 +33,7 @@ gesture, so the console assembles and the intro sound plays at that moment.
 
 | Word | Meaning | Keys |
 | --- | --- | --- |
-| **View** | The console's mode: what fills the stage, which commands the card offers, which palette everything uses. Browser (home), Page, Cosmos. | `V` pulls back (Browser -> Page -> Cosmos) and wraps back in |
+| **View** | The console's mode: what fills the stage, which commands the card offers, which palette everything uses. Browser (home) and Cosmos are shown; Page is kept in code but hidden. | `V` pulls back from the Browser to the Cosmos, onto the current page, and returns |
 | **Lens** | A perspective within a view: same graph, different emphasis. Overview, Clusters, Hubs, Routes, Anomalies. | `1-5`, `Left/Right` |
 | **Layer** | An independent toggle drawn on top: links, labels, annotations. | `L` (links) |
 
@@ -41,9 +41,28 @@ gesture, so the console assembles and the intro sound plays at that moment.
 
 | View | Shows | Palette | Attention accent |
 | --- | --- | --- | --- |
-| **Cosmos** | The entire network | Egyptian blue, base `#1034a6` | gold `#e0b85c` (9.4:1 on panels) |
-| **Page** | One page and its connections (1 or 2 hops), everything else hidden; the minimap keeps the whole cosmos as context | Orpiment amber, base `#954c00` | pale blue `#9fb6ff` (8.9:1) |
-| **Browser** | The website under review, live, in a sandboxed frame filling the centre; the home view after Engage | Viridian, base `#005d2c` | gold `#e0b85c` (8.9:1) |
+| **Cosmos** | The entire network; arriving from the Browser it opens on the current page, selected and zoomed in on | Egyptian blue, base `#1034a6` | gold `#e0b85c` (9.4:1 on panels) |
+| **Page** (hidden) | One page and its connections (1 or 2 hops), everything else hidden; the minimap keeps the whole cosmos as context | Orpiment amber, base `#954c00` | pale blue `#9fb6ff` (8.9:1) |
+| **Browser** | The website under review, live, filling the stage; the home view after Engage | Viridian, base `#005d2c` | gold `#e0b85c` (8.9:1) |
+
+Two views are shown for the prototype. The Page view is hidden, not removed: its palette,
+command set, controller behaviour (subgraph, Depth, Route) and unit tests stay, and clearing
+`hidden` on its entry in `src/views.ts` puts it back into the V cycle between the two others.
+
+### Landing on the current page
+
+Pulling back from the Browser (V) opens the Cosmos on the page the browser is on: the node is
+selected (focus ring, neighbours highlighted, the rest dimmed, its label tracked), the camera
+closes in to x4 with the node at the centre of the stage, the console readout names it (SEL,
+TIER, SECTOR, DEG) and the status line says `View: Cosmos. Current page RL-1A selected.`. A
+selection made earlier in the Cosmos gives way to the current page on the next pull-back. The
+current page is emulated for now (the first relay, `currentPage` in the store) until the browser's
+address maps to a node. Frames: `docs/screenshots/cosmos-current-page.png` and `-1280.png`.
+
+The first layout frames itself as it unfolds (fits at ticks 90 and 240, then once settled). Any
+camera move the operator causes (this landing, Focus, a target lock, the minimap, a wheel or drag
+on the graph) cancels those pending fits, so the camera is never taken off the page by the layout
+settling behind it.
 
 The green and amber ramps were derived from the blue ramp by rotating hue in OKLCH at equal
 lightness and chroma (amber mid-steps lifted so they read as yellow), then rendered as mock-ups and
@@ -56,8 +75,8 @@ the canvas backgrounds and the WebGL graph.
 ### The dive (V)
 
 A view switch is a move along the camera's axis (`src/components/Stage.tsx`, Web Animations API):
-pulling back (Browser -> Page -> Cosmos) the outgoing view falls away into depth; wrapping back into
-the Browser it rushes past the camera. The HUD folds; at the midpoint the stage swaps what it
+pulling back (Browser -> Cosmos) the outgoing view falls away into depth; returning to the Browser
+it rushes past the camera. The HUD folds; at the midpoint the stage swaps what it
 shows and the palette changes; the incoming view arrives from the opposite side while the HUD
 reassembles in the new colours. 1.2 s; a plain cross-fade under `prefers-reduced-motion`.
 Frames: `docs/screenshots/dive-*.png`.
@@ -67,7 +86,7 @@ Frames: `docs/screenshots/dive-*.png`.
 | Sketch element | Implementation |
 | --- | --- |
 | Header: `T/S  N/S  R/S  Links  Nodes  ~~~  13:11`, double rule | `src/components/Header.tsx` — brand + view badge, live counters, sparkline, sim state, mute, clock |
-| Centre stage | `src/components/Stage.tsx` — `GraphCanvas` + `HubLabels` (Cosmos, Page) or `BrowserSurface` (Browser) |
+| Centre stage | `src/components/Stage.tsx` — `GraphCanvas` + `HubLabels` (Cosmos) or `BrowserSurface` (Browser) |
 | Bottom-left "map" / "scope" | `src/components/MiniMap.tsx` — second cosmos.gl instance, viewport rectangle, click/drag to pan |
 | Bottom-right 3x3 grid with hotkey letters | `src/components/CommandCard.tsx`, per-view sets in `src/commands.tsx` |
 | Lens tab bar (chamfered caps, active underline, dashed rail, `<< >>`) | `src/components/Console.tsx` (`TabStrip`); replaced by page readouts in the Browser view |
@@ -77,12 +96,12 @@ Frames: `docs/screenshots/dive-*.png`.
 
 A and S hold the top row and V the middle row in every view, as drawn in the sketch.
 
-| Key | Cosmos | Page | Browser (placeholders) |
+| Key | Cosmos | Page (hidden) | Browser (placeholders) |
 | --- | --- | --- | --- |
 | A | Target: arm, click a node to lock on | Target | Annotate: pin a note to an element |
 | S | Stop: halt / resume the simulation | Stop | Snapshot: capture the page |
 | H | Hold: pin the selected node | Hold | Highlight: outline interactive elements |
-| V | View: return to Browser | View: pull back to Cosmos | View: pull back to Page |
+| V | View: return to Browser | View: pull back to Cosmos | View: pull back to Cosmos, onto the current page |
 | F | Focus: zoom to selection; else tour sectors, then fit all | Focus | Flow: mark this page as a step in a flow |
 | L | Links on / off | Links | Links: list outbound links |
 | D | Disperse: repulsion pulse | Depth: 1 or 2 hops | DOM: inspect the element tree |
@@ -140,10 +159,10 @@ load from other software (or the measuring browsers themselves) swamps everythin
 ## Tests
 
 - `tests/target.test.ts` — website normalisation (bare domains, rejected schemes) and engaging the console with and without a valid address.
-- `tests/views.test.ts` — view order, dive direction, palettes carry the approved values and the same tokens.
-- `tests/controller.test.ts` — view/lens state, transition lifecycle, Focus absorbing Vision (real controller, fake GPU boundary).
-- `tests/commands.test.ts` — nine commands per view with A/S/V fixed, Depth and Route, Page subgraph (BFS) and framing, minimap context.
-- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in every view, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V walks Browser -> Page -> Cosmos -> Browser, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
+- `tests/views.test.ts` — view order and depth, the Page view kept but hidden (V cycles Browser <-> Cosmos), palettes carry the approved values and the same tokens.
+- `tests/controller.test.ts` — view/lens state, transition lifecycle, landing on the current page when pulling back from the Browser (selected, focused, zoomed in on, labelled, announced; an earlier selection gives way), the first layout's auto-fit and its cancellation by any operator camera move (landing, Focus, wheel/drag), Focus absorbing Vision (real controller, fake GPU boundary).
+- `tests/commands.test.ts` — nine commands per view with A/S/V fixed, V hints for the two shown views, Depth and Route, Page subgraph (BFS) and framing, minimap context (the Page view's behaviour stays tested while hidden).
+- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in both views, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V pulls back to the Cosmos and returns, palette variables change, command card and tab strip swap, no Page view on the way; the Cosmos opens on the current page (selected, label at the stage centre, zoom readout x4, named in the readout) and stays there while the first layout settles; the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
 - `tests/shell-logic.test.ts` — where the native site view goes (shown only engaged, in the Browser view, not diving), which clicks pass through to the site (everywhere but the panels), resuming the engaged website after a console reload (garbage, non-web addresses and refusing storage resume nothing).

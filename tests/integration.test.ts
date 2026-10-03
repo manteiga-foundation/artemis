@@ -55,7 +55,22 @@ const visible = (page: Page, name: string) => page.getByRole('button', { name })
 /** Counts elements regardless of animation visibility. */
 const anyCount = (page: Page, role: 'button' | 'tablist', name: string) => page.getByRole(role, { name, includeHidden: true }).count();
 
-test('after engaging, the console is in the browser view; V walks browser -> page -> cosmos -> browser', async () => {
+/** The selected node's label: its text and where it sits relative to the stage centre (px). */
+const selectedLabel = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>('.hub-label.is-selected');
+    const stage = document.querySelector('.graph-layer')!.getBoundingClientRect();
+    if (!el) return null;
+    const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(el.style.transform);
+    return {
+      text: el.textContent,
+      dx: m ? Number(m[1]) - stage.width / 2 : NaN,
+      dy: m ? Number(m[2]) - stage.height / 2 : NaN
+    };
+  });
+const zoomReadout = (page: Page) => page.evaluate(() => Number(document.querySelector('.minimap .panel-title-right')?.textContent?.slice(1)));
+
+test('after engaging, the console is in the browser view; V pulls back to the cosmos and returns; the Page view is hidden', async () => {
   const { page, errors } = await engaged();
   try {
     expect(await page.getAttribute('.app', 'data-view')).toBe('browser');
@@ -67,21 +82,16 @@ test('after engaging, the console is in the browser view; V walks browser -> pag
     expect(await page.locator('.graph-layer').isVisible()).toBe(false);
 
     await page.keyboard.press('v');
-    await page.waitForFunction('window.__artemis().view === "page"');
-    expect(await page.getAttribute('.app', 'data-view')).toBe('page');
-    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
-    expect(await cssVar(page, '--base')).toBe('#954c00');
-    expect(await cssVar(page, '--alert')).toBe('#9fb6ff');
-    await visible(page, 'Depth (D)');
-    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(1);
-    expect(await page.locator('.hud-header').textContent()).toContain('PAGE');
-    expect(await page.locator('.graph-layer').isVisible()).toBe(true);
-
-    await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().view === "cosmos"');
+    expect(await page.getAttribute('.app', 'data-view')).toBe('cosmos');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     expect(await cssVar(page, '--base')).toBe('#1034a6');
     await visible(page, 'Disperse (D)');
+    expect(await anyCount(page, 'button', 'Depth (D)')).toBe(0);
+    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(1);
+    expect(await page.locator('.hud-header').textContent()).toContain('COSMOS');
+    expect(await page.locator('.hud-header').textContent()).not.toContain('PAGE');
+    expect(await page.locator('.graph-layer').isVisible()).toBe(true);
     expect(await page.locator('.browser-surface').count()).toBe(0);
 
     await page.keyboard.press('v');
@@ -89,6 +99,42 @@ test('after engaging, the console is in the browser view; V walks browser -> pag
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     expect(await cssVar(page, '--base')).toBe('#005d2c');
     expect(await page.locator('.browser-surface').count()).toBe(1);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
+test('pulling back from the browser opens the cosmos on the current page: selected, labelled, centred and zoomed in, and it stays there', async () => {
+  const { page, errors } = await engaged();
+  try {
+    const before = await zoomReadout(page);
+    // Pressed at once, while the first layout is still unfolding and wants to frame itself.
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 4000 });
+    const s = (await stateOf(page)) as { selected: number; currentPage: number; status: string };
+    expect(s.selected).toBe(s.currentPage);
+
+    // The camera settles on the page: well past the whole-network fit, the page at the centre.
+    await page.waitForFunction(() => Number(document.querySelector('.minimap .panel-title-right')?.textContent?.slice(1)) >= 3.9, null, { timeout: 4000 });
+    expect(await zoomReadout(page)).toBeGreaterThan(before * 2);
+    await page.waitForTimeout(400);
+    const label = (await selectedLabel(page))!;
+    expect(label).not.toBeNull();
+    expect(s.status).toContain(label.text!);
+    expect(await page.locator('.hub-label.is-selected .hub-text').isVisible()).toBe(true);
+    expect(Math.abs(label.dx)).toBeLessThan(80);
+    expect(Math.abs(label.dy)).toBeLessThan(80);
+
+    // The console readout names the page as the selection.
+    expect(await page.locator('.console-readout').textContent()).toContain(label.text!);
+
+    // The layout keeps settling; its framing must not take the camera off the page.
+    await page.waitForTimeout(3000);
+    expect(await zoomReadout(page)).toBeGreaterThanOrEqual(3.9);
+    const still = (await selectedLabel(page))!;
+    expect(Math.abs(still.dx)).toBeLessThan(80);
+    expect(Math.abs(still.dy)).toBeLessThan(80);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
@@ -121,14 +167,14 @@ test('C hides and shows the panels in every view; the header switch does the sam
     await page.waitForFunction('window.__artemis().panelsHidden === false');
     await card.waitFor({ state: 'visible', timeout: 4000 });
 
-    // Works in the other views too, and a view change does not bring the panels back by itself.
+    // Works in the cosmos too, and a view change does not bring the panels back by itself.
     await page.keyboard.press('v');
-    await page.waitForFunction('window.__artemis().view === "page" && window.__artemis().viewTransition === null', { timeout: 5000 });
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 5000 });
     await page.keyboard.press('c');
     await page.waitForFunction('window.__artemis().panelsHidden === true');
     await card.waitFor({ state: 'hidden', timeout: 4000 });
     await page.keyboard.press('v');
-    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 5000 });
+    await page.waitForFunction('window.__artemis().view === "browser" && window.__artemis().viewTransition === null', { timeout: 5000 });
     expect(await card.isVisible()).toBe(false);
     await page.keyboard.press('c');
     await card.waitFor({ state: 'visible', timeout: 4000 });
@@ -158,12 +204,12 @@ test('the dive is a staged depth animation: the old view leaves before the new o
   const { page, errors } = await engaged();
   try {
     await page.keyboard.press('v');
-    // Immediately after the keypress the store is already on page, but the stage still shows cosmos.
-    expect(await page.getAttribute('.app', 'data-view')).toBe('page');
+    // Immediately after the keypress the store is already on the cosmos, but the stage still shows the browser.
+    expect(await page.getAttribute('.app', 'data-view')).toBe('cosmos');
     expect(await page.getAttribute('.stage', 'data-shown')).toBe('browser');
     expect(await page.getAttribute('.stage', 'data-dir')).toBe('out');
     expect(await page.evaluate('document.querySelector(".stage").getAnimations().length')).toBeGreaterThan(0);
-    await page.waitForFunction('document.querySelector(".stage").dataset.shown === "page"', { timeout: 4000 });
+    await page.waitForFunction('document.querySelector(".stage").dataset.shown === "cosmos"', { timeout: 4000 });
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     expect(await page.getAttribute('.stage', 'data-dir')).toBeNull();
     expect(errors).toEqual([]);
@@ -177,25 +223,26 @@ test('with reduced motion the switch still completes and clears its transition',
   try {
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 2000 });
-    expect(await page.getAttribute('.stage', 'data-shown')).toBe('page');
+    expect(await page.getAttribute('.stage', 'data-shown')).toBe('cosmos');
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
   }
 }, 30000);
 
-test('lenses keep working from the keyboard inside the page and cosmos views', async () => {
+test('lenses keep working from the keyboard inside the cosmos, and step aside in the browser', async () => {
   const { page, errors } = await engaged();
   try {
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     await page.keyboard.press('3');
     expect(await page.getByRole('tab', { name: /Hubs/ }).getAttribute('aria-selected')).toBe('true');
-    await page.keyboard.press('v');
-    await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     await page.keyboard.press('4');
     expect(await page.getByRole('tab', { name: /Routes/ }).getAttribute('aria-selected')).toBe('true');
     expect(await stateOf(page)).toMatchObject({ view: 'cosmos', lens: 'routes' });
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "browser" && window.__artemis().viewTransition === null', { timeout: 4000 });
+    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(0);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();

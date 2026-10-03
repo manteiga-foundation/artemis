@@ -1,9 +1,13 @@
-// The three views of the console and their palettes.
+// The views of the console and their palettes.
 //
 // A view is the console's mode: what fills the stage, which commands the card offers, which
 // palette every Arwes frame and the WebGL graph use. Views are ordered by depth, nearest first:
 // the browser (the page itself, the home view), the page (one page and its connections), the
-// cosmos (everything). V pulls back one step (browser -> page -> cosmos) and wraps back in.
+// cosmos (everything). V pulls back one shown step and wraps back in.
+//
+// Two views are shown for the prototype: V pulls back from the browser straight to the cosmos,
+// landing on the current page, and returns. The Page view stays in code (palette, commands,
+// behaviour, tests) but is hidden; clearing `hidden` puts it back in the cycle.
 //
 // Not to be confused with lenses (Overview, Clusters, ...), which are perspectives within a view.
 
@@ -14,24 +18,31 @@ export interface ViewSpec {
   label: string;
   /** Short line shown under the brand in the header. */
   tagline: string;
+  /** Kept in code (palette, commands, behaviour) but left out of the V cycle. */
+  hidden?: boolean;
 }
 
 export const VIEWS: readonly ViewSpec[] = [
   { id: 'browser', label: 'Browser', tagline: 'Live page' },
-  { id: 'page', label: 'Page', tagline: 'Page and its connections' },
+  { id: 'page', label: 'Page', tagline: 'Page and its connections', hidden: true },
   { id: 'cosmos', label: 'Cosmos', tagline: 'Entire network' }
 ];
 
+/** The views V moves between, nearest first. */
+export const SHOWN_VIEWS: readonly ViewSpec[] = VIEWS.filter((v) => !v.hidden);
+
 export const VIEW_BY_ID = new Map(VIEWS.map((v) => [v.id, v]));
 
-/** 0 = nearest (browser), 2 = farthest (cosmos). */
+/** 0 = nearest (browser), 2 = farthest (cosmos). Hidden views keep their depth. */
 export const viewDepth = (id: ViewId): number => VIEWS.findIndex((v) => v.id === id);
 
-/** The view V goes to: one step farther out, wrapping from the cosmos back into the browser. */
-export const nextView = (id: ViewId): ViewId => VIEWS[(viewDepth(id) + 1) % VIEWS.length].id;
+/** The view V goes to: the next shown view farther out, wrapping from the cosmos back into the browser. */
+export const nextView = (id: ViewId): ViewId =>
+  (SHOWN_VIEWS.find((v) => viewDepth(v.id) > viewDepth(id)) ?? SHOWN_VIEWS[0]).id;
 
-/** One step nearer, wrapping from the browser out to the cosmos. */
-export const prevView = (id: ViewId): ViewId => VIEWS[(viewDepth(id) - 1 + VIEWS.length) % VIEWS.length].id;
+/** The next shown view nearer in, wrapping from the browser out to the cosmos. */
+export const prevView = (id: ViewId): ViewId =>
+  ([...SHOWN_VIEWS].reverse().find((v) => viewDepth(v.id) < viewDepth(id)) ?? SHOWN_VIEWS[SHOWN_VIEWS.length - 1]).id;
 
 // ---------------------------------------------------------------- palettes
 // Each ramp was derived from the Egyptian blue ramp by rotating hue in OKLCH at equal lightness
