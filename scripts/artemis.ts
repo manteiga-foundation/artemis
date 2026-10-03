@@ -1,13 +1,13 @@
-// `bun run artemis`: open Artemis in the browser it owns.
-// Starts the Vite dev server if nothing answers on the port, then launches a chromeless Chromium
-// (app mode) with Artemis as its page. The profile persists under data/browser-profile so the
-// reviewed site's logins survive restarts.
+// `bun run artemis`: open Artemis in the browser it owns, the Electron shell (shell/main.ts).
+// Starts the Vite dev server if nothing answers on the port, then launches the shell under
+// Playwright: the website runs as a genuine native page behind the console. The profile persists
+// under data/shell-profile so the reviewed site's logins survive restarts.
 import { mkdir } from 'node:fs/promises';
-import { ownBrowser } from '../server/owned-browser';
+import { launchShell } from '../server/shell';
 
 const port = Number(process.env.ARTEMIS_PORT ?? 5173);
 const appUrl = `http://127.0.0.1:${port}`;
-const profile = new URL('../data/browser-profile', import.meta.url).pathname;
+const profile = new URL('../data/shell-profile', import.meta.url).pathname;
 
 const up = () => fetch(appUrl).then((r) => r.ok).catch(() => false);
 
@@ -27,10 +27,10 @@ if (!(await up())) {
 }
 
 await mkdir(profile, { recursive: true });
-const owned = await ownBrowser({ appUrl, userDataDir: profile, headless: false });
+const shell = await launchShell({ appUrl, userDataDir: profile });
 console.log(`Artemis: owned browser open on ${appUrl} (profile ${profile})`);
 
-owned.context.on('close', () => {
+shell.app.on('close', () => {
   console.log('Artemis: browser closed');
   vite?.kill();
   process.exit(0);

@@ -173,6 +173,18 @@ kbd {
     color-mix(in srgb, var(--bg) 55%, transparent);
 }
 
+/* Owned browser (Electron shell): the website is a native page behind the console's transparent
+   window, so in the Browser view the console's own backdrop opens over the slot. */
+html[data-shell],
+html[data-shell] body,
+html[data-shell] #root {
+  background: transparent;
+}
+
+html[data-shell] .app[data-shown='browser'] .bg-layer {
+  visibility: hidden;
+}
+
 .browser-frame {
   display: block;
   flex: 1;

@@ -26,7 +26,8 @@ Stack: Bun, Vite, React 18, `@arwes/react` (alpha), `@cosmos.gl/graph` (WebGL gr
 - **Lens** - a perspective inside a view: Overview, Clusters, Hubs, Routes, Anomalies (`1-5`).
 - **Layer** - an independent toggle (Links, labels, annotations).
 - **Command card** - the 3x3 grid; A and S keep the top row, V the middle row, in every view.
-- **Owned browser** - the chromeless Chromium `bun run artemis` launches with Artemis as its page.
+- **Owned browser** - the Electron shell `bun run artemis` launches: the website as a genuine native
+  page, the console in a transparent window over it.
 - **Dive** - the depth transition between views.
 
 ## How we work: the methodology
@@ -36,11 +37,11 @@ Every slice follows the same loop. Do not skip steps because a change looks smal
 
 1. **RED first.** Write the failing test before the code: a unit test for logic (`tests/*.test.ts`,
    run with the fake window/renderer in `tests/harness.ts` when the controller is involved), a
-   Playwright test in real Chromium for behaviour (`tests/integration.test.ts`,
-   `tests/owned-browser.test.ts`, `tests/debug-page.test.ts`). Run it and see it fail for the
+   Playwright test in real Chromium or the Electron shell for behaviour (`tests/integration.test.ts`,
+   `tests/shell.test.ts`, `tests/debug-page.test.ts`). Run it and see it fail for the
    right reason.
 2. **GREEN.** The smallest change that passes. Then refactor if needed with the tests still green.
-3. **Gates before "done":** `bun run check` (tsc for app and server), `bun run test` (all), and
+3. **Gates before "done":** `bun run check` (tsc for app, server and shell), `bun run test` (all), and
    `bun run build`. A dev server answering is not verification.
 4. **Look at it.** Take screenshots (`scripts/screenshots*.ts`, 1440x900 and 1280x800, mid-dive
    frames when motion is the point) and inspect them, by eye or with a vision model. Treat what
@@ -59,19 +60,20 @@ the real button chrome, sounds on `/debug`, palettes on a contrast sheet) and le
 
 ```
 bun run dev                      # Vite on 5173 (tests spawn their own isolated server)
-bun run check                    # tsc --noEmit for src and server
+bun run check                    # tsc --noEmit for src, server and shell
 bun run test                     # bun test --timeout 60000 tests  (unit + Playwright)
 bun run build                    # check + production bundle
-bun run artemis                  # the owned browser (starts the dev server if needed)
+bun run artemis                  # the owned browser, Electron shell (starts the dev server if needed)
 bun run scripts/screenshots.ts <port> [outDir] [site]
-bun run scripts/screenshots-browser.ts <port> [outDir] [site]   # live site in the owned browser
+bun run scripts/screenshots-shell.ts <port> [outDir] [site]     # the owned browser (Electron shell)
 bun run scripts/screenshots-entry.ts <port> [outDir]
 bun run scripts/screenshots-debug.ts <port> [outDir]
 bun run scripts/measure-dive.ts <port>                          # fps idle and through the dive
 ```
 
 Playwright's Chromium: `bunx playwright install chromium`. GPU in headless on macOS:
-`--use-angle=metal --enable-gpu --ignore-gpu-blocklist`.
+`--use-angle=metal --enable-gpu --ignore-gpu-blocklist`. Electron installs with `bun install`
+(binary fetched on first use); shell tests keep its windows hidden (`ARTEMIS_SHELL_HIDDEN`).
 
 ## Conventions that tests depend on
 
@@ -82,6 +84,9 @@ Playwright's Chromium: `bunx playwright install chromium`. GPU in headless on ma
   "Depth (D)", "Annotate (A)", "Panels (C)", tablist "Lenses". Change them only with the tests.
 - `window.__artemis = getState` is exposed in DEV by `main.tsx`; tests and scripts read it.
   Never `import('/src/store.ts')` from a test (Vite HMR history makes a second instance).
+- The shell bridge is `window.artemisShell` (shell/console-preload.ts, typed in `src/shell.ts`);
+  the shell's state for tests is `globalThis.__artemisShell` in the main process (`shell.state()`).
+  Clicks stay with the console only over `PANEL_SELECTOR`; new floating panels must match it.
 - Arwes hides entering elements (`visibility: hidden`): wait for `visible`, use
   `includeHidden` for absence checks. Integration tests collect `pageerror` and assert none.
 - Commit in a separate step after reading the test counts; never chain `bun test | grep && git
@@ -95,18 +100,21 @@ src/commands.tsx        per-view command sets                src/graph/controlle
 src/components/Stage.tsx  the dive                           src/components/BrowserSurface.tsx  the website frame
 src/metrics.ts          FPS sampler (header readouts)        src/quality.ts       graph pixel-ratio budget
 src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/           /debug page, synth presets
-server/owned-browser.ts the owned Chromium: unframing, cookies, frame agent, redirects
+shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
+server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
+server/owned-browser.ts the earlier framed owned Chromium (no longer launched)
 server/machine.ts       machine CPU/memory/process-tree feed
 tests/harness.ts        fake window + renderer for controller tests;  tests/vite.ts  isolated Vite
 ```
 
 ## Standing decisions (do not re-litigate without the user)
 
-- Streamed (CDP screencast) browser was validated and set aside; the framed approach in the owned
-  browser is the design. Under review with the user: the frame blanks Microsoft sign-in; the stream
-  (spike 002) imitates input, so the user set it aside too; spike 003 (`docs/spikes/003-electron-shell.md`)
-  runs the site as a native Electron view under the unchanged console, the direction the user leans to.
-  Injecting HUD panels into the site's DOM was rejected.
+- The owned browser must be a genuine browser: a bug a reviewer finds must be the site's, never
+  Artemis's. It is the Electron shell (spike 003, confirmed by the user with a real MFA sign-in):
+  the site is an unmodified native page; nothing rewrites its headers or cookies; only an
+  isolated-world preload runs in it. The framed owned browser (blanks Microsoft sign-in) and the
+  streamed tab (imitates input and widgets, spike 002) were set aside; injecting HUD panels into
+  the site's DOM was rejected. "Sign in with Google" blocked in embedded browsers is accepted.
 - Browser view: the website fills the stage edge to edge from a glass address strip under the header
   to the bottom; panels float over it on their own glass; no full-width scrim (it hid the part of
   the page people need).
@@ -121,16 +129,18 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
 ## Where things stand (update when it changes)
 
 Done: three views with palettes and the dive; entry screen with the website field; Browser view
-showing the real site (external and owned browser); `C` panels fold with header switch; hotkeys
-reach the console from inside the framed site; real resource readouts; `/debug` with sounds.
+showing the real site; the owned browser is the Electron shell (`bun run artemis`): genuine site,
+click pass-through, hotkeys from the site, live address strip, right-click Back/Forward/Reload,
+console reload resumes on the same page; `C` panels fold with header switch; real resource
+readouts; `/debug` with sounds.
 
-Browser direction: the user requires a genuine browser (a bug seen in review must be the site's,
-never ours). Spike 002 (streamed tab) works but imitates input and widgets: set aside. Spike 003
-(Electron: site as a native WebContentsView, console as a transparent click-through window above it,
-Playwright via `_electron` / `connectOverCDP`) carries the Microsoft sign-in with automation,
-tracing and video; open items are in the spike's verdict. Building it waits for the user's go.
+Next for the shell (in order): session save/restore through cookies behind one API; a snapshot of
+the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs;
+remove the framed owned browser (`server/owned-browser.ts`, its tests) once the user agrees; the
+slot's navy veil over the site as a switchable Layer (kept on for now by the user's choice).
 
 Next: the user is designing more interface elements (node selection, annotations, ...), each
 built with emulated data first. Also pending: apply the user's final sound picks as defaults;
-Back / Forward / Reload and page title/forms readouts from the owned browser's Playwright page;
+Back / Forward / Reload as command-card commands (the right-click menu has them) and page
+title/forms readouts from the site's Playwright page;
 Page view ego layout; annotation overlays anchored to element rects; adaptive graph quality.

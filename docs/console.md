@@ -93,9 +93,9 @@ Also: `C` hides and shows the bottom panels in every view (the header stays, wit
 switch for when C was pressed by mistake; handy for reading a page in the Browser view), `1-5` /
 `Left` / `Right` lenses, `Esc` cancel, `M` mute.
 
-Hotkeys reach the console from inside the website too: in the owned browser an init script in
-every frame forwards plain keys (not while typing in a field) to the console, so `V` works after
-clicking into the page. An external browser cannot hear keys inside a cross-origin frame; the
+Hotkeys reach the console from inside the website too: in the owned browser an isolated-world
+preload in every frame of the site forwards plain keys (not while typing in a field) to the
+console, so `V` works after clicking into the page; the page still receives the key. An external browser cannot hear keys inside a cross-origin frame; the
 command card then says "Keyboard is in the page. Click the console to use hotkeys."
 
 ## Debug page and sounds
@@ -146,19 +146,38 @@ load from other software (or the measuring browsers themselves) swamps everythin
 - `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in every view, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V walks Browser -> Page -> Cosmos -> Browser, palette variables change, command card and tab strip swap, the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
-- `tests/owned-browser.test.ts` — CSP/cookie rewriting; machine readouts (CPU, ARTEMIS, MEM) arrive from the Bun side; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page. Links aimed at the top window or a new tab, and redirects, stay inside the frame and land on the final address with no extra window.
+- `tests/shell-logic.test.ts` — where the native site view goes (shown only engaged, in the Browser view, not diving), which clicks pass through to the site (everywhere but the panels), resuming the engaged website after a console reload (garbage, non-web addresses and refusing storage resume nothing).
+- `tests/shell.test.ts` — the owned browser as an Electron shell under Playwright, windows hidden: launching without a console server fails fast and says why; a fixture site that refuses framing and hides its body unless it is the top window (the Microsoft sign-in defense) runs top-level and visible under the console, with no iframe, sits exactly in the slot, and is followed through a redirect by the address strip; `V` typed in the site dives (the site view steps aside and returns on the same page), `v` typed in a site field stays in the field; clicks pass through over the site and stay over the header; a console reload comes back engaged on the same site page without sending the site back to the start; machine readouts arrive.
+- `tests/owned-browser.test.ts` — the earlier framed owned browser (still in the tree, no longer launched): CSP/cookie rewriting; machine readouts (CPU, ARTEMIS, MEM) arrive from the Bun side; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page. Links aimed at the top window or a new tab, and redirects, stay inside the frame and land on the final address with no extra window.
 
 ## Browser view: the real website
 
-The website under review loads in a sandboxed `<iframe>` (no `allow-top-navigation`, so a
-frame-busting site cannot take over the console) that fills the stage edge to edge, from a glass
-address strip under the header down to the bottom of the screen; the bottom panels float over the
-page, each on its own glass, so the page stays visible and usable around them. The strip shows the
-address and the state: `EXTERNAL` or `OWNED`, then `CONNECTING` / `LIVE`.
+The website fills the stage edge to edge, from a glass address strip under the header down to the
+bottom of the screen; the bottom panels float over the page, each on its own glass, so the page
+stays visible and usable around them. The strip shows the address the browser is on and the state:
+`EXTERNAL` or `OWNED`, then `CONNECTING` / `LIVE`.
 
-- **External browser** (`bun run dev`, your own Chrome): works for sites that allow framing;
-  sites sending `X-Frame-Options` or CSP `frame-ancestors` stay blank, and a footnote says so.
-- **Owned browser** (`bun run artemis`): Artemis runs as the top-level page inside a chromeless
+- **Owned browser** (`bun run artemis`): an Electron shell (`shell/main.ts`, launched under
+  Playwright by `server/shell.ts`, profile in `data/shell-profile`). The website is a genuine,
+  unmodified Chromium page, top-level, in a native view placed exactly where the console's slot
+  is; the unchanged console sits over it in a transparent window. Over the site, clicks pass
+  through to it (`setIgnoreMouseEvents` with forwarding); over the header, address strip and
+  bottom panels they stay with the console. Nothing rewrites the site's headers or cookies, so
+  sign-in flows that refuse frames (Microsoft, PingOne, MFA) work as in any browser. The only code
+  of Artemis in the site's renderer is `shell/site-preload.ts`, in an isolated world: it reports
+  whether focus is in a field and forwards plain keys as hotkeys. The site view steps aside during
+  a dive and outside the Browser view, keeping its page; a console reload (right-click Reload,
+  Cmd+R) comes back engaged on the same page (`src/resume.ts`). The right-click menu on the site
+  has Back, Forward, Reload, Cut/Copy/Paste and Inspect Element. Sites see Chrome, not Electron;
+  Google blocks "Sign in with Google" in embedded browsers, an accepted limitation. Playwright owns
+  the shell: the site is an ordinary Playwright page for automation, video and tracing.
+  `context.storageState()` is refused by Electron; cookies save and restore through
+  `context.cookies()` / `addCookies()` (spike 003).
+- **External browser** (`bun run dev`, your own Chrome): the site loads in a sandboxed `<iframe>`
+  (no `allow-top-navigation`); sites sending `X-Frame-Options` or CSP `frame-ancestors` stay
+  blank, and a footnote says so.
+- **Earlier framed owned browser** (`server/owned-browser.ts`, kept in the tree, no longer
+  launched): Artemis ran as the top-level page inside a chromeless
   Chromium that Playwright launches (`server/owned-browser.ts`, profile in `data/browser-profile`).
   For documents loaded into sub-frames Playwright removes `X-Frame-Options` and `frame-ancestors`
   and rewrites `Set-Cookie` to `SameSite=None; Secure`, so any site can be framed and keeps its
@@ -173,8 +192,13 @@ address and the state: `EXTERNAL` or `OWNED`, then `CONNECTING` / `LIVE`.
 Proof (`tests/owned-browser.test.ts`): a fixture site that refuses framing and sets a
 `SameSite=Lax` session cookie stays blank in an ordinary browser, and in the owned browser is
 framed, navigates on a click inside the frame, and still has its cookie on the second page.
-`docs/screenshots/browser-live.png` shows Wikipedia live inside the console. Validation of the
-streamed alternative is kept in `docs/spikes/001-live-browser-view.md`.
+`docs/screenshots/browser-live.png` shows Wikipedia live inside the console. Why the frame was
+replaced: `docs/spikes/002-streamed-browser.md` (streamed tab: works, but imitates input and
+browser-drawn widgets) and `docs/spikes/003-electron-shell.md` (the chosen design, with its
+Playwright findings). `docs/screenshots/shell-browser-1440.png` and `-1280.png` show the shell,
+composed from its own captures (`scripts/screenshots-shell.ts`). The darker cast over the site
+comes from the slot's navy backing showing through the console (`.browser-slot`); kept for now,
+a candidate Layer to switch off for colour and contrast reviews.
 
 ## Arwes usage
 

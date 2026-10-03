@@ -27,6 +27,8 @@ export interface UIState {
   engaged: boolean;
   /** The website under review, canonical http(s) URL. Null until the console is engaged. */
   targetUrl: string | null;
+  /** Address the browser is on now (the shell reports it as the site navigates); null until known. */
+  pageUrl: string | null;
   muted: boolean;
   view: ViewId;
   viewTransition: ViewTransition | null;
@@ -62,6 +64,7 @@ export interface UIState {
 let state: UIState = {
   engaged: false,
   targetUrl: null,
+  pageUrl: null,
   muted: false,
   view: 'cosmos',
   viewTransition: null,

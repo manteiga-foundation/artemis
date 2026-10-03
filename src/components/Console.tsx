@@ -74,7 +74,7 @@ export function Console() {
   const targetMode = useStore((s) => s.targetMode);
   const pinnedCount = useStore((s) => s.pinned.length);
   const view = useStore((s) => s.stageView);
-  const targetUrl = useStore((s) => s.targetUrl);
+  const address = useStore((s) => s.pageUrl ?? s.targetUrl);
   const meta = selected !== null ? controller.data.meta[selected] : null;
   const pageMeta = controller.data.meta[selected ?? currentPage];
   const seq = useStore((s) => s.statusId);
@@ -94,7 +94,7 @@ export function Console() {
           // Page facts for the auditor. Placeholders until the live page reports them.
           <div className="console-readout">
             <span>
-              <em>URL</em> {targetUrl ?? '--'}
+              <em>URL</em> {address ?? '--'}
             </span>
             <span>
               <em>TITLE</em> --

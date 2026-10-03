@@ -13,6 +13,7 @@ import { LENSES, getState, setState, useStore } from './store';
 import { SfxBridge, bleepsSettings, useSfx } from './sfx';
 import { paletteStyle } from './views';
 import { FRAME_KEY_MESSAGE, isOwnedBrowser } from './owned';
+import { shellBridge } from './shell';
 import { usePerfSampler } from './metrics';
 
 function Hotkeys() {
@@ -82,11 +83,15 @@ function Hotkeys() {
     const onBlur = () => window.setTimeout(() => setState({ keyboardInPage: document.activeElement?.tagName === 'IFRAME' }), 0);
     const onFocus = () => setState({ keyboardInPage: false });
 
+    // Keys pressed in the owned browser's native site view, forwarded by the shell.
+    const offShellKeys = shellBridge()?.onKey((key) => dispatch(key));
+
     window.addEventListener('keydown', onKey);
     window.addEventListener('message', onMessage);
     window.addEventListener('blur', onBlur);
     window.addEventListener('focus', onFocus);
     return () => {
+      offShellKeys?.();
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('message', onMessage);
       window.removeEventListener('blur', onBlur);
@@ -94,6 +99,12 @@ function Hotkeys() {
     };
   }, [play]);
 
+  return null;
+}
+
+/** The owned browser reports where the website is as it navigates (and again after a reload). */
+function SiteAddress() {
+  useEffect(() => shellBridge()?.onSiteNav((nav) => setState({ pageUrl: nav.url })), []);
   return null;
 }
 
@@ -113,6 +124,7 @@ export function App() {
       <BleepsProvider {...bleepsSettings}>
         <SfxBridge />
         <Hotkeys />
+        <SiteAddress />
         <div className="app" data-view={view} data-shown={stageView} style={paletteStyle(stageView) as CSSProperties}>
           <Background />
           <Stage />
