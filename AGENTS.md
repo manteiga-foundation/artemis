@@ -103,7 +103,9 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
 ## Standing decisions (do not re-litigate without the user)
 
 - Streamed (CDP screencast) browser was validated and set aside; the framed approach in the owned
-  browser is the design. Injecting HUD panels into the site's DOM was rejected.
+  browser is the design. Under review with the user since spike 002
+  (`docs/spikes/002-streamed-browser.md`): the frame blanks Microsoft sign-in, the stream carries it.
+  Injecting HUD panels into the site's DOM was rejected.
 - Browser view: the website fills the stage edge to edge from a glass address strip under the header
   to the bottom; panels float over it on their own glass; no full-width scrim (it hid the part of
   the page people need).
@@ -120,6 +122,10 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
 Done: three views with palettes and the dive; entry screen with the website field; Browser view
 showing the real site (external and owned browser); `C` panels fold with header switch; hotkeys
 reach the console from inside the framed site; real resource readouts; `/debug` with sounds.
+
+Spike 002: a streamed top-level tab in the Browser view carries the staging site -> PingOne -> Microsoft
+sign-in the frame blanks (60 fps at 2x on an idle machine; select popups and 2x decode under load
+are the open costs). Whether it replaces the frame is the user's call.
 
 Next: the user is designing more interface elements (node selection, annotations, ...), each
 built with emulated data first. Also pending: apply the user's final sound picks as defaults;
