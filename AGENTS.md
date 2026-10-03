@@ -1,7 +1,8 @@
 # Working on Artemis
 
 This file is the working contract for anyone (person or agent) changing this repository. It is
-short on purpose; the README explains the product, this explains how we build it.
+short on purpose: the README has the setup steps, `docs/console.md` the notes on what is built, and
+this explains how we build it.
 
 ## What Artemis is
 
@@ -41,7 +42,7 @@ Every slice follows the same loop. Do not skip steps because a change looks smal
 4. **Look at it.** Take screenshots (`scripts/screenshots*.ts`, 1440x900 and 1280x800, mid-dive
    frames when motion is the point) and inspect them, by eye or with a vision model. Treat what
    you see as a lead and confirm with a DOM/CSS probe before changing code.
-5. **Document.** README (vocabulary, views, command table, test list, decisions), screenshots into
+5. **Document.** `docs/console.md` (vocabulary, views, command table, test list, decisions), screenshots into
    `docs/screenshots/`, a commit per slice with a descriptive message. Never push or rewrite
    history unless asked.
 6. **Report honestly:** what changed, what is verified (counts and commands), one real finding
@@ -107,7 +108,7 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
   the machine first (`uptime`, `vm_stat` wired memory); measure with interleaved A/B rounds.
 - Shipped sound files are Arwes free samples: development only. The synthesized set on `/debug`
   is the path to a licence-clean voice; the user picks per action.
-- Icons: Game-icons via `react-icons/gi`; the View glyph is Font Awesome `FaLayerGroup`. Credit
+- Icons: Game-icons via `react-icons/gi`; the View glyph is Font Awesome `FaLayerGroup`. Credits
   in the README.
 
 ## Where things stand (update when it changes)
