@@ -133,7 +133,7 @@ export function Header() {
           title={panelsHidden ? 'Show the panels (C)' : 'Hide the panels (C)'}
           onClick={() => {
             setState({ panelsHidden: !panelsHidden });
-            play('click');
+            play(panelsHidden ? 'panels-open' : 'panels-close');
           }}
         >
           <span className="dot" /> PANELS {panelsHidden ? 'OFF' : 'ON'}

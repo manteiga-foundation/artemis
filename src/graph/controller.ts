@@ -6,15 +6,15 @@ import { getState, setState, type LensId } from '../store';
 import { graphPixelRatio } from '../quality';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from '../views';
 
-import type { Sfx } from '../sounds';
-export type { Sfx } from '../sounds';
+import type { SfxAction } from '../sounds';
+export type { SfxAction } from '../sounds';
 export interface CommandResult {
   ok: boolean;
   message: string;
-  sfx?: Sfx;
+  sfx?: SfxAction;
 }
 
-type SfxListener = (sfx: Sfx) => void;
+type SfxListener = (sfx: SfxAction) => void;
 type Listener = () => void;
 
 const BASE_REPULSION = 0.9;
@@ -69,7 +69,7 @@ class GraphController {
   private emitViewport() {
     this.viewportListeners.forEach((l) => l());
   }
-  private emitSfx(s: Sfx) {
+  private emitSfx(s: SfxAction) {
     this.sfxListeners.forEach((l) => l(s));
   }
 
@@ -438,7 +438,7 @@ class GraphController {
       this.select(index);
       this.main?.zoomToPointByIndex(index, 900, Math.max(3, this.main.getZoomLevel()), false);
       this.status(`Target locked: ${m.id}. ${m.degree} connections traced.`, 'ok');
-      this.emitSfx('info');
+      this.emitSfx('notice');
       return;
     }
     this.select(index);
@@ -451,7 +451,7 @@ class GraphController {
     if (!s.engaged) return;
     if (s.targetMode) {
       this.status('Target mode: select a node, or press ESC to cancel.', 'warn');
-      this.emitSfx('error');
+      this.emitSfx('command-error');
       return;
     }
     if (s.selected !== null) {
@@ -477,7 +477,7 @@ class GraphController {
   /** Switch to another view. The transition record drives the stage's depth animation. */
   setView(to: ViewId): CommandResult {
     const from = getState().view;
-    if (to === from) return { ok: false, message: `Already in the ${VIEW_BY_ID.get(to)!.label} view.`, sfx: 'error' };
+    if (to === from) return { ok: false, message: `Already in the ${VIEW_BY_ID.get(to)!.label} view.`, sfx: 'command-error' };
     const dir = viewDepth(to) < viewDepth(from) ? 'in' : 'out';
     const id = ++this.transitionSeq;
     setState({ view: to, viewTransition: { from, to, dir, id } });
@@ -488,7 +488,7 @@ class GraphController {
       this.main?.fitView(900, 0.18, false);
     }
     const spec = VIEW_BY_ID.get(to)!;
-    return this.done({ ok: true, message: `View: ${spec.label}. ${spec.tagline}.`, sfx: 'info' });
+    return this.done({ ok: true, message: `View: ${spec.label}. ${spec.tagline}.`, sfx: 'view-dive' });
   }
 
   /** V: pull back one view, wrapping from the cosmos back into the browser. */
@@ -513,7 +513,7 @@ class GraphController {
     return this.done({
       ok: true,
       message: on ? 'Target mode armed. Select a node to lock on.' : 'Target mode disarmed.',
-      sfx: on ? 'info' : 'click'
+      sfx: on ? 'notice' : 'command-ok'
     });
   }
 
@@ -525,12 +525,12 @@ class GraphController {
     else if (g.progress >= 1) g.start(0.3);
     else g.unpause();
     setState({ paused });
-    return this.done({ ok: true, message: paused ? 'Simulation halted.' : 'Simulation resumed.', sfx: 'click' });
+    return this.done({ ok: true, message: paused ? 'Simulation halted.' : 'Simulation resumed.', sfx: 'command-ok' });
   }
 
   hold(): CommandResult {
     const s = getState();
-    if (s.selected === null) return this.done({ ok: false, message: 'Hold requires a selected node.', sfx: 'error' });
+    if (s.selected === null) return this.done({ ok: false, message: 'Hold requires a selected node.', sfx: 'command-error' });
     const set = new Set(s.pinned);
     const id = this.data.meta[s.selected].id;
     const pinned = set.has(s.selected);
@@ -540,12 +540,12 @@ class GraphController {
     setState({ pinned: list });
     this.main?.setPinnedPoints(list.length ? list : null);
     this.applyLens();
-    return this.done({ ok: true, message: pinned ? `${id} released.` : `${id} holding position.`, sfx: 'click' });
+    return this.done({ ok: true, message: pinned ? `${id} released.` : `${id} holding position.`, sfx: 'command-ok' });
   }
 
   vision(): CommandResult {
     this.main?.fitView(700, 0.18, false);
-    return this.done({ ok: true, message: 'Full network in view.', sfx: 'click' });
+    return this.done({ ok: true, message: 'Full network in view.', sfx: 'command-ok' });
   }
 
   focus(): CommandResult {
@@ -554,14 +554,14 @@ class GraphController {
     const s = getState();
     if (s.selected !== null) {
       g.zoomToPointByIndex(s.selected, 800, Math.max(4, g.getZoomLevel()), false, false);
-      return this.done({ ok: true, message: `Focused on ${this.data.meta[s.selected].id}.`, sfx: 'click' });
+      return this.done({ ok: true, message: `Focused on ${this.data.meta[s.selected].id}.`, sfx: 'command-ok' });
     }
     // Tour the sectors; the step after the last sector fits the whole network (the old Vision).
     this.hubCycle = (this.hubCycle + 1) % (this.data.sectors.length + 1);
     if (this.hubCycle === this.data.sectors.length) return this.vision();
     const idx = this.data.sectors[this.hubCycle];
     g.zoomToPointByIndex(idx, 800, 2.2, true, false);
-    return this.done({ ok: true, message: `Focused on ${this.data.meta[idx].id}.`, sfx: 'click' });
+    return this.done({ ok: true, message: `Focused on ${this.data.meta[idx].id}.`, sfx: 'command-ok' });
   }
 
   /** Page view: toggle the connection depth between one and two hops. */
@@ -570,26 +570,26 @@ class GraphController {
     setState({ pageHops });
     this.applyLens();
     this.framePage();
-    return this.done({ ok: true, message: pageHops === 2 ? 'Depth: two hops. Connections of connections shown.' : 'Depth: one hop. Direct connections only.', sfx: 'click' });
+    return this.done({ ok: true, message: pageHops === 2 ? 'Depth: two hops. Connections of connections shown.' : 'Depth: one hop. Direct connections only.', sfx: 'command-ok' });
   }
 
   /** Page view: toggle the Routes lens, which adds the page's path back to the core. */
   route(): CommandResult {
     const on = getState().lens !== 'routes';
     this.setLens(on ? 'routes' : 'overview');
-    return this.done({ ok: true, message: on ? 'Route traced to the core.' : 'Route hidden.', sfx: 'click' });
+    return this.done({ ok: true, message: on ? 'Route traced to the core.' : 'Route hidden.', sfx: 'command-ok' });
   }
 
   /** Browser view commands exist as interface placeholders until the live page attaches. */
   placeholder(name: string): CommandResult {
-    return this.done({ ok: true, message: `${name}: interface placeholder. Functionality attaches with the live page.`, sfx: 'click' });
+    return this.done({ ok: true, message: `${name}: interface placeholder. Functionality attaches with the live page.`, sfx: 'command-ok' });
   }
 
   links(): CommandResult {
     const linksOn = !getState().linksOn;
     setState({ linksOn });
     this.applyLens();
-    return this.done({ ok: true, message: linksOn ? 'Links visible.' : 'Links hidden.', sfx: 'click' });
+    return this.done({ ok: true, message: linksOn ? 'Links visible.' : 'Links hidden.', sfx: 'command-ok' });
   }
 
   disperse(): CommandResult {
@@ -602,7 +602,7 @@ class GraphController {
     this.disperseTimer = window.setTimeout(() => {
       g.setConfigPartial({ simulationRepulsion: BASE_REPULSION });
     }, 1400);
-    return this.done({ ok: true, message: 'Disperse pulse. Layout re-settling.', sfx: 'info' });
+    return this.done({ ok: true, message: 'Disperse pulse. Layout re-settling.', sfx: 'notice' });
   }
 
   regenerate(): CommandResult {
@@ -634,7 +634,7 @@ class GraphController {
     return this.done({
       ok: true,
       message: `Network regenerated (seed ${seed}). ${this.data.count.toLocaleString()} nodes.`,
-      sfx: 'info'
+      sfx: 'notice'
     });
   }
 
@@ -647,7 +647,7 @@ class GraphController {
     return this.done({
       ok: had,
       message: had ? 'Selection, holds and targeting cleared.' : 'Nothing to clear.',
-      sfx: had ? 'click' : 'error'
+      sfx: had ? 'command-ok' : 'command-error'
     });
   }
 
@@ -655,11 +655,11 @@ class GraphController {
     const s = getState();
     if (s.targetMode) {
       setState({ targetMode: false });
-      return this.done({ ok: true, message: 'Target mode disarmed.', sfx: 'click' });
+      return this.done({ ok: true, message: 'Target mode disarmed.', sfx: 'command-ok' });
     }
     if (s.selected !== null) {
       this.select(null);
-      return this.done({ ok: true, message: 'Selection cleared.', sfx: 'click' });
+      return this.done({ ok: true, message: 'Selection cleared.', sfx: 'command-ok' });
     }
     return null;
   }

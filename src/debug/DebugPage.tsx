@@ -1,11 +1,17 @@
 // /debug: a page of its own for trying things in isolation. First section: every sound Artemis can
 // make (shipped files and synthesized bleeps) and every console action that makes one, so sounds
 // can be auditioned per action and the picks copied as text.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Animator, BleepsProvider, FrameCorners, FrameLines, Text, useBleeps } from '@arwes/react';
-import { bleepsSettings, type Sfx } from '../sounds';
+import { bleepsSettings, loadOverrides, saveOverrides, type Sfx, type SfxAction, type SoundOverrides, type SoundRef } from '../sounds';
 import { SFX_ACTIONS, SOUND_CATALOG, soundById, suggestionsText, type CatalogSound } from './catalog';
-import { playSynth } from './synth';
+
+const GROUP_LABEL: Record<CatalogSound['group'], string> = {
+  file: 'file',
+  bright: 'synth · bright',
+  soft: 'synth · soft'
+};
+import { playSynth } from '../synth';
 
 let audioCtx: AudioContext | null = null;
 const context = () => (audioCtx ??= new AudioContext());
@@ -58,7 +64,8 @@ function SoundRow({ s, onPlay }: { s: CatalogSound; onPlay: (id: string) => void
   return (
     <tr data-sound-id={s.id}>
       <td className="debug-mono">{s.id}</td>
-      <td>{s.kind === 'file' ? `file · ${s.file!.category}${s.file!.volume ? ` · ${Math.round(s.file!.volume * 100)}%` : ''}` : `synth · ${s.synth!.durationMs} ms`}</td>
+      <td className="debug-dim">{GROUP_LABEL[s.group]}</td>
+      <td>{s.kind === 'file' ? `${s.file!.category}${s.file!.volume ? ` · ${Math.round(s.file!.volume * 100)}%` : ''}` : `${s.synth!.durationMs} ms`}</td>
       <td className="debug-desc">{s.description}</td>
       <td>
         <button className="debug-btn" onClick={() => onPlay(s.id)}>
@@ -72,9 +79,11 @@ function SoundRow({ s, onPlay }: { s: CatalogSound; onPlay: (id: string) => void
 function Sounds() {
   const [volume, setVolume] = useState(0.8);
   const play = usePlayer(volume);
-  const [picks, setPicks] = useState<Record<string, string>>({});
+  // Picks start from whatever was last applied to the console (localStorage), so the page and the
+  // console always agree.
+  const [picks, setPicks] = useState<SoundOverrides>(() => loadOverrides(localStorage));
   const [copied, setCopied] = useState<string | null>(null);
-  const suggestionsRef = useRef<HTMLPreElement>(null);
+  const [applied, setApplied] = useState<string | null>(null);
 
   const text = suggestionsText(picks);
   const copy = async () => {
@@ -84,6 +93,16 @@ function Sounds() {
       // Clipboard may be unavailable (insecure context); the text stays visible to select by hand.
     }
     setCopied(text);
+  };
+  const apply = () => {
+    saveOverrides(localStorage, picks);
+    const n = Object.keys(loadOverrides(localStorage)).length;
+    setApplied(n ? `Applied: ${n} action${n === 1 ? '' : 's'} overridden in this browser. Open the console and use it.` : 'Applied: the console is on its defaults.');
+  };
+  const reset = () => {
+    saveOverrides(localStorage, {});
+    setPicks({});
+    setApplied('Reset: the console is on its defaults.');
   };
 
   return (
@@ -101,7 +120,8 @@ function Sounds() {
           <thead>
             <tr>
               <th>Id</th>
-              <th>Kind</th>
+              <th>Group</th>
+              <th>Length / category</th>
               <th>Description</th>
               <th />
             </tr>
@@ -116,7 +136,7 @@ function Sounds() {
 
       <Section
         title="Actions"
-        note="Where the console makes a sound today, and what it plays. Pick a candidate per action, audition it with Play, then copy the list and paste it back to apply."
+        note="Where the console makes a sound today, and what it plays. Pick a candidate per action and audition it with Play. Apply to the console stores the picks in this browser so the real console plays them (hover, click, C, V...); Reset returns to the defaults. Copy suggestions renders the picks as text to paste back when they are final."
       >
         <table className="debug-table">
           <thead>
@@ -130,7 +150,7 @@ function Sounds() {
           </thead>
           <tbody>
             {SFX_ACTIONS.map((a) => {
-              const chosen = picks[a.id] ?? `file:${a.current}`;
+              const chosen: SoundRef = picks[a.id] ?? a.current;
               return (
                 <tr key={a.id} data-action-id={a.id}>
                   <td>
@@ -138,9 +158,19 @@ function Sounds() {
                     <div className="debug-mono debug-dim">{a.id}</div>
                   </td>
                   <td className="debug-desc">{a.where}</td>
-                  <td className="debug-mono">file:{a.current}</td>
+                  <td className="debug-mono">{a.current}</td>
                   <td>
-                    <select className="debug-select" value={chosen} onChange={(e) => setPicks({ ...picks, [a.id]: e.target.value })}>
+                    <select
+                      className="debug-select"
+                      value={chosen}
+                      onChange={(e) => {
+                        const v = e.target.value as SoundRef;
+                        const next: SoundOverrides = { ...picks };
+                        if (v === a.current) delete next[a.id as SfxAction];
+                        else next[a.id as SfxAction] = v;
+                        setPicks(next);
+                      }}
+                    >
                       {SOUND_CATALOG.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.id}
@@ -159,14 +189,19 @@ function Sounds() {
           </tbody>
         </table>
         <div className="debug-actions-foot">
-          <button className="debug-btn is-primary" onClick={copy}>
+          <button className="debug-btn is-primary" onClick={apply}>
+            Apply to the console
+          </button>
+          <button className="debug-btn" onClick={reset}>
+            Reset
+          </button>
+          <button className="debug-btn" onClick={copy}>
             Copy suggestions
           </button>
+          {applied !== null && <span className="debug-dim">{applied}</span>}
           {copied !== null && <span className="debug-dim">Copied to the clipboard; the list is below as well.</span>}
         </div>
-        <pre ref={suggestionsRef} className="debug-suggestions debug-mono">
-          {text}
-        </pre>
+        <pre className="debug-suggestions debug-mono">{text}</pre>
       </Section>
     </>
   );

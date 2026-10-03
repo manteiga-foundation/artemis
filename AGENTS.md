@@ -106,8 +106,9 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
   the page people need).
 - Visuals and animations are not traded for speed without a measurement that points at them. Read
   the machine first (`uptime`, `vm_stat` wired memory); measure with interleaved A/B rounds.
-- Shipped sound files are Arwes free samples: development only. The synthesized set on `/debug`
-  is the path to a licence-clean voice; the user picks per action.
+- Shipped sound files are Arwes free samples: development only. The console plays by action
+  (`src/sounds.ts`); `/debug` applies per-action picks live via localStorage; final picks become
+  `DEFAULT_ACTION_SOUNDS`. The target voice is the `soft` family: StarCraft-spirit, gentle.
 - Icons: Game-icons via `react-icons/gi`; the View glyph is Font Awesome `FaLayerGroup`. Credits
   in the README.
 

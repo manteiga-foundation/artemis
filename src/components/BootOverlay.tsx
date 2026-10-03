@@ -29,12 +29,12 @@ function FocusWhenEntered({ target }: { target: RefObject<HTMLElement> }) {
   return null;
 }
 
-/** Engage with the given website; plays the intro on success (needs the user's gesture). */
+/** Engage with the given website; plays the engage sound on success (needs the user's gesture). */
 export function useEngage() {
   const play = useSfx();
   return (input: string): boolean => {
     const ok = engageConsole(input);
-    play(ok ? 'intro' : 'error');
+    play(ok ? 'engage' : 'command-error');
     return ok;
   };
 }

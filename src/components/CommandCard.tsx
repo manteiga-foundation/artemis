@@ -9,7 +9,7 @@ import { isOwnedBrowser } from '../owned';
 
 export function runCommand(cmd: CommandDef, play: ReturnType<typeof useSfx>) {
   const r = cmd.run();
-  play(r.sfx ?? (r.ok ? 'click' : 'error'));
+  play(r.sfx ?? (r.ok ? 'command-ok' : 'command-error'));
   window.dispatchEvent(new CustomEvent(CMD_PRESS_EVENT, { detail: cmd.key }));
 }
 

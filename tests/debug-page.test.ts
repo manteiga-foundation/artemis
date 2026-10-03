@@ -35,6 +35,14 @@ test('/debug is a page of its own: every sound can be played, actions can be ass
     await page.waitForFunction(() => document.body.dataset.lastPlayed === 'synth:tick');
     await page.locator('[data-sound-id="file:click"] button', { hasText: 'Play' }).click();
     await page.waitForFunction(() => document.body.dataset.lastPlayed === 'file:click');
+    // Every synthesized preset schedules cleanly (a bad ramp or filter value throws synchronously).
+    const synthIds = await page.locator('[data-sound-id^="synth:"]').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.soundId!));
+    for (const id of synthIds) {
+      await page.locator(`[data-sound-id="${id}"] button`, { hasText: 'Play' }).click();
+      await page.waitForFunction((want) => document.body.dataset.lastPlayed === want, id);
+    }
+    expect(synthIds.length).toBeGreaterThanOrEqual(20);
+    expect(errors).toEqual([]);
 
     // Actions: pick a candidate for hover, audition it, then copy the suggestions.
     const hover = page.locator('[data-action-id="hover"]');
@@ -45,8 +53,31 @@ test('/debug is a page of its own: every sound can be played, actions can be ass
     const text = await page.locator('.debug-suggestions').textContent();
     expect(text).toContain('hover -> synth:tick');
     expect(text).toContain('command-error -> (keep file:error)');
+
+    // Apply to the console: the real hover in the real console now plays the pick.
+    await hover.locator('select').selectOption('synth:soft-hover');
+    await page.getByRole('button', { name: /apply to the console/i }).click();
+    await page.goto(`${vite.url}/`, { waitUntil: 'networkidle' });
+    await page.waitForFunction('typeof window.__artemis === "function"');
+    await page.getByRole('textbox', { name: 'Web App' }).fill('example.com');
+    await page.getByRole('button', { name: 'Engage', exact: true }).click();
+    await page.waitForFunction('window.__artemis().engaged === true');
+    await page.waitForFunction(() => document.body.dataset.lastPlayed === 'file:intro'); // engage sound, default
+    const annotate = page.getByRole('button', { name: 'Annotate (A)' });
+    await annotate.waitFor({ state: 'visible' });
+    await annotate.hover();
+    await page.waitForFunction(() => document.body.dataset.lastPlayed === 'synth:soft-hover');
+    await page.keyboard.press('c');
+    await page.waitForFunction(() => document.body.dataset.lastPlayed === 'file:click'); // panels-close default
+
+    // Reset on /debug returns the console to its defaults.
+    await page.goto(`${vite.url}/debug`, { waitUntil: 'networkidle' });
+    expect(await page.locator('[data-action-id="hover"] select').inputValue()).toBe('synth:soft-hover'); // picks were remembered
+    await page.getByRole('button', { name: /reset/i }).click();
+    expect(await page.locator('[data-action-id="hover"] select').inputValue()).toBe('file:hover');
+    expect(await page.evaluate(() => localStorage.getItem('artemis.sfx.overrides'))).toBeNull();
     expect(errors).toEqual([]);
   } finally {
     await page.close();
   }
-}, 40000);
+}, 60000);

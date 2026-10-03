@@ -52,12 +52,12 @@ function Hotkeys() {
       }
       if (k === 'C') {
         setState({ panelsHidden: !s.panelsHidden });
-        play('click');
+        play(s.panelsHidden ? 'panels-open' : 'panels-close');
         return true;
       }
       if (k === 'Escape') {
         const r = controller.cancel();
-        if (r) play(r.sfx ?? 'click');
+        if (r) play(r.sfx ?? 'command-ok');
         return true;
       }
       return false;
