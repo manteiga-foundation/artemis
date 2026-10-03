@@ -5,6 +5,9 @@ application: what each page does and why, how pages chain into flows (registrati
 work, a purchase), and where those flows live in the whole. The interface is built first, with
 the Arwes sci-fi UI framework and a cosmos.gl GPU graph; functionality attaches behind it later.
 
+Working on the code? `AGENTS.md` is the working contract: methodology (test-first, real-browser
+verification, screenshots, gates), vocabulary, conventions the tests depend on, standing decisions.
+
 ## Run
 
 ```bash
