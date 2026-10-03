@@ -11,7 +11,10 @@ each page of a web application does and why, how pages chain into flows (registr
 a job, a purchase), and where those flows live in the whole. It is not a security tool; that
 framing was dropped on purpose. Interfaces come first: surfaces, hotkeys, transitions and sounds
 are designed and tested against deterministic stubs, and functionality attaches later without
-reshaping them.
+reshaping them. In the user's words: emulate the functionality while driving the interface to a
+perfect state, then apply the functionality to the existing elements. So a new element (a
+selection card, an annotation pin) ships with emulated data and a real test of its behaviour; the
+backend later fills shapes that already exist, it never dictates them.
 
 Stack: Bun, Vite, React 18, `@arwes/react` (alpha), `@cosmos.gl/graph` (WebGL graph), Playwright
 (tests, and the browser Artemis owns at runtime). No framework for state: `src/store.ts`.
@@ -118,6 +121,7 @@ Done: three views with palettes and the dive; entry screen with the website fiel
 showing the real site (external and owned browser); `C` panels fold with header switch; hotkeys
 reach the console from inside the framed site; real resource readouts; `/debug` with sounds.
 
-Next candidates, in suggested order: apply the user's sound picks; Back / Forward / Reload and
-page title/forms readouts from the owned browser's Playwright page; Page view ego layout;
-annotation overlays anchored to element rects; adaptive graph quality under sustained low FPS.
+Next: the user is designing more interface elements (node selection, annotations, ...), each
+built with emulated data first. Also pending: apply the user's final sound picks as defaults;
+Back / Forward / Reload and page title/forms readouts from the owned browser's Playwright page;
+Page view ego layout; annotation overlays anchored to element rects; adaptive graph quality.
