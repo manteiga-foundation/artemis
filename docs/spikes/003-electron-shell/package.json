@@ -1,0 +1,15 @@
+{
+  "name": "artemis-spike-003-electron-shell",
+  "private": true,
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "44.5.1"
+  },
+  "trustedDependencies": [
+    "electron"
+  ],
+  "scripts": {
+    "start": "electron main.cjs",
+    "measure": "bun measure.ts"
+  }
+}
