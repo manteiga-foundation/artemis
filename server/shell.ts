@@ -3,7 +3,9 @@
 // pages (automation, video, tracing, routing), and the machine feed pushes the header readouts.
 import { _electron, type ElectronApplication, type Page } from 'playwright';
 import { createRequire } from 'node:module';
+import { mkdir } from 'node:fs/promises';
 import { startMachineFeed } from './machine';
+import { startRecorder, type Recorder } from './recorder';
 
 const require = createRequire(import.meta.url);
 const SHELL_SRC = new URL('../shell/', import.meta.url).pathname;
@@ -37,6 +39,8 @@ export interface Shell {
   console: Page;
   /** The website's page (about:blank until the console engages). */
   site(): Page | undefined;
+  /** Records the session into SQLite when `sessionsDir` was given. */
+  recorder: Recorder | null;
   state(): Promise<ShellState>;
   close(): Promise<void>;
 }
@@ -49,6 +53,8 @@ export interface LaunchShellOptions {
   /** Never show the windows (tests). */
   hidden?: boolean;
   recordVideo?: { dir: string; size?: { width: number; height: number } };
+  /** Record each browsing session as a SQLite file in this directory. */
+  sessionsDir?: string;
 }
 
 export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
@@ -82,13 +88,23 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   }
   const stopFeed = startMachineFeed(consolePage, o.userDataDir);
   app.on('close', stopFeed);
+  const site = () => app.windows().find((p) => !isConsole(p));
+  let recorder: Recorder | null = null;
+  if (o.sessionsDir) {
+    await mkdir(o.sessionsDir, { recursive: true });
+    let sitePage = site();
+    for (let i = 0; i < 200 && !sitePage; i++) sitePage = (await Bun.sleep(50), site());
+    if (sitePage) recorder = startRecorder({ app, site: sitePage, sessionsDir: o.sessionsDir });
+  }
   return {
     app,
     console: consolePage,
-    site: () => app.windows().find((p) => !isConsole(p)),
+    site,
+    recorder,
     state: () => app.evaluate(() => (globalThis as unknown as { __artemisShell: ShellState }).__artemisShell),
     close: async () => {
       stopFeed();
+      await recorder?.stop();
       await app.close();
     }
   };

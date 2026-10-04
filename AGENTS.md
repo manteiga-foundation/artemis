@@ -103,6 +103,7 @@ src/metrics.ts          FPS sampler (header readouts)        src/quality.ts     
 src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/           /debug page, synth presets
 shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
 server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
+server/recorder.ts      session recorder (Playwright traffic, preload actions)  server/session-store.ts  SQLite schema + policy
 server/owned-browser.ts the earlier framed owned Chromium (no longer launched)
 server/machine.ts       machine CPU/memory/process-tree feed
 tests/harness.ts        fake window + renderer for controller tests;  tests/vite.ts  isolated Vite
@@ -136,7 +137,17 @@ website field; Browser view
 showing the real site; the owned browser is the Electron shell (`bun run artemis`): genuine site,
 click pass-through, hotkeys from the site, live address strip, right-click Back/Forward/Reload,
 console reload resumes on the same page; `C` panels fold with header switch; real resource
-readouts; `/debug` with sounds.
+readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
+SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,
+bodies; observations only, categorisation later and recomputable).
+
+Next (user's order): the cosmos built live from the recording in the owned browser (no emulated
+network there; V lands on the current page with the whole recorded cosmos around it), with a
+scope control (show or hide what is outside the reviewed host); then DOM session replay and video
+(spike first), HAR export, then categorisation and autopilot. No LLMs or new dependencies for now;
+strong open-source tools are welcome; a small model for categorisation (and compliance mapping
+such as NIST CSF 2.0 or PCI) comes later, because hard-coded heuristics would put wrong labels in
+the database.
 
 Next for the shell (in order): session save/restore through cookies behind one API; a snapshot of
 the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs

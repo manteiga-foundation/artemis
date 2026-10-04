@@ -8,6 +8,7 @@ import { launchShell } from '../server/shell';
 const port = Number(process.env.ARTEMIS_PORT ?? 5173);
 const appUrl = `http://127.0.0.1:${port}`;
 const profile = new URL('../data/shell-profile', import.meta.url).pathname;
+const sessionsDir = new URL('../data/sessions', import.meta.url).pathname;
 
 const up = () => fetch(appUrl).then((r) => r.ok).catch(() => false);
 
@@ -27,11 +28,17 @@ if (!(await up())) {
 }
 
 await mkdir(profile, { recursive: true });
-const shell = await launchShell({ appUrl, userDataDir: profile });
-console.log(`Artemis: owned browser open on ${appUrl} (profile ${profile})`);
+const shell = await launchShell({ appUrl, userDataDir: profile, sessionsDir });
+console.log(`Artemis: owned browser open on ${appUrl} (profile ${profile}; sessions recorded in ${sessionsDir})`);
 
-shell.app.on('close', () => {
-  console.log('Artemis: browser closed');
+let closing = false;
+const finish = async () => {
+  if (closing) return;
+  closing = true;
+  await shell.recorder?.stop();
+  const file = shell.recorder?.path();
+  console.log(`Artemis: browser closed${file ? `; session saved to ${file}` : ''}`);
   vite?.kill();
   process.exit(0);
-});
+};
+shell.app.on('close', () => void finish());

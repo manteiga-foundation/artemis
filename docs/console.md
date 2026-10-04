@@ -156,6 +156,43 @@ measures idle and dive frame rates at several sizes with and without the blur ef
 `?gpr=<n>` on the URL forces the graph pixel ratio for comparisons. Measure on a quiet machine:
 load from other software (or the measuring browsers themselves) swamps everything.
 
+## Recording sessions (owned browser)
+
+`bun run artemis` records every browsing session into its own SQLite file under `data/sessions/`
+(`20261004T194512-shop.example.sqlite`): the session file is the database, and importing a session
+later means opening it. The recorder (`server/recorder.ts`) runs on the Bun side next to the
+machine feed. Traffic comes from Playwright, which owns the shell, so nothing is added to the
+site's page. The operator's actions come from the isolated site preload through the shell's main
+process (a queue drained every 100 ms). The page reports later than the network, so actions are
+matched to page views and requests by time, not by arrival order.
+
+What is stored (`server/session-store.ts`; observations only, nothing guessed about what a page is):
+
+| Table | Holds |
+| --- | --- |
+| `sessions` | target, the scope host (target host without `www.`), start and end |
+| `visits` | each page view: address, `document` or `same-document` (history API), status, title, and the action that led to it (an action at most 5 s earlier, while the previous page was open) |
+| `actions` | click, input (once per field, when typing pauses), submit; who did it (`actor`: `user` now, `autopilot` later); the element as a person or Playwright finds it (role, accessible name, tag, selector, href, field name and type); the value as typed, password-like fields marked `sensitive` |
+| `requests` | every request of the site: method, URL, host, resource type, navigation or not, frame, redirect chain, request headers and body, status, response headers and body, timing; the page view and the latest earlier action in it (late-reported actions re-credit later requests) |
+| `bodies` | request and response bodies by SHA-256, stored once |
+
+Policy: response bodies are kept for documents and API calls (`fetch`, `xhr`) up to 5 MB; images,
+scripts, styles, fonts and media keep metadata only. Cookies, `Authorization`, API keys and
+anti-forgery tokens are stored and marked sensitive in the header lists, so each export decides.
+Typed values are stored as typed while testing; exports will mask what is marked sensitive.
+
+A missing body always says why (`res_body_note`): `too large`, or `unavailable`. Chromium only keeps
+the bytes of a response the page actually reads; a response the page ignores (fire-and-forget
+`fetch`, beacons) can be discarded before it can be read, so it is recorded with its headers and
+the note. Bodies are requested the moment a response arrives, because a navigation discards them.
+
+Measured on Wikipedia (main page, one article link, a search typed): 2 page views, 70 requests in
+5 s, a 600 KB file; 8 bodies (262 KB) for the documents and API calls, metadata only for 37 images,
+20 scripts, 4 stylesheets and 4 beacons; 17 requests credited to the search typing.
+
+Not yet: popups, Back/Forward/Reload as actions, DOM session replay and video (spike first), HAR
+export, the cosmos built from the recording (next slice).
+
 ## Tests
 
 - `tests/target.test.ts` — website normalisation (bare domains, rejected schemes) and engaging the console with and without a valid address.
@@ -165,6 +202,8 @@ load from other software (or the measuring browsers themselves) swamps everythin
 - `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in both views, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V pulls back to the Cosmos and returns, palette variables change, command card and tab strip swap, no Page view on the way; the Cosmos opens on the current page (selected, label at the stage centre, zoom readout x4, named in the readout) and stays there while the first layout settles; the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working.
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
+- `tests/session-store.test.ts` — the session database: target and scope; actions belong to the page view open at the time and credit the next page view (also when reported late, never long after); requests credited to the latest earlier action in their page view, re-credited when an action arrives late; the actor column; typed values kept with password fields marked; responses with status, headers (credentials marked sensitive), body and timing; request bodies; bodies stored once by hash; missing bodies noted (too large, unavailable); the file opens in another process; body, sensitive-header and scope policies.
+- `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic.
 - `tests/shell-logic.test.ts` — where the native site view goes (shown only engaged, in the Browser view, not diving), which clicks pass through to the site (everywhere but the panels), resuming the engaged website after a console reload (garbage, non-web addresses and refusing storage resume nothing).
 - `tests/shell.test.ts` — the owned browser as an Electron shell under Playwright, windows hidden: launching without a console server fails fast and says why; a fixture site that refuses framing and hides its body unless it is the top window (the Microsoft sign-in defense) runs top-level and visible under the console, with no iframe, sits exactly in the slot, and is followed through a redirect by the address strip; `V` typed in the site dives (the site view steps aside and returns on the same page), `v` typed in a site field stays in the field; clicks pass through over the site and stay over the header; a `target="_blank"` link loads in the site view (no bare window) while a sign-in popup opened with window features still opens; a console reload comes back engaged on the same site page without sending the site back to the start; machine readouts arrive.
 - `tests/owned-browser.test.ts` — the earlier framed owned browser (still in the tree, no longer launched): CSP/cookie rewriting; machine readouts (CPU, ARTEMIS, MEM) arrive from the Bun side; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page. Links aimed at the top window or a new tab, and redirects, stay inside the frame and land on the final address with no extra window.

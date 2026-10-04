@@ -34,6 +34,11 @@ interface Layout {
 const state = { passThrough: false, siteVisible: false, editable: false, layout: null as Layout | null, siteUrl: '' };
 (globalThis as unknown as { __artemisShell: typeof state }).__artemisShell = state;
 
+/** The operator's actions reported by the site preload, drained by the recorder (server/recorder.ts). */
+const actions: unknown[] = [];
+(globalThis as unknown as { __artemisActions: unknown[] }).__artemisActions = actions;
+const MAX_QUEUED_ACTIONS = 10_000;
+
 const HOTKEY_NAMED = new Set(['Escape', 'ArrowLeft', 'ArrowRight']);
 
 app.whenReady().then(() => {
@@ -110,6 +115,9 @@ app.whenReady().then(() => {
   });
   ipcMain.on('site-hotkey', (_e, key: string) => {
     if (typeof key === 'string' && (key.length === 1 || HOTKEY_NAMED.has(key))) toConsole('site-key', key);
+  });
+  ipcMain.on('site-action', (e, action: unknown) => {
+    if (e.sender === site.webContents && actions.length < MAX_QUEUED_ACTIONS) actions.push(action);
   });
 
   // The right-click menu a browser has.
