@@ -75,8 +75,8 @@ export function Console() {
   const pinnedCount = useStore((s) => s.pinned.length);
   const view = useStore((s) => s.stageView);
   const address = useStore((s) => s.pageUrl ?? s.targetUrl);
-  const meta = selected !== null ? controller.data.meta[selected] : null;
-  const pageMeta = controller.data.meta[selected ?? currentPage];
+  const meta = (selected !== null ? controller.data.meta[selected] : null) ?? null;
+  const pageMeta = controller.data.meta[selected ?? currentPage] ?? null;
   const seq = useStore((s) => s.statusId);
 
   return (
@@ -103,7 +103,7 @@ export function Console() {
               <em>FORMS</em> --
             </span>
             <span>
-              <em>LINKS</em> {pageMeta.degree}
+              <em>LINKS</em> {pageMeta ? pageMeta.degree : '--'}
             </span>
             <span>
               <em>NOTES</em> 0
@@ -118,7 +118,7 @@ export function Console() {
               <em>SEL</em> {meta ? meta.id : '--'}
             </span>
             <span>
-              <em>TIER</em> {meta ? meta.tier.toUpperCase() : '--'}
+              <em>TIER</em> {meta ? (meta.kind ?? meta.tier).toUpperCase() : '--'}
             </span>
             <span>
               <em>SECTOR</em> {meta ? (meta.sector < 0 ? 'CORE' : String(meta.sector + 1).padStart(2, '0')) : '--'}

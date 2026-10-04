@@ -141,6 +141,58 @@ test('pulling back from the browser opens the cosmos on the current page: select
   }
 }, 40000);
 
+// The recorder's events, as the owned browser's feed delivers them (src/site-events.ts).
+const S = 'http://shop.example';
+const recorded = (from: number, pages: string[]) =>
+  pages.flatMap((path, i) => {
+    const id = from + i;
+    return [
+      { type: 'visit', id, t: id, url: `${S}${path}`, kind: 'document', committed: true },
+      { type: 'request', id: id * 10, visitId: id, method: 'GET', url: `${S}/api${path}`, resourceType: 'fetch', mainDocument: false },
+      { type: 'request', id: id * 10 + 1, visitId: id, method: 'GET', url: 'https://maps.googleapis.com/js', resourceType: 'script', mainDocument: false }
+    ];
+  });
+const feed = (page: Page, events: unknown[]) =>
+  page.evaluate((events) => dispatchEvent(new CustomEvent('artemis:site', { detail: events })), events);
+
+test('the recorded cosmos grows live from the feed; V lands on the current page; Scope hides other hosts', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.waitForFunction('window.__artemisSiteFeed === true');
+    await feed(page, [{ type: 'reset' }, { type: 'session', target: `${S}/`, scopeHost: 'shop.example' }, ...recorded(1, ['/', '/contact'])]);
+    await page.waitForFunction('window.__artemis().recorded === true');
+    // pages /, /contact; endpoints /api/, /api/contact; one shared maps service
+    expect(await stateOf(page)).toMatchObject({ nodeCount: 5 });
+
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 4000 });
+    expect(((await stateOf(page)) as { status: string }).status).toBe('View: Cosmos. Current page /contact selected.');
+    await page.waitForTimeout(600);
+    expect((await selectedLabel(page))?.text).toBe('/contact');
+    // Pages are labelled as they appear.
+    expect(await page.locator('.hub-label .hub-text').allTextContents()).toEqual(expect.arrayContaining(['/', '/contact']));
+
+    // Browsing on: the cosmos grows in place, the camera stays where the operator put it.
+    await feed(page, recorded(3, ['/thanks']));
+    await page.waitForFunction('window.__artemis().nodeCount === 7');
+    await page.waitForFunction(() => [...document.querySelectorAll('.hub-label .hub-text')].some((e) => e.textContent === '/thanks'));
+    expect(((await stateOf(page)) as { selected: number }).selected).not.toBeNull();
+    expect(await zoomReadout(page)).toBeGreaterThanOrEqual(3.9);
+
+    // Scope sits where Regenerate was; it hides the outside host and brings it back.
+    expect(await anyCount(page, 'button', 'Regenerate (R)')).toBe(0);
+    await visible(page, 'Scope (E)');
+    await page.keyboard.press('e');
+    await page.waitForFunction('window.__artemis().nodeCount === 6');
+    expect(await page.getByRole('button', { name: 'Scope (E)' }).getAttribute('aria-pressed')).toBe('true');
+    await page.keyboard.press('e');
+    await page.waitForFunction('window.__artemis().nodeCount === 7');
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('C hides and shows the panels in every view; the header switch does the same', async () => {
   const { page, errors } = await engaged();
   try {

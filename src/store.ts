@@ -59,6 +59,12 @@ export interface UIState {
   nodeCount: number;
   linkCount: number;
   seed: number;
+  /** The cosmos is the live recording of the site (owned browser), not the emulated network. */
+  recorded: boolean;
+  /** Recorded cosmos: also show hosts outside the review scope (the Scope command). */
+  showExternal: boolean;
+  /** Bumped whenever the graph's nodes change (labels follow it). */
+  graphVersion: number;
 }
 
 let state: UIState = {
@@ -87,7 +93,10 @@ let state: UIState = {
   statusId: 0,
   nodeCount: 0,
   linkCount: 0,
-  seed: 7
+  seed: 7,
+  recorded: false,
+  showExternal: true,
+  graphVersion: 0
 };
 
 const listeners = new Set<() => void>();

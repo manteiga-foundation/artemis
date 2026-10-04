@@ -7,6 +7,7 @@ import { mkdir, rename, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { startMachineFeed } from './machine';
 import { startRecorder, type Recorder } from './recorder';
+import { startSiteFeed } from './site-feed';
 import { addArtifacts } from './session-store';
 
 const require = createRequire(import.meta.url);
@@ -129,6 +130,9 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     for (let i = 0; i < 200 && !sitePage; i++) sitePage = (await Bun.sleep(50), site());
     if (sitePage) recorder = startRecorder({ app, site: sitePage, sessionsDir: o.sessionsDir });
   }
+  // The console's cosmos grows from the recording as it is written.
+  const stopSiteFeed = recorder ? startSiteFeed(consolePage, recorder) : () => {};
+  app.on('close', stopSiteFeed);
 
   // Once the app has closed (by close() or by the operator closing the window): move the
   // recordings next to the session's database and list them in it.
@@ -174,6 +178,7 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     state: () => app.evaluate(() => (globalThis as unknown as { __artemisShell: ShellState }).__artemisShell),
     close: async () => {
       stopFeed();
+      stopSiteFeed();
       await recorder?.stop();
       await app.close();
       if (o.sessionsDir) await finish();

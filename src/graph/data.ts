@@ -3,7 +3,7 @@
 // relays fanning out of each sector, and leaf nodes clustered around relays.
 
 export type Tier = 'core' | 'sector' | 'relay' | 'node';
-export type LinkKind = 'trunk' | 'branch' | 'leaf' | 'mesh' | 'backbone' | 'cross';
+export type LinkKind = 'trunk' | 'branch' | 'leaf' | 'mesh' | 'backbone' | 'cross' | 'nav' | 'api' | 'third';
 
 export interface NodeMeta {
   id: string;
@@ -12,6 +12,9 @@ export interface NodeMeta {
   parent: number; // -1 for core
   degree: number;
   jitter: number; // 0..1, stable per node, used for colour variation
+  /** Recorded networks only: what the node is (src/site-model.ts). */
+  kind?: 'page' | 'api' | 'service';
+  external?: boolean;
 }
 
 export interface NetworkData {

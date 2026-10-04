@@ -102,6 +102,21 @@ describe('the recorder', () => {
       await page.getByRole('heading', { name: 'Thanks' }).waitFor();
       await Bun.sleep(400);
       path = shell.recorder!.path();
+
+      // Meanwhile the console's cosmos became the recording, live: the two pages, the shared
+      // config endpoint and the map endpoint, and the third party outside the scope.
+      const nodes = () => c.evaluate('window.__artemisNodes()') as Promise<string[]>;
+      const expected = ['/', '/contact', '127.0.0.1', 'GET /api/config', 'GET /api/map'];
+      await c.waitForFunction(`window.__artemis().recorded && window.__artemisNodes().length === ${expected.length}`, null, { timeout: 5000 });
+      expect((await nodes()).sort()).toEqual(expected);
+      await c.getByRole('button', { name: 'View (V)' }).click();
+      await c.waitForFunction('window.__artemis().view === "cosmos"');
+      expect(((await c.evaluate('window.__artemis()')) as { status: string }).status).toBe('View: Cosmos. Current page /contact selected.');
+
+      // A console reload rebuilds the same cosmos from the session database.
+      await c.reload();
+      await c.waitForFunction(`typeof window.__artemis === "function" && window.__artemis().recorded && window.__artemisNodes().length === ${expected.length}`, null, { timeout: 10000 });
+      expect((await nodes()).sort()).toEqual(expected);
     } finally {
       await shell.close();
     }
@@ -117,7 +132,9 @@ describe('the recorder', () => {
     for (const video of [`${base}.site.webm`, `${base}.console.webm`]) {
       const bytes = new Uint8Array(await Bun.file(video).arrayBuffer());
       expect([...bytes.slice(0, 4)]).toEqual([0x1a, 0x45, 0xdf, 0xa3]); // WebM (EBML) header
-      expect(bytes.length).toBeGreaterThan(20_000);
+      // Frames, not just a header (a header-only file is a few hundred bytes; a still console
+      // compresses to ~15 KB over these few seconds).
+      expect(bytes.length).toBeGreaterThan(4_000);
     }
     const har = (await Bun.file(`${base}.har`).json()) as { log: { entries: { request: { url: string }; response: { content: { text?: string } } }[] } };
     const urls = har.log.entries.map((e) => e.request.url);

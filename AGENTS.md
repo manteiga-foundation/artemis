@@ -67,6 +67,7 @@ bun run build                    # check + production bundle
 bun run artemis                  # the owned browser, Electron shell (starts the dev server if needed)
 bun run scripts/screenshots.ts <port> [outDir] [site]
 bun run scripts/screenshots-shell.ts <port> [outDir] [site]     # the owned browser (Electron shell)
+bun run scripts/screenshots-recorded.ts <port> [outDir] [site]  # the live cosmos after browsing a real site
 bun run scripts/screenshots-entry.ts <port> [outDir]
 bun run scripts/screenshots-debug.ts <port> [outDir]
 bun run scripts/measure-dive.ts <port>                          # fps idle and through the dive
@@ -104,6 +105,8 @@ src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/         
 shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
 server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
 server/recorder.ts      session recorder (Playwright traffic, preload actions)  server/session-store.ts  SQLite schema + policy
+server/site-feed.ts     recorder events -> console, snapshot on reload    src/site-events.ts   the event contract
+src/site-model.ts       events -> live cosmos (pages, endpoints, services) src/scope.ts         review scope (shared)
 server/owned-browser.ts the earlier framed owned Chromium (no longer launched)
 server/machine.ts       machine CPU/memory/process-tree feed
 tests/harness.ts        fake window + renderer for controller tests;  tests/vite.ts  isolated Vite
@@ -139,12 +142,14 @@ click pass-through, hotkeys from the site, live address strip, right-click Back/
 console reload resumes on the same page; `C` panels fold with header switch; real resource
 readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
 SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,
-bodies; observations only, categorisation later and recomputable).
+bodies; observations only, categorisation later and recomputable), with a video of the site and of
+the console and a HAR next to it (on by default until the configuration view); in the owned
+browser the Cosmos is the live recording (pages, first-party endpoints, outside services; Scope
+`E`; V lands on the current page; a console reload rebuilds it from the database).
 
-Next (user's order): the cosmos built live from the recording in the owned browser (no emulated
-network there; V lands on the current page with the whole recorded cosmos around it), with a
-scope control (show or hide what is outside the reviewed host); then DOM session replay and video
-(spike first), HAR export, then categorisation and autopilot. No LLMs or new dependencies for now;
+Next (user's order): the configuration view (the user is drafting it: recording defaults such as
+video and HAR); DOM session replay (spike first), a policy-aware HAR export from the database,
+then categorisation and autopilot. No LLMs or new dependencies for now;
 strong open-source tools are welcome; a small model for categorisation (and compliance mapping
 such as NIST CSF 2.0 or PCI) comes later, because hard-coded heuristics would put wrong labels in
 the database.
@@ -156,8 +161,8 @@ remove the framed owned browser (`server/owned-browser.ts`, its tests) once the 
 slot's navy veil over the site as a switchable Layer (kept on for now by the user's choice).
 
 Next: the user is designing more interface elements (node selection, annotations, ...), each
-built with emulated data first. From the user's notes: the current page should follow the
-browser's address (today it is always the first relay, emulated), a simple autopilot browsing,
+built with emulated data first. From the user's notes: a simple autopilot browsing (the current
+page now follows the browser in the owned browser; outside it, it is still the first relay),
 and true categorisations for every page (authentication? part of a flow, which step?). Also
 pending: apply the user's final sound picks as defaults;
 Back / Forward / Reload as command-card commands (the right-click menu has them) and page

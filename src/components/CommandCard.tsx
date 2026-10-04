@@ -59,7 +59,8 @@ export function CommandCard() {
   const [hover, setHover] = useState<CommandDef | null>(null);
   const view = useStore((s) => s.view);
   const keyboardInPage = useStore((s) => s.keyboardInPage);
-  const commands = commandsFor(view);
+  const recorded = useStore((s) => s.recorded);
+  const commands = commandsFor(view, recorded);
   useIlluminator(panelRef);
   // In an external browser the console cannot hear keys pressed inside the framed website.
   const hint = hover

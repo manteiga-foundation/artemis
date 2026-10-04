@@ -14,6 +14,7 @@ import { SfxBridge, bleepsSettings, useSfx } from './sfx';
 import { paletteStyle } from './views';
 import { FRAME_KEY_MESSAGE, isOwnedBrowser } from './owned';
 import { shellBridge } from './shell';
+import { SITE_EVENT, SITE_FEED_READY, type SiteEvent } from './site-events';
 import { usePerfSampler } from './metrics';
 
 function Hotkeys() {
@@ -29,7 +30,7 @@ function Hotkeys() {
         return false;
       }
       const k = key.length === 1 ? key.toUpperCase() : key;
-      const cmd = commandByKey(s.view, k);
+      const cmd = commandByKey(s.view, k, s.recorded);
       if (cmd) {
         runCommand(cmd, play);
         return true;
@@ -108,6 +109,21 @@ function SiteAddress() {
   return null;
 }
 
+/** The owned browser's recording, delivered live by the recorder's feed (server/site-feed.ts). */
+function SiteFeed() {
+  useEffect(() => {
+    const on = (e: Event) => controller.applySiteEvents((e as CustomEvent<SiteEvent[]>).detail);
+    const w = window as unknown as Record<string, boolean>;
+    window.addEventListener(SITE_EVENT, on);
+    w[SITE_FEED_READY] = true;
+    return () => {
+      window.removeEventListener(SITE_EVENT, on);
+      w[SITE_FEED_READY] = false;
+    };
+  }, []);
+  return null;
+}
+
 export function App() {
   const engaged = useStore((s) => s.engaged);
   const view = useStore((s) => s.view);
@@ -124,6 +140,7 @@ export function App() {
       <BleepsProvider {...bleepsSettings}>
         <SfxBridge />
         <Hotkeys />
+        <SiteFeed />
         <SiteAddress />
         <div className="app" data-view={view} data-shown={stageView} style={paletteStyle(stageView) as CSSProperties}>
           <Background />

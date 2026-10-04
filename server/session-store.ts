@@ -3,6 +3,8 @@
 // here decides what a page *is*; categorisation comes later, from the data, and can be recomputed.
 // The session file is the database: importing a session means opening the file.
 import { Database } from 'bun:sqlite';
+import { inScope, scopeHostOf } from '../src/scope';
+import type { SiteEvent } from '../src/site-events';
 
 export type Actor = 'user' | 'autopilot';
 export type ActionKind = 'click' | 'submit' | 'input';
@@ -45,6 +47,8 @@ export interface RequestInput {
   url: string;
   resourceType: string;
   isNavigation: boolean;
+  /** The page's own document (main frame), as opposed to frames inside it. */
+  mainDocument?: boolean;
   frameUrl?: string | null;
   headers: HeaderList;
   postData?: Uint8Array | null;
@@ -85,14 +89,8 @@ const SENSITIVE_HEADERS = new Set([
 /** Credentials and anti-forgery tokens: stored, but marked so each export decides. */
 export const isSensitiveHeader = (name: string): boolean => SENSITIVE_HEADERS.has(name.toLowerCase());
 
-/** The host that defines the review scope: the target's, without a leading www. */
-export const scopeHostOf = (target: string): string => new URL(target).hostname.toLowerCase().replace(/^www\./, '');
-
-/** Inside the review scope: the scope host itself or any of its subdomains. */
-export const inScope = (host: string, scopeHost: string): boolean => {
-  const h = host.toLowerCase();
-  return h === scopeHost || h.endsWith(`.${scopeHost}`);
-};
+// The review scope is shared with the console (src/scope.ts), so both draw the same line.
+export { inScope, scopeHostOf };
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS sessions (
@@ -140,6 +138,7 @@ CREATE TABLE IF NOT EXISTS requests (
   host TEXT NOT NULL,
   resource_type TEXT NOT NULL,
   is_navigation INTEGER NOT NULL,
+  main_document INTEGER NOT NULL DEFAULT 0,
   frame_url TEXT,
   redirected_from INTEGER,
   req_headers TEXT,
@@ -214,6 +213,11 @@ export interface SessionStore {
   completeRequest(id: number, r: ResponseInput): void;
   failRequest(id: number, tEnd: number, failure: string): void;
   end(t: number): void;
+  /**
+   * The session as the console's live events (src/site-events.ts), for a console that (re)loads.
+   * `uncommittedVisit`: a navigation still in flight, sent as not yet committed.
+   */
+  siteEvents(uncommittedVisit: number | null): SiteEvent[];
   close(): void;
 }
 
@@ -290,10 +294,10 @@ export function openSessionStore(path: string, o: { target: string; startedAt: n
       return id(
         db
           .query(
-            `INSERT INTO requests (visit_id, action_id, t_start, method, url, host, resource_type, is_navigation, frame_url, redirected_from, req_headers, req_body_hash)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO requests (visit_id, action_id, t_start, method, url, host, resource_type, is_navigation, main_document, frame_url, redirected_from, req_headers, req_body_hash)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
-          .run(r.visitId, action, r.t, r.method, r.url, hostOf(r.url), r.resourceType, r.isNavigation ? 1 : 0, r.frameUrl ?? null, r.redirectedFrom ?? null, marked(r.headers), r.postData?.length ? putBody(r.postData) : null)
+          .run(r.visitId, action, r.t, r.method, r.url, hostOf(r.url), r.resourceType, r.isNavigation ? 1 : 0, r.mainDocument ? 1 : 0, r.frameUrl ?? null, r.redirectedFrom ?? null, marked(r.headers), r.postData?.length ? putBody(r.postData) : null)
       );
     },
 
@@ -325,6 +329,22 @@ export function openSessionStore(path: string, o: { target: string; startedAt: n
 
     end(t) {
       db.query('UPDATE sessions SET ended_at = ?').run(t);
+    },
+
+    siteEvents(uncommittedVisit) {
+      const s = db.query('SELECT target, scope_host FROM sessions').get() as { target: string; scope_host: string } | null;
+      if (!s) return [];
+      const events: SiteEvent[] = [{ type: 'session', target: s.target, scopeHost: s.scope_host }];
+      type V = { id: number; t_start: number; url: string; kind: 'document' | 'same-document' };
+      for (const v of db.query('SELECT id, t_start, url, kind FROM visits ORDER BY id').all() as V[])
+        events.push({ type: 'visit', id: v.id, t: v.t_start, url: v.url, kind: v.kind, committed: v.id !== uncommittedVisit });
+      type R = { id: number; visit_id: number | null; method: string; url: string; resource_type: string; main_document: number; status: number | null; failure: string | null };
+      const answered: SiteEvent[] = [];
+      for (const r of db.query('SELECT id, visit_id, method, url, resource_type, main_document, status, failure FROM requests ORDER BY id').all() as R[]) {
+        events.push({ type: 'request', id: r.id, visitId: r.visit_id, method: r.method, url: r.url, resourceType: r.resource_type, mainDocument: r.main_document === 1 });
+        if (r.status !== null || r.failure !== null) answered.push({ type: 'response', id: r.id, status: r.status, ...(r.failure !== null ? { failed: true } : {}) });
+      }
+      return [...events, ...answered];
     },
 
     close() {

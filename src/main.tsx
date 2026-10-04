@@ -12,10 +12,13 @@ import { getState } from './store';
 import { readResume } from './resume';
 import { engageConsole } from './session';
 import { inShell } from './shell';
+import { controller } from './graph/controller';
 
 // Development only: expose the live store to browser tests and screenshot scripts. Importing
 // `/src/store.ts` from outside would create a second instance once Vite has HMR history.
 if (import.meta.env.DEV) (window as unknown as { __artemis: typeof getState }).__artemis = getState;
+// The cosmos's node names, for tests and scripts (the recorded cosmos is not in the store).
+if (import.meta.env.DEV) (window as unknown as { __artemisNodes: () => string[] }).__artemisNodes = () => controller.data.meta.map((m) => m.id);
 
 // /debug is a page of its own for trying things in isolation (sounds first).
 const isDebug = location.pathname.replace(/\/+$/, '') === '/debug';

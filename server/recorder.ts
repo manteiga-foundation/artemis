@@ -11,12 +11,17 @@
 import { join } from 'node:path';
 import type { ElectronApplication, Page, Request, Response } from 'playwright';
 import { keepsBody, openSessionStore, type ActionInput, type SessionStore } from './session-store';
+import type { SiteEvent } from '../src/site-events';
 
 export interface Recorder {
   /** The current session's file, or null before the first page. */
   path(): string | null;
   /** Drains the last actions, marks the session ended and closes the file. */
   stop(): Promise<void>;
+  /** Live events for the console's cosmos, emitted as they are written. Returns an unsubscribe. */
+  onEvent(listener: (e: SiteEvent) => void): () => void;
+  /** Everything recorded so far, as events (for a console that reloads). */
+  snapshot(): SiteEvent[];
 }
 
 const isWeb = (url: string) => /^https?:\/\//i.test(url);
@@ -38,6 +43,10 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   const requestVisit = new WeakMap<Request, number | null>();
   /** Bodies are asked for as soon as the response arrives: a navigation discards them. */
   const responseBodies = new WeakMap<Request, Promise<Buffer | null>>();
+  const listeners = new Set<(e: SiteEvent) => void>();
+  const emit = (e: SiteEvent) => {
+    for (const l of listeners) l(e);
+  };
 
   /** Writes stop once the file is closed; late Playwright events are dropped. */
   const write = (fn: (s: SessionStore) => void) => {
@@ -64,13 +73,21 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     const t = Date.now();
     const redirectedFrom = req.redirectedFrom();
     if (isMainDocument(req)) {
-      if (!store) store = openSessionStore(join(o.sessionsDir, sessionFileName(url, t)), { target: url, startedAt: t });
+      if (!store) {
+        store = openSessionStore(join(o.sessionsDir, sessionFileName(url, t)), { target: url, startedAt: t });
+        emit({ type: 'session', target: url, scopeHost: store.scopeHost });
+      }
       // A redirect hop is the same page view arriving somewhere else.
       if (redirectedFrom && requestIds.has(redirectedFrom) && visitId !== null) write((s) => s.updateVisit(visitId!, { url }));
-      else write((s) => (visitId = s.startVisit({ t, url, kind: 'document' })));
+      else
+        write((s) => {
+          visitId = s.startVisit({ t, url, kind: 'document' });
+          emit({ type: 'visit', id: visitId, t, url, kind: 'document', committed: false });
+        });
       documentPending = true;
     }
     write((s) => {
+      const mainDocument = isMainDocument(req);
       const id = s.recordRequest({
         t,
         visitId,
@@ -78,6 +95,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
         url,
         resourceType: req.resourceType(),
         isNavigation: req.isNavigationRequest(),
+        mainDocument,
         frameUrl: req.frame().url() || null,
         headers: Object.entries(req.headers()),
         postData: req.postDataBuffer() ?? null,
@@ -85,6 +103,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
       });
       requestIds.set(req, id);
       requestVisit.set(req, visitId);
+      emit({ type: 'request', id, visitId, method: req.method(), url, resourceType: req.resourceType(), mainDocument });
       // The full set (cookies included) is only known once the network stack has sent it.
       req
         .allHeaders()
@@ -119,6 +138,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
       });
       const visit = requestVisit.get(req);
       if (isMainDocument(req) && visit != null) s.updateVisit(visit, { status: res.status() });
+      emit({ type: 'response', id, status: res.status() });
     });
   };
 
@@ -126,7 +146,10 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     const id = requestIds.get(req);
     if (id === undefined) return;
     if (isMainDocument(req)) documentPending = false;
-    write((s) => s.failRequest(id, Date.now(), req.failure()?.errorText ?? 'failed'));
+    write((s) => {
+      s.failRequest(id, Date.now(), req.failure()?.errorText ?? 'failed');
+      emit({ type: 'response', id, status: null, failed: true });
+    });
   };
 
   const onNavigated = (frame: ReturnType<Page['mainFrame']>) => {
@@ -134,10 +157,18 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     const url = frame.url();
     if (documentPending) {
       documentPending = false;
-      if (visitId !== null) write((s) => s.updateVisit(visitId!, { url }));
+      if (visitId !== null)
+        write((s) => {
+          s.updateVisit(visitId!, { url });
+          emit({ type: 'commit', id: visitId!, url });
+        });
     } else {
       // No document request: a route change inside the page (history API).
-      write((s) => (visitId = s.startVisit({ t: Date.now(), url, kind: 'same-document' })));
+      const t = Date.now();
+      write((s) => {
+        visitId = s.startVisit({ t, url, kind: 'same-document' });
+        emit({ type: 'visit', id: visitId, t, url, kind: 'same-document', committed: true });
+      });
     }
   };
 
@@ -168,6 +199,11 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   let stopping: Promise<void> | null = null;
   return {
     path: () => store?.path ?? null,
+    onEvent: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    snapshot: () => (store && !closed ? store.siteEvents(documentPending ? visitId : null) : []),
     stop: () =>
       (stopping ??= (async () => {
         clearInterval(timer);

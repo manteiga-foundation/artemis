@@ -5,6 +5,9 @@ import { PALETTES, type Palette } from '../views';
 import { getState, setState, type LensId } from '../store';
 import { graphPixelRatio } from '../quality';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from '../views';
+import { inShell } from '../shell';
+import { applySiteEvents as applyToModel, emptySiteModel, toNetwork, type SiteModel } from '../site-model';
+import type { SiteEvent } from '../site-events';
 
 import type { SfxAction } from '../sounds';
 export type { SfxAction } from '../sounds';
@@ -27,7 +30,10 @@ const LINK_WIDTH: Record<string, number> = {
   branch: 1.3,
   cross: 1.1,
   leaf: 0.7,
-  mesh: 0.5
+  mesh: 0.5,
+  nav: 1.8,
+  api: 1.0,
+  third: 0.9
 };
 
 class GraphController {
@@ -35,7 +41,15 @@ class GraphController {
   mini: Graph | null = null;
   mainEl: HTMLDivElement | null = null;
   miniEl: HTMLDivElement | null = null;
-  data: NetworkData = generateNetwork(getState().seed);
+  /** In the owned browser the cosmos is the live recording (src/site-model.ts); elsewhere, emulated. */
+  recorded = inShell();
+  site: SiteModel = emptySiteModel();
+  /** Model key of each graph index (recorded cosmos), to carry positions and selections across rebuilds. */
+  private siteKeys: string[] = [];
+  /** Last known position of every recorded node, hidden ones included, so they return where they were. */
+  private positionsByKey = new Map<string, [number, number]>();
+  private showExternal = true;
+  data: NetworkData = this.recorded ? toNetwork(emptySiteModel(), { external: true }).data : generateNetwork(getState().seed);
 
   private miniLastSync = 0;
   private viewportListeners = new Set<Listener>();
@@ -45,10 +59,17 @@ class GraphController {
   private tickCount = 0;
   private ticksSinceStart = 0;
   private needsFit = true;
+  /** The operator has pointed the camera somewhere; nothing automatic moves it after that. */
+  private operatorAimed = false;
   tickRate = 0; // simulation ticks per second (measured)
 
   constructor() {
-    setState({ nodeCount: this.data.count, linkCount: this.data.linkCount, currentPage: this.data.relays[0] });
+    setState({
+      nodeCount: this.data.count,
+      linkCount: this.data.linkCount,
+      currentPage: this.recorded ? -1 : this.data.relays[0],
+      recorded: this.recorded
+    });
     window.setInterval(() => {
       this.tickRate = this.tickCount;
       this.tickCount = 0;
@@ -85,12 +106,15 @@ class GraphController {
     const m = this.data.meta[i];
     if (lens === 'anomalies' && this.anomalySet.has(i)) return rgba(P.alert);
     if (m.tier === 'core') return white;
+    // Recorded cosmos: hosts outside the review scope wear the attention accent, dimmed.
+    if (m.external) return mix(rgba(P.alert), bg, m.kind === 'page' ? 0.05 : 0.12);
     if (lens === 'clusters') {
-      const hue = rgba(SECTOR_HUES[m.sector]);
+      const hue = rgba(SECTOR_HUES[Math.max(0, m.sector) % SECTOR_HUES.length]);
       if (m.tier === 'sector') return mix(hue, white, 0.35);
       if (m.tier === 'relay') return mix(hue, white, 0.1);
       return mix(hue, bg, 0.18 + m.jitter * 0.22);
     }
+    if (m.kind === 'api') return mix(rgba(P.sky), white, 0.25);
     if (m.tier === 'sector') return mix(rgba(P.sky), white, 0.35);
     if (m.tier === 'relay') return rgba(P.azure);
     return mix(rgba(P.royal), rgba(P.sky), m.jitter * 0.55);
@@ -118,10 +142,19 @@ class GraphController {
       if (lens === 'clusters' && kind !== 'trunk' && kind !== 'backbone' && kind !== 'cross') {
         const s = meta[links[l * 2 + 1]].sector;
         c = rgba(SECTOR_HUES[Math.max(0, s)], kind === 'branch' ? 0.6 : 0.26);
-      } else if (lens === 'routes' && kind === 'cross') {
+      } else if (lens === 'routes' && (kind === 'cross' || kind === 'nav')) {
         c = rgba(P.mist, 0.95);
       } else {
         switch (kind) {
+          case 'nav':
+            c = rgba(P.mist, 0.8);
+            break;
+          case 'api':
+            c = rgba(P.sky, 0.5);
+            break;
+          case 'third':
+            c = rgba(P.alert, 0.3);
+            break;
           case 'trunk':
             c = rgba(P.mist, 0.85);
             break;
@@ -158,7 +191,7 @@ class GraphController {
     const out = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       const m = meta[i];
-      const base = m.tier === 'core' ? 32 : m.tier === 'sector' ? 16 : m.tier === 'relay' ? 8 : 2.6 + m.jitter * 1.8;
+      const base = m.kind === 'api' ? 5 : m.kind === 'service' ? 8 : m.tier === 'core' ? 32 : m.tier === 'sector' ? 16 : m.tier === 'relay' ? (m.kind ? 11 : 8) : 2.6 + m.jitter * 1.8;
       out[i] = base * scale;
     }
     return out;
@@ -185,13 +218,11 @@ class GraphController {
       linkOpacity: 0.95,
       curvedLinkWeight: 0.8,
       curvedLinkControlPointDistance: 0.35,
-      simulationGravity: 0.22,
       simulationRepulsion: BASE_REPULSION,
       simulationLinkSpring: 1.1,
-      simulationLinkDistance: 9,
       simulationFriction: 0.86,
       simulationDecay: 4200,
-      simulationCluster: 0.22,
+      ...this.physics(),
       simulationRepulsionFromMouse: 2,
       enableDrag: true,
       fitViewOnInit: true,
@@ -216,7 +247,7 @@ class GraphController {
     const g = new Graph(el, config);
     this.main = g;
     this.loadInto(g, 1);
-    g.trackPointPositionsByIndices([this.data.core, ...this.data.sectors]);
+    g.trackPointPositionsByIndices(this.trackedIndices());
     g.render();
     g.start(1);
   }
@@ -281,7 +312,7 @@ class GraphController {
     this.tickCount++;
     this.ticksSinceStart++;
     if (this.needsFit && (this.ticksSinceStart === 90 || this.ticksSinceStart === 240)) {
-      this.main?.fitView(700, 0.16, true);
+      this.fitAll(700, 0.16, true);
     }
     this.syncMini();
   }
@@ -290,7 +321,7 @@ class GraphController {
     setState({ simRunning: false });
     if (this.needsFit) {
       this.needsFit = false;
-      this.main?.fitView(900, 0.16, false);
+      this.fitAll(900, 0.16, false);
     }
     this.syncMini(true);
   }
@@ -306,6 +337,126 @@ class GraphController {
    */
   private aimed() {
     this.needsFit = false;
+    this.operatorAimed = true;
+  }
+
+  // ---------------------------------------------------------------- the recorded cosmos
+
+  /**
+   * The emulated network spreads by sheer numbers; a recorded site has a handful of nodes, which
+   * the same gravity and short links pull into one knot. Links as long as new nodes' seeding
+   * distance (site-model.ts) keep pages a readable distance apart at the landing zoom.
+   */
+  private physics() {
+    return this.recorded
+      ? { simulationGravity: 0.04, simulationLinkDistance: 70, simulationCluster: 0 }
+      : { simulationGravity: 0.22, simulationLinkDistance: 9, simulationCluster: 0.22 };
+  }
+
+  /**
+   * Events from the owned browser's recorder (src/site-events.ts). The first one turns the cosmos
+   * into the recording; each batch grows it in place: known nodes stay where they are, new ones
+   * start beside the node that brought them in, and the layout re-settles gently.
+   */
+  applySiteEvents(events: SiteEvent[]) {
+    const switching = !this.recorded;
+    if (switching) {
+      this.recorded = true;
+      this.site = emptySiteModel();
+      this.siteKeys = [];
+      this.positionsByKey.clear();
+      setState({ recorded: true, selected: null, pinned: [], targetMode: false });
+      this.main?.setPinnedPoints(null);
+      this.main?.setConfigPartial(this.physics());
+    }
+    if (applyToModel(this.site, events) || switching) this.rebuildRecorded(switching);
+  }
+
+  /** Scope: show or hide what lies outside the review host (recorded cosmos). */
+  scope(): CommandResult {
+    if (!this.recorded) return this.done({ ok: false, message: 'Scope applies to a recorded site.', sfx: 'command-error' });
+    this.showExternal = !this.showExternal;
+    setState({ showExternal: this.showExternal });
+    this.rebuildRecorded();
+    const host = this.site.scopeHost ?? 'the target';
+    return this.done({
+      ok: true,
+      message: this.showExternal ? `Scope: everything, including hosts outside ${host}.` : `Scope: only ${host} and its subdomains.`,
+      sfx: 'command-ok'
+    });
+  }
+
+  /** `fresh`: the graph held the emulated network, so nothing on screen is the recording yet. */
+  private rebuildRecorded(fresh = false) {
+    const prevCount = fresh ? 0 : this.data.count;
+    const p = this.livePositions();
+    this.siteKeys.forEach((k, i) => i * 2 + 1 < p.length && this.positionsByKey.set(k, [p[i * 2], p[i * 2 + 1]]));
+    const s = getState();
+    const keyOf = (i: number | null) => (i === null ? undefined : this.siteKeys[i]);
+    const selectedKey = keyOf(s.selected);
+    const pinnedKeys = s.pinned.map(keyOf);
+    const { data, keys } = toNetwork(this.site, { external: this.showExternal, positions: this.positionsByKey });
+    this.data = data;
+    this.siteKeys = keys;
+    const at = (k: string | undefined) => (k === undefined ? -1 : keys.indexOf(k));
+    const current = this.site.current !== null ? at(this.site.nodes[this.site.current].key) : -1;
+    const selected = at(selectedKey);
+    const pinned = pinnedKeys.map(at).filter((i) => i >= 0);
+    setState((st) => ({
+      nodeCount: data.count,
+      linkCount: data.linkCount,
+      currentPage: current,
+      selected: selected >= 0 ? selected : null,
+      pinned,
+      graphVersion: st.graphVersion + 1
+    }));
+    for (const [g, scale] of [
+      [this.main, 1],
+      [this.mini, 0.42]
+    ] as const) {
+      if (g) this.loadInto(g, scale);
+    }
+    this.main?.setPinnedPoints(pinned.length ? pinned : null);
+    this.main?.trackPointPositionsByIndices(this.trackedIndices());
+    this.applyLens();
+    // The first nodes are framed as they unfold, unless the operator already aimed the camera.
+    if (prevCount === 0 && data.count > 0 && !this.operatorAimed) this.needsFit = true;
+    this.main?.start(prevCount === 0 ? 1 : 0.3);
+    window.setTimeout(() => this.syncMini(true), 60);
+  }
+
+  /** Back to the emulated network (tests; an ordinary browser never leaves it). */
+  useEmulated() {
+    this.recorded = false;
+    this.site = emptySiteModel();
+    this.siteKeys = [];
+    this.positionsByKey.clear();
+    this.showExternal = true;
+    this.operatorAimed = false;
+    this.data = generateNetwork(getState().seed);
+    this.main?.setConfigPartial(this.physics());
+    setState({
+      recorded: false,
+      showExternal: true,
+      nodeCount: this.data.count,
+      linkCount: this.data.linkCount,
+      currentPage: this.data.relays[0],
+      selected: null,
+      pinned: []
+    });
+  }
+
+  /** Frames the whole graph; nothing to frame (and nothing cosmos.gl can measure) when it is empty. */
+  fitAll(duration: number, padding: number, simulation = false) {
+    if (this.main && this.data.count > 0) this.main.fitView(duration, padding, simulation);
+  }
+
+  /**
+   * Current simulated positions of the main graph. cosmos.gl cannot read positions from a graph
+   * that holds no points (it has no position texture yet): an empty recording reads as none.
+   */
+  private livePositions(): number[] {
+    return this.main && this.data.count > 0 ? this.main.getPointPositions() : [];
   }
 
   /** Copy current simulated positions from the main graph into the minimap. */
@@ -314,7 +465,7 @@ class GraphController {
     if (!this.main || !this.mini) return;
     if (!force && now - this.miniLastSync < 180) return;
     this.miniLastSync = now;
-    const p = this.main.getPointPositions();
+    const p = this.livePositions();
     if (!p.length) return;
     this.mini.setPointPositions(new Float32Array(p), true);
     this.mini.render();
@@ -356,7 +507,7 @@ class GraphController {
 
   hubScreenPositions(): Map<number, [number, number]> {
     const out = new Map<number, [number, number]>();
-    if (!this.main) return out;
+    if (!this.main || this.data.count === 0) return out;
     const tracked = this.main.getTrackedPointPositionsMap();
     tracked.forEach((pos, idx) => out.set(idx, this.main!.spaceToScreenPosition(pos)));
     return out;
@@ -450,11 +601,21 @@ class GraphController {
 
   private select(index: number | null) {
     setState({ selected: index });
-    if (this.main) {
-      const base = [this.data.core, ...this.data.sectors];
-      this.main.trackPointPositionsByIndices(index === null ? base : [...base, index]);
-    }
+    this.main?.trackPointPositionsByIndices(this.trackedIndices());
     this.applyLens();
+  }
+
+  /** Nodes whose names stay on screen: the core and sectors (emulated), the core and pages (recorded). */
+  labelIndices(): number[] {
+    const d = this.data;
+    if (!d.count) return [];
+    return this.recorded ? [d.core, ...d.relays.slice(0, 60)] : [d.core, ...d.sectors];
+  }
+
+  private trackedIndices(): number[] {
+    const base = this.labelIndices();
+    const sel = getState().selected;
+    return sel === null || base.includes(sel) ? base : [...base, sel];
   }
 
   private handlePointClick(index: number) {
@@ -514,6 +675,11 @@ class GraphController {
     if (to === 'cosmos' && from === 'browser') {
       // Pulling back from the page itself: the cosmos opens on that page, selected and zoomed in on.
       const page = getState().currentPage;
+      if (page < 0 || page >= this.data.count) {
+        this.applyLens();
+        this.fitAll(900, 0.18, false);
+        return this.done({ ok: true, message: `View: ${spec.label}. Nothing recorded yet.`, sfx: 'view-dive' });
+      }
       this.select(page);
       this.aimed();
       this.main?.zoomToPointByIndex(page, 900, PAGE_ZOOM, true, false);
@@ -523,7 +689,7 @@ class GraphController {
     if (to === 'page') {
       this.framePage();
     } else if (to === 'cosmos') {
-      this.main?.fitView(900, 0.18, false);
+      this.fitAll(900, 0.18, false);
     }
     return this.done({ ok: true, message: `View: ${spec.label}. ${spec.tagline}.`, sfx: 'view-dive' });
   }
@@ -581,7 +747,7 @@ class GraphController {
   }
 
   vision(): CommandResult {
-    this.main?.fitView(700, 0.18, false);
+    this.fitAll(700, 0.18, false);
     return this.done({ ok: true, message: 'Full network in view.', sfx: 'command-ok' });
   }
 
@@ -644,6 +810,7 @@ class GraphController {
   }
 
   regenerate(): CommandResult {
+    if (this.recorded) return this.done({ ok: false, message: 'The cosmos is the recording: browse to grow it.', sfx: 'command-error' });
     const seed = Math.floor(Math.random() * 1e6);
     this.data = generateNetwork(seed);
     setState({
@@ -664,7 +831,7 @@ class GraphController {
       g.setPinnedPoints(null);
       this.loadInto(g, scale);
     }
-    this.main?.trackPointPositionsByIndices([this.data.core, ...this.data.sectors]);
+    this.main?.trackPointPositionsByIndices(this.trackedIndices());
     this.applyLens();
     this.needsFit = true;
     this.main?.start(1);

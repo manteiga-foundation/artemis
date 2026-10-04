@@ -35,7 +35,7 @@ export function engageConsole(input: string, opts: { resume?: boolean } = {}): b
   if (typeof sessionStorage !== 'undefined') writeResume(sessionStorage, { targetUrl });
   if (!opts.resume) shellBridge()?.navigate(targetUrl);
   controller.applyLens();
-  controller.main?.fitView(900, 0.16, false);
+  controller.fitAll(900, 0.16, false);
   window.setTimeout(() => controller.syncMini(true), 400);
   return true;
 }

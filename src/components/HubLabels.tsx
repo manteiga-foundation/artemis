@@ -9,19 +9,27 @@ export function HubLabels() {
   const engaged = useStore((s) => s.engaged);
   const selected = useStore((s) => s.selected);
   const seed = useStore((s) => s.seed);
+  const graphVersion = useStore((s) => s.graphVersion);
 
   useEffect(() => {
     const layer = layerRef.current;
     if (!layer) return;
     const els = new Map<number, HTMLDivElement>();
     const d = controller.data;
-    const wanted = [d.core, ...d.sectors, ...(selected !== null ? [selected] : [])];
+    const base = controller.labelIndices();
+    const wanted = selected !== null && selected < d.count && !base.includes(selected) ? [...base, selected] : base;
 
     wanted.forEach((idx) => {
       const m = d.meta[idx];
       const el = document.createElement('div');
       el.className = `hub-label tier-${m.tier}${idx === selected ? ' is-selected' : ''}`;
-      el.innerHTML = `<span class="hub-line"></span><span class="hub-text">${m.id}</span>`;
+      // Recorded names come from the website: text, never markup.
+      const line = document.createElement('span');
+      line.className = 'hub-line';
+      const text = document.createElement('span');
+      text.className = 'hub-text';
+      text.textContent = m.id;
+      el.append(line, text);
       el.style.opacity = '0';
       layer.appendChild(el);
       els.set(idx, el);
@@ -46,7 +54,7 @@ export function HubLabels() {
       cancelAnimationFrame(raf);
       els.forEach((el) => el.remove());
     };
-  }, [selected, seed]);
+  }, [selected, seed, graphVersion]);
 
   return <div ref={layerRef} className={`labels-layer${engaged ? ' is-on' : ''}`} aria-hidden />;
 }

@@ -13,7 +13,8 @@ import {
   GiPhotoCamera,
   GiLightBulb,
   GiPathDistance,
-  GiFamilyTree
+  GiFamilyTree,
+  GiRadarSweep
 } from 'react-icons/gi';
 import { FaLayerGroup } from 'react-icons/fa6';
 import { controller, type CommandResult } from './graph/controller';
@@ -175,7 +176,18 @@ const SETS: Record<ViewId, CommandDef[]> = {
   browser: BROWSER_COMMANDS
 };
 
-export const commandsFor = (view: ViewId): CommandDef[] => SETS[view];
+// The recorded cosmos (owned browser) has nothing to regenerate; its slot holds Scope instead.
+const scope: CommandDef = {
+  key: 'E',
+  name: 'Scope',
+  hint: 'Show or hide what lies outside the review scope: other hosts and their pages.',
+  Icon: GiRadarSweep,
+  run: () => controller.scope(),
+  isActive: (s) => !s.showExternal
+};
+const RECORDED_COSMOS_COMMANDS: CommandDef[] = COSMOS_COMMANDS.map((c) => (c.key === 'R' ? scope : c));
 
-export const commandByKey = (view: ViewId, key: string): CommandDef | undefined =>
-  SETS[view].find((c) => c.key === key);
+export const commandsFor = (view: ViewId, recorded = false): CommandDef[] => (recorded && view === 'cosmos' ? RECORDED_COSMOS_COMMANDS : SETS[view]);
+
+export const commandByKey = (view: ViewId, key: string, recorded = false): CommandDef | undefined =>
+  commandsFor(view, recorded).find((c) => c.key === key);

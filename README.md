@@ -3,7 +3,7 @@
 Web Application Intelligent Console.
 
 ![Status](https://img.shields.io/badge/status-draft%20UI-1034a6?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-92%20passing-005d2c?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-115%20passing-005d2c?style=flat-square)
 ![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB)
@@ -73,6 +73,7 @@ With a development server running on `<port>`:
 ```sh
 bun run scripts/screenshots.ts <port> [outDir] [site]           # entry, views, dive frames, 1280 check
 bun run scripts/screenshots-shell.ts <port> [outDir] [site]     # the owned browser (Electron shell), 1440 and 1280
+bun run scripts/screenshots-recorded.ts <port> [outDir] [site]  # the live cosmos after browsing a real site
 bun run scripts/screenshots-entry.ts <port> [outDir]
 bun run scripts/screenshots-debug.ts <port> [outDir]
 bun run scripts/measure-dive.ts <port>                          # frame rate idle and through the view dive
