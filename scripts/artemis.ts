@@ -56,15 +56,20 @@ shell.app.on('close', () => void finish());
 
 // Ctrl+C, closing the terminal, kill: Playwright's own handlers would close the browser at once
 // and exit before the session is saved. Artemis's close saves it (HAR, videos), then exits above.
-let interrupted = false;
+// One Ctrl+C can arrive twice: the terminal signals the whole job, and `bun run artemis`'s wrapper
+// passes it on to this process too. Repeats within a second are the same press.
+const SAME_PRESS_MS = 1000;
+let interruptedAt = 0;
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
   process.removeAllListeners(signal);
   process.on(signal, () => {
-    if (interrupted) {
+    const now = Date.now();
+    if (interruptedAt && now - interruptedAt < SAME_PRESS_MS) return;
+    if (interruptedAt) {
       console.log('\nArtemis: quitting without saving the rest of the session');
       process.exit(130);
     }
-    interrupted = true;
+    interruptedAt = now;
     console.log('\nArtemis: closing, saving the session (Ctrl+C again to quit without waiting)');
     void shell.close().catch(() => process.exit(1));
   });
