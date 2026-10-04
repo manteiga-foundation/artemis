@@ -75,6 +75,14 @@ app.whenReady().then(() => {
   site.webContents.on('did-navigate', reportNav);
   site.webContents.on('did-navigate-in-page', (_e, _url, isMainFrame) => isMainFrame && reportNav());
   site.webContents.on('page-title-updated', reportNav);
+  // Links aimed at a new tab (target="_blank", window.open without features) load in the site view
+  // until the shell has tabs; a bare window would leave the console behind. Windows asked for with
+  // features stay popups: that is how sign-in popups (Microsoft, Google) work.
+  site.webContents.setWindowOpenHandler(({ url, disposition }) => {
+    if (disposition === 'new-window') return { action: 'allow' };
+    if (/^https?:\/\//i.test(url)) void site.webContents.loadURL(url);
+    return { action: 'deny' };
+  });
   // A navigation drops the old page's focus without a focusout: each page starts not editable.
   site.webContents.on('did-start-navigation', (d) => {
     if (d.isMainFrame && !d.isSameDocument) state.editable = false;

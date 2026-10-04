@@ -139,7 +139,8 @@ console reload resumes on the same page; `C` panels fold with header switch; rea
 readouts; `/debug` with sounds.
 
 Next for the shell (in order): session save/restore through cookies behind one API; a snapshot of
-the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs;
+the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs
+(today `_blank` links load in the site view and featured popups stay windows);
 remove the framed owned browser (`server/owned-browser.ts`, its tests) once the user agrees; the
 slot's navy veil over the site as a switchable Layer (kept on for now by the user's choice).
 

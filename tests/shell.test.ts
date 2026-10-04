@@ -26,6 +26,11 @@ const site = Bun.serve({
     if (url.pathname === '/guarded/') return page('<h1>Guarded site</h1><a href="/guarded/go">next page</a><p><input id="field" aria-label="Field"></p>');
     if (url.pathname === '/guarded/go') return Response.redirect(`${url.origin}/guarded/final`, 302);
     if (url.pathname === '/guarded/final') return page('<h1>Final page</h1>');
+    const plain = (body: string) => new Response(`<!doctype html><title>Tabs</title><body>${body}</body>`, { headers: { 'content-type': 'text/html' } });
+    if (url.pathname === '/tabs/')
+      return plain(`<h1>Tabs</h1><a href="/tabs/next" target="_blank">open in a new tab</a> <button onclick="window.open('/tabs/popup', 'signin', 'width=480,height=600')">Sign in</button>`);
+    if (url.pathname === '/tabs/next') return plain('<h1>Next</h1>');
+    if (url.pathname === '/tabs/popup') return plain('<h1>Popup</h1>');
     return new Response('not found', { status: 404 });
   }
 });
@@ -140,6 +145,32 @@ describe('the owned browser is an Electron shell', () => {
       await shell.console.mouse.move(header.x + 40, header.y + header.height / 2);
       await Bun.sleep(150);
       expect((await shell.state()).passThrough).toBe(false);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
+  test('a link aimed at a new tab stays in the site view; a sign-in popup still opens as a popup', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      await engage(shell.console, `${siteUrl}/tabs/`);
+      const page = await sitePage(shell, `${siteUrl}/tabs/`);
+      await page.getByRole('heading', { name: 'Tabs' }).waitFor({ timeout: 10000 });
+      expect(shell.app.windows()).toHaveLength(2);
+
+      // window.open with window features is how sign-in popups work (Microsoft, Google): keep it.
+      const popupOpened = shell.app.waitForEvent('window', { timeout: 5000 });
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      const popup = await popupOpened;
+      await popup.waitForURL(`${siteUrl}/tabs/popup`);
+      await popup.close();
+
+      // target="_blank" would leave the console behind in a bare window: it loads in the site view.
+      await page.getByRole('link', { name: 'open in a new tab' }).click();
+      await page.waitForURL(`${siteUrl}/tabs/next`, { timeout: 5000 });
+      await stripShows(shell.console, '/tabs/next');
+      await Bun.sleep(300);
+      expect(shell.app.windows()).toHaveLength(2);
     } finally {
       await shell.close();
     }
