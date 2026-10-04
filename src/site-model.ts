@@ -236,6 +236,90 @@ export function applySiteEvents(m: SiteModel, events: SiteEvent[]): boolean {
 
 // ---------------------------------------------------------------- graph shape
 
+/** Distance between neighbouring cells of the honeycomb pages sit on, in space units. */
+export const CELL = 150;
+
+// A flat-top hexagonal lattice in axial coordinates: the core's cell at the centre, ring k around
+// it holding 6k cells, neighbours CELL apart at 30 + 60n degrees (so none sits beside a label).
+const AXIAL: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+const HEX = CELL / Math.sqrt(3);
+interface Cell {
+  key: string;
+  q: number;
+  r: number;
+  ring: number;
+  x: number;
+  y: number;
+  /** Screen bearing from the core in degrees: 270 straight up, increasing clockwise. */
+  bearing: number;
+}
+const byKey = new Map<string, Cell>();
+const rings: Cell[][] = [];
+/** Ring k's cells (around the core, or used as offsets around any cell), clockwise from the top. */
+const ring = (k: number): Cell[] => {
+  if (rings[k]) return rings[k];
+  const make = (q: number, r: number): Cell => {
+    const x = HEX * 1.5 * q;
+    const y = HEX * Math.sqrt(3) * (r + q / 2);
+    // Rounded so a cell straight along another's bearing turns 0 degrees, never 359.9999.
+    const bearing = k === 0 ? 270 : Math.round((((Math.atan2(y, x) * 180) / Math.PI + 360) % 360) * 1e6) / 1e6;
+    const cell = { key: `${q},${r}`, q, r, ring: k, x, y, bearing: bearing % 360 };
+    byKey.set(cell.key, cell);
+    return cell;
+  };
+  const cells: Cell[] = [];
+  if (k === 0) cells.push(make(0, 0));
+  let [q, r] = [AXIAL[4][0] * k, AXIAL[4][1] * k];
+  for (let side = 0; k > 0 && side < 6; side++)
+    for (let step = 0; step < k; step++) {
+      cells.push(make(q, r));
+      q += AXIAL[side][0];
+      r += AXIAL[side][1];
+    }
+  return (rings[k] = cells.sort((a, b) => ((a.bearing + 90) % 360) - ((b.bearing + 90) % 360)));
+};
+const cellAt = (q: number, r: number): Cell => {
+  ring(Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)));
+  return byKey.get(`${q},${r}`)!;
+};
+/** Degrees turned clockwise from bearing `from` to bearing `to`. */
+const clockwise = (from: number, to: number) => (to - from + 360) % 360;
+
+/**
+ * Each page's cell. Pages grow like a crystal: the core takes the centre, and each new page
+ * attaches beside the page it came from, on the free cell nearest the core, turning clockwise
+ * (when every neighbour is taken, the nearest free cell beyond them, by the same order). A walk
+ * winds around the hexagon and then the next ring, a hub gathers its pages around it, and
+ * navigation runs along the honeycomb's edges. Decided in discovery order over every page, outside
+ * the scope too, so nothing already placed ever moves as the site grows or Scope changes.
+ */
+function honeycomb(m: SiteModel): Map<number, Cell> {
+  const cells = new Map<number, Cell>();
+  const taken = new Set<string>();
+  m.nodes.forEach((n, i) => {
+    if (n.kind !== 'page') return;
+    const from = (n.parent !== null ? cells.get(n.parent) : undefined) ?? (m.entry !== null ? cells.get(m.entry) : undefined);
+    if (i === m.entry || !from) {
+      const centre = ring(0)[0];
+      cells.set(i, centre);
+      taken.add(centre.key);
+      return;
+    }
+    const order = (a: Cell, b: Cell) => a.ring - b.ring || clockwise(from.bearing, a.bearing) - clockwise(from.bearing, b.bearing);
+    for (let d = 1; ; d++) {
+      const free = ring(d)
+        .map((o) => cellAt(from.q + o.q, from.r + o.r))
+        .filter((c) => !taken.has(c.key))
+        .sort(order);
+      if (!free.length) continue;
+      taken.add(free[0].key);
+      cells.set(i, free[0]);
+      return;
+    }
+  });
+  return cells;
+}
+
 const hash01 = (s: string): number => {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
@@ -247,12 +331,14 @@ export interface RecordedNetwork {
   data: NetworkData;
   /** Model key of each graph index, to carry positions and selections across rebuilds. */
   keys: string[];
+  /** Graph indices that hold their place: the core and every page, on their cells. */
+  fixed: number[];
 }
 
 /**
  * The graph's network for the recorded site. `external: false` leaves out everything outside the
- * review scope. Known nodes keep their `positions`; new ones start next to the node that brought
- * them in, so the layout grows around what is already there.
+ * review scope. The core and pages sit on the honeycomb (fixed); endpoints and services float:
+ * known ones keep their `positions`, new ones start next to the page that brought them in.
  */
 export function toNetwork(m: SiteModel, o: { external: boolean; positions?: Map<string, [number, number]> }): RecordedNetwork {
   const remap = new Array<number>(m.nodes.length).fill(-1);
@@ -265,6 +351,8 @@ export function toNetwork(m: SiteModel, o: { external: boolean; positions?: Map<
   const meta: NodeMeta[] = [];
   const pos = new Float32Array(count * 2);
   const C = SPACE_SIZE / 2;
+  const cells = honeycomb(m);
+  const fixed: number[] = [];
 
   m.nodes.forEach((n, i) => {
     const idx = remap[i];
@@ -281,8 +369,13 @@ export function toNetwork(m: SiteModel, o: { external: boolean; positions?: Map<
       kind: n.kind,
       external: n.external
     });
+    const cell = cells.get(i);
     const known = o.positions?.get(n.key);
-    if (known) {
+    if (cell) {
+      pos[idx * 2] = C + cell.x;
+      pos[idx * 2 + 1] = C + cell.y;
+      fixed.push(idx);
+    } else if (known) {
       pos[idx * 2] = known[0];
       pos[idx * 2 + 1] = known[1];
     } else if (parent >= 0) {
@@ -316,6 +409,7 @@ export function toNetwork(m: SiteModel, o: { external: boolean; positions?: Map<
   const relays = meta.flatMap((n, i) => (n.kind === 'page' && i !== entry ? [i] : []));
   return {
     keys,
+    fixed,
     data: {
       seed: 0,
       count,

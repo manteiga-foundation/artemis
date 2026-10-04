@@ -11,7 +11,7 @@ import { launchShell } from '../server/shell';
 const port = Number(process.argv[2] ?? 5173);
 const outDir = process.argv[3] ?? new URL('../docs/screenshots', import.meta.url).pathname;
 const target = process.argv[4] ?? 'https://en.wikipedia.org/wiki/Main_Page';
-const clicks = Number(process.argv[5] ?? 4);
+const clicks = Number(process.argv[5] ?? 6);
 await mkdir(outDir, { recursive: true });
 const scratch = await mkdtemp(join(tmpdir(), 'artemis-recorded-'));
 const shell = await launchShell({
@@ -43,10 +43,14 @@ try {
   let site = shell.site()!;
   for (let i = 0; i < 100 && !site.url().startsWith('http'); i++) (await Bun.sleep(100), (site = shell.site()!));
   await site.waitForLoadState('load', { timeout: 20000 });
-  // Follow in-site links the way a reviewer would: one per page, a different one each time, from
-  // the page's main content when it has one, staying on the target's host.
+  // Follow in-site links the way a reviewer would: a few branches from the home page, each a
+  // couple of links deep, a different link each time, staying on the target's host.
   const host = new URL(target).host;
   for (let i = 0; i < clicks; i++) {
+    if (i > 0 && i % 2 === 0) {
+      await site.goto(target).catch(() => {});
+      await Bun.sleep(1200);
+    }
     const href = (await site.evaluate(`(() => {
       const n = ${i}, host = ${JSON.stringify(host)}, here = location.pathname;
       const scope = document.querySelector('main, #content, [role="main"]') || document.body;
@@ -65,8 +69,10 @@ try {
   await c.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', null, { timeout: 5000 });
   await Bun.sleep(2500);
   await capture('cosmos-recorded-landing');
-  for (let i = 0; i < 2; i++) (await c.mouse.move(720, 450), await c.mouse.wheel(0, 400), await Bun.sleep(120));
-  await Bun.sleep(2000);
+  // The whole recorded site: Clear the selection, then Focus frames everything.
+  await c.getByRole('button', { name: 'Clear (X)' }).click();
+  await c.getByRole('button', { name: 'Focus (F)' }).click();
+  await Bun.sleep(2500);
   await capture('cosmos-recorded');
   await c.getByRole('button', { name: 'Scope (E)' }).click();
   await Bun.sleep(2500);

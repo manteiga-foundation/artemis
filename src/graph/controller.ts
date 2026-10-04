@@ -1,4 +1,4 @@
-import { Graph, type GraphConfig } from '@cosmos.gl/graph';
+import { Graph, PointShape, type GraphConfig } from '@cosmos.gl/graph';
 import { generateNetwork, linksForChain, linksWithin, pageSubgraph, pathToCore, type NetworkData } from './data';
 import { EG, SECTOR_HUES, mix, rgba, type RGBA } from '../theme';
 import { PALETTES, type Palette } from '../views';
@@ -49,6 +49,8 @@ class GraphController {
   /** Last known position of every recorded node, hidden ones included, so they return where they were. */
   private positionsByKey = new Map<string, [number, number]>();
   private showExternal = true;
+  /** Recorded cosmos: the core and pages, pinned to their honeycomb cells. */
+  private fixedPoints: number[] = [];
   data: NetworkData = this.recorded ? toNetwork(emptySiteModel(), { external: true }).data : generateNetwork(getState().seed);
 
   private miniLastSync = 0;
@@ -282,6 +284,13 @@ class GraphController {
     window.setTimeout(() => this.syncMini(true), 200);
   }
 
+  /** cosmos.gl point shapes: the core is a hexagon, everything else a circle. */
+  private pointShapes(): Float32Array {
+    const out = new Float32Array(this.data.count);
+    if (this.data.count) out[this.data.core] = PointShape.Hexagon;
+    return out;
+  }
+
   private loadInto(g: Graph, sizeScale: number) {
     const lens = getState().lens;
     this.anomalySet = new Set(this.data.anomalies);
@@ -289,6 +298,7 @@ class GraphController {
     g.setLinks(this.data.links);
     g.setPointColors(this.pointColors(lens));
     g.setPointSizes(this.pointSizes(sizeScale));
+    g.setPointShapes(this.pointShapes());
     g.setLinkColors(this.linkColors(lens));
     g.setLinkWidths(this.linkWidths().map((w) => w * (sizeScale < 1 ? 0.6 : 1)));
     if (sizeScale === 1) {
@@ -343,14 +353,20 @@ class GraphController {
   // ---------------------------------------------------------------- the recorded cosmos
 
   /**
-   * The emulated network spreads by sheer numbers; a recorded site has a handful of nodes, which
-   * the same gravity and short links pull into one knot. Links as long as new nodes' seeding
-   * distance (site-model.ts) keep pages a readable distance apart at the landing zoom.
+   * The emulated network spreads by sheer numbers. A recorded site's core and pages sit on the
+   * honeycomb (pinned, site-model.ts); only endpoints and services move: short links keep them in
+   * orbit around their pages, and no gravity drags them toward the core.
    */
   private physics() {
     return this.recorded
-      ? { simulationGravity: 0.04, simulationLinkDistance: 70, simulationCluster: 0 }
+      ? { simulationGravity: 0, simulationLinkDistance: 45, simulationCluster: 0 }
       : { simulationGravity: 0.22, simulationLinkDistance: 9, simulationCluster: 0.22 };
+  }
+
+  /** Points the layout must not move: the recorded structure, plus the operator's holds. */
+  private applyPins() {
+    const pins = [...new Set([...this.fixedPoints, ...getState().pinned])];
+    this.main?.setPinnedPoints(pins.length ? pins : null);
   }
 
   /**
@@ -366,7 +382,8 @@ class GraphController {
       this.siteKeys = [];
       this.positionsByKey.clear();
       setState({ recorded: true, selected: null, pinned: [], targetMode: false });
-      this.main?.setPinnedPoints(null);
+      this.fixedPoints = [];
+      this.applyPins();
       this.main?.setConfigPartial(this.physics());
     }
     if (applyToModel(this.site, events) || switching) this.rebuildRecorded(switching);
@@ -395,9 +412,10 @@ class GraphController {
     const keyOf = (i: number | null) => (i === null ? undefined : this.siteKeys[i]);
     const selectedKey = keyOf(s.selected);
     const pinnedKeys = s.pinned.map(keyOf);
-    const { data, keys } = toNetwork(this.site, { external: this.showExternal, positions: this.positionsByKey });
+    const { data, keys, fixed } = toNetwork(this.site, { external: this.showExternal, positions: this.positionsByKey });
     this.data = data;
     this.siteKeys = keys;
+    this.fixedPoints = fixed;
     const at = (k: string | undefined) => (k === undefined ? -1 : keys.indexOf(k));
     const current = this.site.current !== null ? at(this.site.nodes[this.site.current].key) : -1;
     const selected = at(selectedKey);
@@ -416,7 +434,7 @@ class GraphController {
     ] as const) {
       if (g) this.loadInto(g, scale);
     }
-    this.main?.setPinnedPoints(pinned.length ? pinned : null);
+    this.applyPins();
     this.main?.trackPointPositionsByIndices(this.trackedIndices());
     this.applyLens();
     // The first nodes are framed as they unfold, unless the operator already aimed the camera.
@@ -434,6 +452,7 @@ class GraphController {
     this.showExternal = true;
     this.operatorAimed = false;
     this.data = generateNetwork(getState().seed);
+    this.fixedPoints = [];
     this.main?.setConfigPartial(this.physics());
     setState({
       recorded: false,
@@ -444,11 +463,20 @@ class GraphController {
       selected: null,
       pinned: []
     });
+    this.applyPins();
   }
 
-  /** Frames the whole graph; nothing to frame (and nothing cosmos.gl can measure) when it is empty. */
+  /** Live simulated positions, [x0, y0, x1, y1, ...] (tests and scripts read it through DEV hooks). */
+  nodePositions(): number[] {
+    return this.livePositions();
+  }
+
+  /**
+   * Frames the whole graph; nothing to frame (and nothing cosmos.gl can measure) when it is empty.
+   * Recorded pages carry their names beside them, so the recorded cosmos keeps a wider margin.
+   */
   fitAll(duration: number, padding: number, simulation = false) {
-    if (this.main && this.data.count > 0) this.main.fitView(duration, padding, simulation);
+    if (this.main && this.data.count > 0) this.main.fitView(duration, this.recorded ? Math.max(padding, 0.3) : padding, simulation);
   }
 
   /**
@@ -741,7 +769,7 @@ class GraphController {
     else set.add(s.selected);
     const list = [...set];
     setState({ pinned: list });
-    this.main?.setPinnedPoints(list.length ? list : null);
+    this.applyPins();
     this.applyLens();
     return this.done({ ok: true, message: pinned ? `${id} released.` : `${id} holding position.`, sfx: 'command-ok' });
   }
@@ -847,7 +875,7 @@ class GraphController {
     const s = getState();
     const had = s.selected !== null || s.pinned.length > 0 || s.targetMode;
     setState({ targetMode: false, pinned: [] });
-    this.main?.setPinnedPoints(null);
+    this.applyPins();
     this.select(null);
     return this.done({
       ok: had,

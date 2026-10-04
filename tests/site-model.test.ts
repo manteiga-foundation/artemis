@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { applySiteEvents, emptySiteModel, toNetwork } from '../src/site-model';
+import { CELL, applySiteEvents, emptySiteModel, toNetwork } from '../src/site-model';
+import { SPACE_SIZE } from '../src/graph/data';
 import type { SiteEvent } from '../src/site-events';
 
 // The live cosmos is built from the recorder's events: pages are nodes, navigation links them,
@@ -150,14 +151,17 @@ describe('the recorded network for the cosmos', () => {
     expect(data.linkKinds.includes('third')).toBe(false);
   });
 
-  test('nodes keep their positions across rebuilds; new nodes start next to the node that brought them in', () => {
+  test('floating nodes keep their positions across rebuilds; new ones start next to the page that brought them in', () => {
     const first = toNetwork(model(), { external: true });
     const positions = new Map(first.keys.map((k, i) => [k, [1000 + i, 2000 + i] as [number, number]]));
     const m = model();
-    applySiteEvents(m, [visit(3, `${S}/thanks`)]);
+    applySiteEvents(m, [visit(3, `${S}/thanks`), req(3, `${S}/api/receipt`, 'fetch')]);
     const next = toNetwork(m, { external: true, positions });
-    for (let i = 0; i < first.keys.length; i++) expect([next.data.positions[i * 2], next.data.positions[i * 2 + 1]]).toEqual([1000 + i, 2000 + i]);
+    first.data.meta.forEach((n, i) => {
+      if (n.kind !== 'page') expect([next.data.positions[i * 2], next.data.positions[i * 2 + 1]]).toEqual([1000 + i, 2000 + i]);
+    });
     const added = next.data.count - 1;
+    expect(next.data.meta[added].id).toBe('GET /api/receipt');
     const parent = next.data.meta[added].parent;
     const dx = next.data.positions[added * 2] - next.data.positions[parent * 2];
     const dy = next.data.positions[added * 2 + 1] - next.data.positions[parent * 2 + 1];
@@ -175,5 +179,70 @@ describe('the recorded network for the cosmos', () => {
     const { data } = toNetwork(emptySiteModel(), { external: true });
     expect(data.count).toBe(0);
     expect(data.linkCount).toBe(0);
+  });
+});
+
+describe('the honeycomb: a fixed core, pages on a hexagonal lattice around it', () => {
+  const C = SPACE_SIZE / 2;
+  const at = (d: { positions: Float32Array }, i: number): [number, number] => [d.positions[i * 2], d.positions[i * 2 + 1]];
+  const dist = (a: [number, number], b: [number, number]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  /** Screen bearing in degrees: 270 is straight up (y grows downwards), increasing clockwise. */
+  const bearing = (from: [number, number], to: [number, number]) => Math.round(((Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI + 360) % 360);
+  const index = (d: { meta: { id: string }[] }, id: string) => d.meta.findIndex((n) => n.id === id);
+  const pages = (...paths: string[]) => build([session, ...paths.map((p, i) => visit(i + 1, `${S}${p}`))]);
+
+  test('the core sits at the centre; the pages reached from it take the six cells around it, top first, then clockwise', () => {
+    const { data } = toNetwork(pages('/', '/a', '/', '/b', '/', '/c', '/', '/d', '/', '/e', '/', '/f', '/', '/g'), { external: true });
+    const core = at(data, data.core);
+    expect(core).toEqual([C, C]);
+    const ring = ['/a', '/b', '/c', '/d', '/e', '/f'].map((p) => at(data, index(data, p)));
+    for (const p of ring) expect(dist(core, p)).toBeCloseTo(CELL, 3);
+    expect(ring.map((p) => bearing(core, p))).toEqual([270, 330, 30, 90, 150, 210]);
+    // The ring is full: the seventh goes one ring further out.
+    expect(dist(core, at(data, index(data, '/g')))).toBeGreaterThan(CELL * 1.5);
+  });
+
+  test('a path winds around the core: each page next to the page it came from, on the free cell nearest the core, turning clockwise', () => {
+    const chain = ['/', '/a', '/b', '/c', '/d', '/e', '/f', '/g'];
+    const { data } = toNetwork(pages(...chain), { external: true });
+    const core = at(data, data.core);
+    const p = chain.map((path) => at(data, index(data, path)));
+    // Every step along the walk is one honeycomb edge.
+    for (let i = 1; i < p.length; i++) expect(dist(p[i - 1], p[i])).toBeCloseTo(CELL, 3);
+    // Around the hexagon first, clockwise from the top...
+    expect(p.slice(1, 7).map((c) => [Math.round(dist(core, c)), bearing(core, c)])).toEqual(
+      [270, 330, 30, 90, 150, 210].map((b) => [CELL, b])
+    );
+    // ...then, the ring full, one ring out from where the walk stood.
+    expect(dist(core, p[7])).toBeCloseTo(CELL * 2, 3);
+  });
+
+  test('a page reached from a hub sits beside the hub, inner cells first', () => {
+    // /a is reached from the core; /a/1 and /a/2 from /a.
+    const { data } = toNetwork(pages('/', '/a', '/a/1', '/a', '/a/2'), { external: true });
+    const hub = at(data, index(data, '/a'));
+    for (const path of ['/a/1', '/a/2']) expect(dist(hub, at(data, index(data, path)))).toBeCloseTo(CELL, 3);
+    // The two ring-1 cells beside /a are taken before any outer one.
+    expect(dist(at(data, data.core), at(data, index(data, '/a/2')))).toBeCloseTo(CELL, 3);
+  });
+
+  test('pages never move: positions handed in, growth and Scope leave every page on its cell', () => {
+    const m = build([session, visit(1, `${S}/`), visit(2, 'https://login.idp.example/authorize'), visit(3, `${S}/home`), visit(4, `${S}/settings`)]);
+    const before = toNetwork(m, { external: true });
+    const cellOf = (net: typeof before, id: string) => at(net.data, index(net.data, id));
+    const elsewhere = new Map(before.keys.map((k) => [k, [1, 1] as [number, number]]));
+    applySiteEvents(m, [visit(5, `${S}/billing`)]);
+    for (const opts of [{ external: true, positions: elsewhere }, { external: false, positions: elsewhere }]) {
+      const after = toNetwork(m, opts);
+      for (const id of ['/', '/home', '/settings']) expect(cellOf(after, id)).toEqual(cellOf(before, id));
+    }
+  });
+
+  test('the core and the pages are the fixed points; endpoints and services float', () => {
+    const { data, fixed } = toNetwork(
+      build([session, visit(1, `${S}/`), req(1, `${S}/api/a`, 'fetch'), req(1, 'https://cdn.example.net/x.js', 'script'), visit(2, `${S}/b`)]),
+      { external: true }
+    );
+    expect(fixed.map((i) => data.meta[i].id)).toEqual(['/', '/b']);
   });
 });

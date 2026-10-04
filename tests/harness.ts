@@ -31,7 +31,10 @@ export class Renderer {
   setLinkWidths() {}
   setPointClusters() {}
   setClusterPositions() {}
-  setPinnedPoints() {}
+  pinned: number[] | null = null;
+  setPinnedPoints(p: number[] | null) { this.pinned = p; }
+  shapes: Float32Array<ArrayBufferLike> = new Float32Array();
+  setPointShapes(s: Float32Array) { this.shapes = s; }
   trackPointPositionsByIndices(t: number[]) { this.tracked = t; }
   setConfigPartial(c: Record<string, unknown>) { this.config = { ...this.config, ...c }; }
   getNeighboringPointIndices(index: number) {
@@ -45,7 +48,8 @@ export class Renderer {
   }
   render() { this.renders++; }
   start() {}
-  fitView() { this.fits++; }
+  fitPadding: number | undefined;
+  fitView(_duration?: number, padding?: number) { this.fits++; this.fitPadding = padding; }
   fittedTo: number[] | null = null;
   fitViewByPointIndices(indices: number[]) { this.fittedTo = [...indices]; }
   getZoomLevel() { return 1; }

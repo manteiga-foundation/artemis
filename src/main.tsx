@@ -19,6 +19,7 @@ import { controller } from './graph/controller';
 if (import.meta.env.DEV) (window as unknown as { __artemis: typeof getState }).__artemis = getState;
 // The cosmos's node names, for tests and scripts (the recorded cosmos is not in the store).
 if (import.meta.env.DEV) (window as unknown as { __artemisNodes: () => string[] }).__artemisNodes = () => controller.data.meta.map((m) => m.id);
+if (import.meta.env.DEV) (window as unknown as { __artemisPositions: () => number[] }).__artemisPositions = () => controller.nodePositions();
 
 // /debug is a page of its own for trying things in isolation (sounds first).
 const isDebug = location.pathname.replace(/\/+$/, '') === '/debug';

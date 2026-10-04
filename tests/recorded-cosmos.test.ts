@@ -26,6 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setState(initialState);
   controller.useEmulated();
   controller.main = null;
   controller.mini = null;
@@ -107,9 +108,44 @@ describe('the recorded cosmos', () => {
   test('a recorded site has a handful of nodes: it gets room (long links, gentle gravity); the emulated network keeps its tuning', () => {
     const { main } = attach();
     controller.applySiteEvents(recording);
-    expect(main.config).toMatchObject({ simulationLinkDistance: 70, simulationGravity: 0.04, simulationCluster: 0 });
+    expect(main.config).toMatchObject({ simulationLinkDistance: 45, simulationGravity: 0, simulationCluster: 0 });
     controller.useEmulated();
     expect(main.config).toMatchObject({ simulationLinkDistance: 9, simulationGravity: 0.22, simulationCluster: 0.22 });
+  });
+
+  test('the core and every page hold their cells; Hold pins on top of them, Clear releases only the holds', () => {
+    const { main } = attach();
+    controller.applySiteEvents(recording);
+    const pagesAt = ids().flatMap((id, i) => (id.startsWith('/') ? [i] : []));
+    expect(main.pinned!.slice().sort()).toEqual(pagesAt);
+    setState({ view: 'cosmos', stageView: 'cosmos', selected: 1 });
+    controller.hold();
+    expect(main.pinned!.slice().sort()).toEqual([...pagesAt, 1].sort());
+    controller.clear();
+    expect(main.pinned!.slice().sort()).toEqual(pagesAt);
+    // Growth keeps the structure pinned, new pages included.
+    controller.applySiteEvents([{ type: 'visit', id: 9, t: 9, url: `${S}/thanks`, kind: 'document', committed: true }]);
+    expect(main.pinned).toContain(ids().indexOf('/thanks'));
+  });
+
+  test('framing the whole recorded site leaves room for the page labels; the emulated cosmos keeps its framing', () => {
+    const { main } = attach();
+    controller.vision();
+    expect(main.fitPadding).toBe(0.18);
+    controller.applySiteEvents(recording);
+    controller.vision();
+    expect(main.fitPadding).toBeGreaterThanOrEqual(0.3);
+  });
+
+  test('the core is a hexagon, in the recorded cosmos and the emulated one', () => {
+    const { main } = attach();
+    const HEXAGON = 5;
+    const shapesOf = () => [...main.shapes].map((s, i) => [i === controller.data.core, s]);
+    controller.regenerate(); // loads the emulated network into the graph
+    expect(main.shapes[controller.data.core]).toBe(HEXAGON);
+    expect(shapesOf().filter(([core, s]) => !core && s !== 0)).toEqual([]);
+    controller.applySiteEvents(recording);
+    expect([...main.shapes]).toEqual([HEXAGON, 0, 0, 0, 0]);
   });
 
   test('an empty recording never asks the graph for positions or a whole-graph fit (cosmos.gl cannot measure zero points)', () => {

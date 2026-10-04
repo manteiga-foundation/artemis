@@ -169,15 +169,33 @@ test('the recorded cosmos grows live from the feed; V lands on the current page;
     expect(((await stateOf(page)) as { status: string }).status).toBe('View: Cosmos. Current page /contact selected.');
     await page.waitForTimeout(600);
     expect((await selectedLabel(page))?.text).toBe('/contact');
+    // ...centred on screen, as in the emulated cosmos, and still there once the layout has moved.
+    for (const wait of [0, 2000]) {
+      await page.waitForTimeout(wait);
+      const label = (await selectedLabel(page))!;
+      expect([Math.abs(label.dx) < 80, Math.abs(label.dy) < 80]).toEqual([true, true]);
+    }
     // Pages are labelled as they appear.
     expect(await page.locator('.hub-label .hub-text').allTextContents()).toEqual(expect.arrayContaining(['/', '/contact']));
 
     // Browsing on: the cosmos grows in place, the camera stays where the operator put it.
+    const positions = () => page.evaluate('window.__artemisPositions()') as Promise<number[]>;
+    const coreBefore = (await positions()).slice(0, 2);
     await feed(page, recorded(3, ['/thanks']));
     await page.waitForFunction('window.__artemis().nodeCount === 7');
     await page.waitForFunction(() => [...document.querySelectorAll('.hub-label .hub-text')].some((e) => e.textContent === '/thanks'));
     expect(((await stateOf(page)) as { selected: number }).selected).not.toBeNull();
     expect(await zoomReadout(page)).toBeGreaterThanOrEqual(3.9);
+
+    // The core is the fixed centre of the cosmos and the pages sit on their cells (one honeycomb
+    // step from the core), however the layout moves around them.
+    await page.waitForTimeout(1500);
+    const p = await positions();
+    expect(coreBefore).toEqual([2048, 2048]);
+    expect(p.slice(0, 2)).toEqual([2048, 2048]);
+    const names = (await page.evaluate('window.__artemisNodes()')) as string[];
+    const contact = names.indexOf('/contact');
+    expect(Math.hypot(p[contact * 2] - 2048, p[contact * 2 + 1] - 2048)).toBeCloseTo(150, 1);
 
     // Scope sits where Regenerate was; it hides the outside host and brings it back.
     expect(await anyCount(page, 'button', 'Regenerate (R)')).toBe(0);
