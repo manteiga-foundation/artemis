@@ -108,12 +108,34 @@ describe('the recorder', () => {
 
     expect(path).not.toBeNull();
     expect((await readdir(sessionsDir)).some((f) => join(sessionsDir, f) === path)).toBe(true);
+
+    // Alongside the database: a video of the website and of the console, and a HAR of the site's
+    // traffic, each listed in the session's artifacts. No temporary files are left behind.
+    const base = path!.replace(/\.sqlite$/, '');
+    const files = await readdir(sessionsDir);
+    expect(files.filter((f) => f.startsWith('.'))).toEqual([]);
+    for (const video of [`${base}.site.webm`, `${base}.console.webm`]) {
+      const bytes = new Uint8Array(await Bun.file(video).arrayBuffer());
+      expect([...bytes.slice(0, 4)]).toEqual([0x1a, 0x45, 0xdf, 0xa3]); // WebM (EBML) header
+      expect(bytes.length).toBeGreaterThan(20_000);
+    }
+    const har = (await Bun.file(`${base}.har`).json()) as { log: { entries: { request: { url: string }; response: { content: { text?: string } } }[] } };
+    const urls = har.log.entries.map((e) => e.request.url);
+    expect(urls).toContain(`${siteUrl}/api/map`);
+    expect(urls.some((u) => u.startsWith(vite.url))).toBe(false);
+    expect(har.log.entries.find((e) => e.request.url === `${siteUrl}/api/map`)!.response.content.text).toContain('tiles');
     const db = new Database(path!, { readonly: true });
     try {
       const q = (sql: string) => db.query(sql).all() as Row[];
       const rel = (u: string | number | null) => String(u).replace(siteUrl, '');
 
       expect(q('SELECT target, scope_host FROM sessions')).toEqual([{ target: `${siteUrl}/`, scope_host: 'localhost' }]);
+      const name = (f: string) => f.slice(f.lastIndexOf('/') + 1);
+      expect(q('SELECT kind, file FROM artifacts ORDER BY kind')).toEqual([
+        { kind: 'har', file: name(`${base}.har`) },
+        { kind: 'video-console', file: name(`${base}.console.webm`) },
+        { kind: 'video-site', file: name(`${base}.site.webm`) }
+      ]);
 
       // Page views, in order, each with the action that led to it.
       const visits = q(`SELECT v.url, v.kind, v.status, v.title, a.kind AS via_kind, a.name AS via_name

@@ -190,8 +190,27 @@ Measured on Wikipedia (main page, one article link, a search typed): 2 page view
 5 s, a 600 KB file; 8 bodies (262 KB) for the documents and API calls, metadata only for 37 images,
 20 scripts, 4 stylesheets and 4 beacons; 17 requests credited to the search typing.
 
-Not yet: popups, Back/Forward/Reload as actions, DOM session replay and video (spike first), HAR
-export, the cosmos built from the recording (next slice).
+Not yet: popups, Back/Forward/Reload as actions, DOM session replay (spike first), a policy-aware
+HAR export from the database (masking what is marked sensitive), the cosmos built from the recording.
+
+### Video and HAR alongside the session
+
+On by default for now (a configuration view will decide later; `launchShell({ record: { video,
+har } })` turns them off). Next to `<session>.sqlite`:
+
+- `<session>.site.webm` — Playwright's video of the website, 1440x900, about 25 fps.
+- `<session>.console.webm` — the console window. The website is drawn under the transparent
+  console, not in it, so the site area is black here; the two files together are what the
+  operator saw.
+- `<session>.har` — Playwright's HAR of the site's traffic (the console's own requests filtered
+  out), with response content embedded, for tools that import HAR.
+
+They are written while the app runs and completed when it closes, so they start in a hidden
+`.recording-<time>` folder, move next to the database once the app has closed (whoever closed it),
+and are listed in the session's `artifacts` table with the time recording started (videos start
+with the window, before the session; use it to line the video up with recorded events).
+Measured: Artemis's share of the machine 5% without video, 6% with both videos (median over 13 s
+of scrolling Wikipedia); about 1 to 1.5 MB per window per 16 s.
 
 ## Tests
 
@@ -203,7 +222,7 @@ export, the cosmos built from the recording (next slice).
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
 - `tests/session-store.test.ts` — the session database: target and scope; actions belong to the page view open at the time and credit the next page view (also when reported late, never long after); requests credited to the latest earlier action in their page view, re-credited when an action arrives late; the actor column; typed values kept with password fields marked; responses with status, headers (credentials marked sensitive), body and timing; request bodies; bodies stored once by hash; missing bodies noted (too large, unavailable); the file opens in another process; body, sensitive-header and scope policies.
-- `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic.
+- `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic. Next to the database: a WebM video of the website and of the console and a HAR holding the site's API call with its body and none of the console's requests, all listed in the `artifacts` table, with no temporary folder left behind.
 - `tests/shell-logic.test.ts` — where the native site view goes (shown only engaged, in the Browser view, not diving), which clicks pass through to the site (everywhere but the panels), resuming the engaged website after a console reload (garbage, non-web addresses and refusing storage resume nothing).
 - `tests/shell.test.ts` — the owned browser as an Electron shell under Playwright, windows hidden: launching without a console server fails fast and says why; a fixture site that refuses framing and hides its body unless it is the top window (the Microsoft sign-in defense) runs top-level and visible under the console, with no iframe, sits exactly in the slot, and is followed through a redirect by the address strip; `V` typed in the site dives (the site view steps aside and returns on the same page), `v` typed in a site field stays in the field; clicks pass through over the site and stay over the header; a `target="_blank"` link loads in the site view (no bare window) while a sign-in popup opened with window features still opens; a console reload comes back engaged on the same site page without sending the site back to the start; machine readouts arrive.
 - `tests/owned-browser.test.ts` — the earlier framed owned browser (still in the tree, no longer launched): CSP/cookie rewriting; machine readouts (CPU, ARTEMIS, MEM) arrive from the Bun side; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page. Links aimed at the top window or a new tab, and redirects, stay inside the frame and land on the final address with no extra window.

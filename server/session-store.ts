@@ -158,6 +158,11 @@ CREATE TABLE IF NOT EXISTS bodies (
   size INTEGER NOT NULL,
   data BLOB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS artifacts (
+  kind TEXT NOT NULL,
+  file TEXT NOT NULL,
+  started_at INTEGER
+);
 CREATE INDEX IF NOT EXISTS visits_t ON visits (t_start);
 CREATE INDEX IF NOT EXISTS actions_visit_t ON actions (visit_id, t);
 CREATE INDEX IF NOT EXISTS requests_visit_t ON requests (visit_id, t_start);
@@ -174,6 +179,27 @@ const hostOf = (url: string): string => {
     return '';
   }
 };
+
+export interface Artifact {
+  /** `video-site`, `video-console`, `har`. */
+  kind: string;
+  /** File name next to the database, so a session folder can move as a whole. */
+  file: string;
+  /** Epoch ms the recording started (videos start with the window, before the session). */
+  startedAt: number | null;
+}
+
+/** Lists files written alongside a session once they are complete (videos, HAR are finished at close). */
+export function addArtifacts(path: string, artifacts: Artifact[]): void {
+  const db = new Database(path);
+  try {
+    db.exec(SCHEMA);
+    const insert = db.query('INSERT INTO artifacts (kind, file, started_at) VALUES (?, ?, ?)');
+    for (const a of artifacts) insert.run(a.kind, a.file, a.startedAt);
+  } finally {
+    db.close();
+  }
+}
 
 export interface SessionStore {
   db: Database;

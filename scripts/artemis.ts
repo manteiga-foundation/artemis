@@ -35,9 +35,11 @@ let closing = false;
 const finish = async () => {
   if (closing) return;
   closing = true;
-  await shell.recorder?.stop();
-  const file = shell.recorder?.path();
-  console.log(`Artemis: browser closed${file ? `; session saved to ${file}` : ''}`);
+  const files = await shell.finished();
+  if (files) {
+    console.log(`Artemis: browser closed; session saved:`);
+    for (const f of [files.database, files.siteVideo, files.consoleVideo, files.har]) if (f) console.log(`  ${f}`);
+  } else console.log('Artemis: browser closed; no website was opened, nothing saved');
   vite?.kill();
   process.exit(0);
 };
