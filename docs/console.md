@@ -18,7 +18,7 @@ bun run check      # TypeScript
 bun run test       # unit tests + Playwright integration tests (isolated Vite server, headless Chromium)
 bun run build      # check + production bundle in dist/
 bun run preview    # serve dist/ at http://127.0.0.1:4173
-bun run artemis    # open Artemis in the browser it owns (starts the dev server if needed)
+bun run artemis    # open Artemis in the browser it owns (starts the dev server if needed); add a website to engage it at once
 bun run scripts/screenshots.ts 5173        # documentation screenshots from a running dev server
 bun run scripts/screenshots-entry.ts 5173  # entry screen states
 ```
@@ -209,11 +209,33 @@ har } })` turns them off). Next to `<session>.sqlite`:
   calls.
 
 They are written while the app runs and completed when it closes, so they start in a hidden
-`.recording-<time>` folder, move next to the database once the app has closed (whoever closed it),
-and are listed in the session's `artifacts` table with the time recording started (videos start
-with the window, before the session; use it to line the video up with recorded events).
+`.recording-<time>` folder, move next to the database once the app has closed, and are listed in
+the session's `artifacts` table with the time recording started (videos start with the window,
+before the session; use it to line the video up with recorded events).
 Measured: Artemis's share of the machine 5% without video, 6% with both videos (median over 13 s
 of scrolling Wikipedia); about 1 to 1.5 MB per window per 16 s.
+
+**Closing saves the session whole, however it ends.** Playwright writes the HAR only when Artemis
+closes the app itself (`context.close()` exports it); an Electron that quits on its own, or a
+process killed by Ctrl+C, leaves no HAR and the videos stranded in the hidden folder (found in
+real use: no session had a HAR, and the interrupted ones had no videos beside them). So, while a
+session is recorded (`ARTEMIS_GRACEFUL_QUIT=1`):
+
+- Closing the window (or the console with Cmd+W) and Cmd+Q hide the windows at once and ask
+  Artemis to close (`quitRequested`, watched every 200 ms); Artemis drains the recorder, approves
+  the quit, closes through Playwright (HAR, videos), then moves the files. If nobody answers in
+  15 s the shell quits on its own.
+- Ctrl+C, closing the terminal and `kill` (SIGINT, SIGHUP, SIGTERM) go through the same close;
+  `scripts/artemis.ts` replaces Playwright's handlers, which would close the browser at once and
+  exit 130. A second Ctrl+C quits without waiting.
+- A crash, `kill -9` or a power cut cannot be saved at the time. Each recording folder keeps a
+  `manifest.json` (which video is the site's, which the console's, and the session's database once
+  a website is opened); the next launch moves what survived next to its database, lists it, and
+  says so (`server/recordings.ts`). The HAR cannot be recovered that way; the database, written
+  as the session happens, is the complete record (and a HAR export from it is planned).
+
+`bun run artemis <website>` engages the website at once (`ARTEMIS_PROFILE_DIR` and
+`ARTEMIS_SESSIONS_DIR` override `data/shell-profile` and `data/sessions`; the test uses both).
 
 ## The live cosmos (owned browser)
 
@@ -285,7 +307,9 @@ full-URL lists in a node panel, the assets count behind a Requests layer.
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
 - `tests/session-store.test.ts` — the session database: target and scope; actions belong to the page view open at the time and credit the next page view (also when reported late, never long after); requests credited to the latest earlier action in their page view, re-credited when an action arrives late; the actor column; typed values kept with password fields marked; responses with status, headers (credentials marked sensitive), body and timing; request bodies; bodies stored once by hash; missing bodies noted (too large, unavailable); the file opens in another process; body, sensitive-header and scope policies.
-- `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic. Next to the database: a WebM video of the website and of the console and a HAR holding the site's API call with its body and none of the console's requests, all listed in the `artifacts` table, with no temporary folder left behind. Meanwhile the console's cosmos became the recording, live (the two pages, the shared config endpoint, the map endpoint, the outside host); V lands on `/contact`; a console reload rebuilds the same cosmos from the database.
+- `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic. Next to the database: a WebM video of the website and of the console and a HAR holding the site's API call with its body and none of the console's requests, all listed in the `artifacts` table, with no temporary folder left behind. Meanwhile the console's cosmos became the recording, live (the two pages, the shared config endpoint, the map endpoint, the outside host); V lands on `/contact`; a console reload rebuilds the same cosmos from the database. The fixture page reads its config before the test moves on (clicking away mid-call cuts it off, and Electron then reports it neither finished nor failed: recorded as open, which made the assertion flaky). Closing the way a person does keeps the recording whole: closing the window, and Cmd+Q, each still produce the HAR, both videos, an ended session and no hidden folder (both failed before: no HAR).
+- `tests/recordings.test.ts` — recovering an interrupted session from its folder's manifest: the videos move next to the database and are listed in it; a launch that never opened a website is removed; the recording in progress and folders without a manifest are left alone.
+- `tests/artemis-cli.test.ts` — `bun run artemis <site>` run as a separate process and stopped with SIGINT, as Ctrl+C does: exit 0, "session saved", the database, both videos and the HAR, no hidden folder (without the signal handling it exits 130, the reported symptom).
 - `tests/site-model.test.ts` — events to drawing: pages keyed without the query, linked in commit order, the last one current; a page appears at its final address once its navigation commits, with the requests made meanwhile; shared endpoint nodes per method and path; shared service nodes per outside host; subdomains in scope, first-party assets counted not drawn; errors and failures on the node that answered; replays change nothing, reset starts over; outside sign-in pages are external pages. The network: core, hubs, small nodes, navigation as the route; Scope drops external nodes and links; positions kept across rebuilds, new nodes beside their parent; anomalies; an empty recording. The honeycomb: the core at the centre, its pages on the six cells around it (top first, clockwise), the seventh one ring out; a walk winds around the core one edge at a time, then steps out; a hub's pages sit beside it, inner cells first; pages never move (positions handed in, growth, Scope); the core and pages are the fixed points.
 - `tests/recorded-cosmos.test.ts` — the controller with the recording: the first events replace the emulated network; growth keeps every node; V lands on the current recorded page, or says nothing is recorded yet; Scope hides and restores outside hosts with the selection kept on its node; Scope replaces Regenerate, which refuses; the recorded physics and back; the core and every page pinned, Hold on top, Clear releasing only holds; whole-site framing with room for labels; the core a hexagon in both cosmos; an empty graph is never measured; the first nodes are framed, growth after the operator aims is not.
 - `tests/shell-logic.test.ts` — where the native site view goes (shown only engaged, in the Browser view, not diving), which clicks pass through to the site (everywhere but the panels), resuming the engaged website after a console reload (garbage, non-web addresses and refusing storage resume nothing).

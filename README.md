@@ -3,7 +3,7 @@
 Web Application Intelligent Console.
 
 ![Status](https://img.shields.io/badge/status-draft%20UI-1034a6?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-123%20passing-005d2c?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-129%20passing-005d2c?style=flat-square)
 ![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB)
@@ -50,7 +50,7 @@ browser page behind the console, so sign-in flows, MFA, menus and dialogs behave
 browser. It starts the development server itself if nothing answers on the port:
 
 ```sh
-bun run artemis            # ARTEMIS_PORT=5179 bun run artemis  to use another port
+bun run artemis            # ARTEMIS_PORT=5179 bun run artemis  to use another port; bun run artemis example.com  to engage it at once
 ```
 
 Its profile (cookies, logins) persists under `data/shell-profile`, which is ignored by git.

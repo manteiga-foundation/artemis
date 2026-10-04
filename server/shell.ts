@@ -9,6 +9,7 @@ import { startMachineFeed } from './machine';
 import { startRecorder, type Recorder } from './recorder';
 import { startSiteFeed } from './site-feed';
 import { addArtifacts } from './session-store';
+import { recoverRecordings, writeManifest } from './recordings';
 
 const require = createRequire(import.meta.url);
 const SHELL_SRC = new URL('../shell/', import.meta.url).pathname;
@@ -44,6 +45,8 @@ export interface Shell {
   site(): Page | undefined;
   /** Records the session into SQLite when `sessionsDir` was given. */
   recorder: Recorder | null;
+  /** Databases of earlier, interrupted sessions whose videos were put back in place at launch. */
+  recovered: string[];
   /** Resolves once the app has closed and the session's files are in place (null: no session). */
   finished(): Promise<SessionFiles | null>;
   state(): Promise<ShellState>;
@@ -86,6 +89,8 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   if (!answers) throw new Error(`nothing answers on ${o.appUrl}: start the dev server (bun run dev), or use bun run artemis`);
   const main = await buildShell();
   const origin = new URL(o.appUrl).origin;
+  // What earlier launches could not save (killed, crashed) goes next to its session first.
+  const recovered = o.sessionsDir ? await recoverRecordings(o.sessionsDir) : [];
   // Recordings are written while the app runs and only complete when it closes, before anyone
   // knows the session's name: they start in a hidden folder and move next to the database.
   const launchedAt = Date.now();
@@ -102,7 +107,9 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
       ARTEMIS_APP_URL: o.appUrl,
       ARTEMIS_USER_DATA: o.userDataDir,
       ARTEMIS_SHELL_DIR: SHELL_OUT,
-      ...(o.hidden ? { ARTEMIS_SHELL_HIDDEN: '1' } : {})
+      ...(o.hidden ? { ARTEMIS_SHELL_HIDDEN: '1' } : {}),
+      // A recorded session is only whole after close(): the shell hands quitting to Artemis.
+      ...(o.sessionsDir ? { ARTEMIS_GRACEFUL_QUIT: '1' } : {})
     },
     recordVideo: o.recordVideo ?? video,
     // The site's traffic only: the console's own requests are left out.
@@ -133,6 +140,23 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   // The console's cosmos grows from the recording as it is written.
   const stopSiteFeed = recorder ? startSiteFeed(consolePage, recorder) : () => {};
   app.on('close', stopSiteFeed);
+
+  // Which video is which, and whose session they are: what a later launch needs to recover them
+  // if this one never closes properly.
+  const videoPath = async (p: Page | undefined) => {
+    try {
+      return (await p?.video()?.path()) ?? null;
+    } catch {
+      return null;
+    }
+  };
+  const manifest = async () => {
+    if (!scratch) return;
+    const [siteVideo, consoleVideo] = await Promise.all([videoPath(sitePage), videoPath(consolePage)]);
+    await writeManifest(scratch, { launchedAt, siteVideo, consoleVideo, database: recorder?.path() ?? null }).catch(() => {});
+  };
+  await manifest();
+  recorder?.onEvent((e) => e.type === 'session' && void manifest());
 
   // Once the app has closed (by close() or by the operator closing the window): move the
   // recordings next to the session's database and list them in it.
@@ -169,19 +193,36 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     })());
   if (o.sessionsDir) app.on('close', () => void finish());
 
+  // The one proper close: drain the recorder, let the shell quit, close through Playwright (which
+  // writes the HAR and finishes the videos), then put the files in place.
+  let closing: Promise<void> | null = null;
+  const close = () =>
+    (closing ??= (async () => {
+      clearInterval(quitWatch);
+      stopFeed();
+      stopSiteFeed();
+      await recorder?.stop();
+      await app.evaluate(() => (globalThis as unknown as { __artemisApproveQuit?: () => void }).__artemisApproveQuit?.()).catch(() => {});
+      await app.close();
+      if (o.sessionsDir) await finish();
+    })());
+  // The operator closed the window or quit: the shell waits for this close (shell/main.ts).
+  const quitWatch = setInterval(() => {
+    app
+      .evaluate(() => (globalThis as unknown as { __artemisShell?: { quitRequested?: boolean } }).__artemisShell?.quitRequested === true)
+      .then((asked) => asked && void close())
+      .catch(() => {});
+  }, 200);
+  app.on('close', () => clearInterval(quitWatch));
+
   return {
     app,
     console: consolePage,
     site,
     recorder,
+    recovered,
     finished: () => finish(),
     state: () => app.evaluate(() => (globalThis as unknown as { __artemisShell: ShellState }).__artemisShell),
-    close: async () => {
-      stopFeed();
-      stopSiteFeed();
-      await recorder?.stop();
-      await app.close();
-      if (o.sessionsDir) await finish();
-    }
+    close
   };
 }

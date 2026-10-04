@@ -9,7 +9,8 @@
 // automation, video and tracing.
 //
 // Environment: ARTEMIS_APP_URL (the console), ARTEMIS_USER_DATA (profile: cookies, logins),
-// ARTEMIS_SHELL_HIDDEN=1 (tests: windows never shown).
+// ARTEMIS_SHELL_HIDDEN=1 (tests: windows never shown), ARTEMIS_GRACEFUL_QUIT=1 (a session is
+// recorded: quitting goes through Artemis so the recording is saved whole).
 import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain } from 'electron';
 import path from 'node:path';
 
@@ -31,8 +32,40 @@ interface Layout {
 }
 
 /** Read by tests through Playwright (`app.evaluate`). */
-const state = { passThrough: false, siteVisible: false, editable: false, layout: null as Layout | null, siteUrl: '' };
+const state = {
+  passThrough: false,
+  siteVisible: false,
+  editable: false,
+  layout: null as Layout | null,
+  siteUrl: '',
+  /** The operator closed the window or quit; Artemis saves the session, then lets the shell go. */
+  quitRequested: false
+};
 (globalThis as unknown as { __artemisShell: typeof state }).__artemisShell = state;
+
+// While a session is recorded (ARTEMIS_GRACEFUL_QUIT=1) the shell never quits by itself: closing
+// the window or Cmd+Q hides it and asks Artemis (server/shell.ts) to close it, because only that
+// close writes the HAR and finishes the videos. If no one answers, it quits on its own anyway.
+const GRACEFUL_QUIT = process.env.ARTEMIS_GRACEFUL_QUIT === '1';
+const QUIT_FALLBACK_MS = 15_000;
+let quitApproved = !GRACEFUL_QUIT;
+(globalThis as unknown as { __artemisApproveQuit: () => void }).__artemisApproveQuit = () => {
+  quitApproved = true;
+};
+const requestQuit = () => {
+  for (const w of BaseWindow.getAllWindows()) w.hide();
+  if (state.quitRequested) return;
+  state.quitRequested = true;
+  setTimeout(() => {
+    quitApproved = true;
+    app.quit();
+  }, QUIT_FALLBACK_MS).unref();
+};
+app.on('before-quit', (e) => {
+  if (quitApproved) return;
+  e.preventDefault();
+  requestQuit();
+});
 
 /** The operator's actions reported by the site preload, drained by the recorder (server/recorder.ts). */
 const actions: unknown[] = [];
@@ -64,6 +97,17 @@ app.whenReady().then(() => {
   fit();
   win.on('resize', fit);
   win.on('move', fit);
+  win.on('close', (e) => {
+    if (quitApproved) return;
+    e.preventDefault();
+    requestQuit();
+  });
+  // Cmd+W lands on the console, the frontmost window: closing it is closing Artemis.
+  consoleWin.on('close', (e) => {
+    if (quitApproved) return;
+    e.preventDefault();
+    requestQuit();
+  });
   win.on('closed', () => app.quit());
   void consoleWin.loadURL(`${APP_URL}/?owned=1`);
 

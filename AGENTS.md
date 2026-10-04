@@ -64,7 +64,7 @@ bun run dev                      # Vite on 5173 (tests spawn their own isolated 
 bun run check                    # tsc --noEmit for src, server and shell
 bun run test                     # bun test --timeout 60000 tests  (unit + Playwright)
 bun run build                    # check + production bundle
-bun run artemis                  # the owned browser, Electron shell (starts the dev server if needed)
+bun run artemis [website]        # the owned browser, Electron shell (starts the dev server if needed)
 bun run scripts/screenshots.ts <port> [outDir] [site]
 bun run scripts/screenshots-shell.ts <port> [outDir] [site]     # the owned browser (Electron shell)
 bun run scripts/screenshots-recorded.ts <port> [outDir] [site]  # the live cosmos after browsing a real site

@@ -38,7 +38,11 @@ const site = Bun.serve({
          <form method="post" action="/contact"><label>Email <input name="email" type="email"></label>
          <label>Password <input name="pw" type="password"></label><button>Send</button></form>`
       );
-    if (url.pathname === '/app.js') return new Response("fetch('/api/config?page=' + location.pathname)", { headers: { 'content-type': 'text/javascript' } });
+    // Like a real app, the page script reads its config and marks the page ready once it has it.
+    if (url.pathname === '/app.js')
+      return new Response("fetch('/api/config?page=' + location.pathname).then((r) => r.json()).then(() => (document.body.dataset.config = 'loaded'))", {
+        headers: { 'content-type': 'text/javascript' }
+      });
     if (url.pathname === '/api/config') return Response.json({ page: url.searchParams.get('page') });
     if (url.pathname === '/api/map') return Response.json({ tiles: 12 });
     if (url.pathname === '/style.css') return new Response('h1{color:teal}', { headers: { 'content-type': 'text/css' } });
@@ -90,6 +94,9 @@ describe('the recorder', () => {
       await c.getByRole('button', { name: 'Engage', exact: true }).click();
       const page = await sitePage(shell, siteUrl);
       await page.getByRole('heading', { name: 'Home' }).waitFor({ timeout: 10000 });
+      // A person reads the page before moving on; clicking away mid-load would cut the page's own
+      // config call off (Electron then reports it neither finished nor failed: recorded as open).
+      await page.locator('body[data-config="loaded"]').waitFor();
       await page.getByRole('link', { name: 'Contact' }).click();
       await page.getByRole('heading', { name: 'Contact' }).waitFor();
       const map = page.waitForResponse((r) => r.url().endsWith('/api/map'));
@@ -219,5 +226,58 @@ describe('the recorder', () => {
     } finally {
       db.close();
     }
+  }, 60000);
+});
+
+describe('closing Artemis the way a person does keeps the recording whole', () => {
+  // Electron quitting by itself skips Playwright's close, which is what writes the HAR; the shell
+  // must hand the quit to Artemis, which saves everything and then lets it go.
+  async function browseThenQuit(quit: (shell: Shell) => Promise<unknown>) {
+    const dir = await mkdtemp(join(tmpdir(), 'artemis-quit-'));
+    const sessions = join(dir, 'sessions');
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: join(dir, 'profile'), hidden: true, sessionsDir: sessions });
+    try {
+      const c = shell.console;
+      await c.waitForFunction('typeof window.__artemis === "function"', null, { timeout: 20000 });
+      await c.getByRole('textbox', { name: 'Web App' }).fill(`${siteUrl}/`);
+      await c.getByRole('button', { name: 'Engage', exact: true }).click();
+      const page = await sitePage(shell, siteUrl);
+      await page.getByRole('heading', { name: 'Home' }).waitFor({ timeout: 10000 });
+      await Bun.sleep(500);
+      await quit(shell).catch(() => {}); // the app may go away while answering
+      const files = await Promise.race([shell.finished(), Bun.sleep(20000).then(() => 'timed out' as const)]);
+      return { dir, sessions, files };
+    } catch (e) {
+      await shell.close().catch(() => {});
+      throw e;
+    }
+  }
+
+  const expectWhole = async ({ dir, sessions, files }: Awaited<ReturnType<typeof browseThenQuit>>) => {
+    try {
+      expect(files).not.toBe('timed out');
+      const f = files as Exclude<typeof files, 'timed out'>;
+      expect({ har: !!f?.har, siteVideo: !!f?.siteVideo, consoleVideo: !!f?.consoleVideo }).toEqual({ har: true, siteVideo: true, consoleVideo: true });
+      const har = (await Bun.file(f!.har!).json()) as { log: { entries: { request: { url: string } }[] } };
+      expect(har.log.entries.map((e) => e.request.url)).toContain(`${siteUrl}/`);
+      expect((await readdir(sessions)).filter((n) => n.startsWith('.'))).toEqual([]);
+      const db = new Database(f!.database, { readonly: true });
+      expect((db.query('SELECT ended_at FROM sessions').get() as { ended_at: number | null }).ended_at).not.toBeNull();
+      db.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  };
+
+  test('closing the window: the HAR, both videos and a closed database', async () => {
+    await expectWhole(
+      await browseThenQuit((shell) =>
+        shell.app.evaluate(({ BaseWindow, BrowserWindow }) => BaseWindow.getAllWindows().find((w) => !(w instanceof BrowserWindow))!.close())
+      )
+    );
+  }, 60000);
+
+  test('quitting (Cmd+Q): the same', async () => {
+    await expectWhole(await browseThenQuit((shell) => shell.app.evaluate(({ app }) => app.quit())));
   }, 60000);
 });
