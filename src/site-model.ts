@@ -1,12 +1,12 @@
 // The live cosmos's data: built in the console from the recorder's events (src/site-events.ts) as
 // the operator (or later the autopilot) browses. Observations only, organised for drawing:
 //
-// - a page is a node, keyed by address without query or fragment (the database keeps full URLs);
-//   navigation between pages links them, in the order page views committed;
-// - first-party API calls (fetch, XHR, beacons, streams) become one endpoint node per method and
-//   path, shared by every page that calls it;
-// - anything from a host outside the review scope becomes one service node per host, shared;
-// - first-party assets (scripts, styles, images, fonts) are a count on their page, not nodes;
+// - a page is a node, keyed by address without query or fragment (the database keeps full URLs),
+//   hanging under the page it was first reached from; navigation links pages in commit order;
+// - every request a page makes is a small dot of that page, one per method and address (without
+//   the query): its API calls (fetch, XHR, beacons, streams), its own files (scripts, styles,
+//   images, fonts) and anything from hosts outside the review scope (marked external). Nothing is
+//   shared between pages, so no line runs from one page's cloud to another's;
 // - a node that answered with an error status or failed counts the errors (the Anomalies lens).
 //
 // The model only grows (indices stay stable), and applying an event twice changes nothing, so a
@@ -15,7 +15,7 @@ import { inScope } from './scope';
 import { SECTOR_COUNT, SPACE_SIZE, type LinkKind, type NetworkData, type NodeMeta } from './graph/data';
 import type { SiteEvent } from './site-events';
 
-export type SiteNodeKind = 'page' | 'api' | 'service';
+export type SiteNodeKind = 'page' | 'api' | 'asset' | 'service';
 
 export interface SiteNode {
   key: string;
@@ -23,9 +23,9 @@ export interface SiteNode {
   label: string;
   host: string;
   external: boolean;
-  /** Index of the page's first path segment, in order of discovery (endpoints/services: their first page's). */
+  /** Index of the page's first path segment, in order of discovery (dots: their page's). */
   section: number;
-  /** The node that brought this one in (a page's previous page; an endpoint's or service's page). */
+  /** The node that brought this one in (a page's previous page; a dot's page). */
   parent: number | null;
   assets: number;
   errors: number;
@@ -35,7 +35,7 @@ export interface SiteNode {
 export interface SiteLink {
   a: number;
   b: number;
-  kind: 'nav' | 'api' | 'third';
+  kind: 'nav' | 'api' | 'asset' | 'third';
 }
 
 interface VisitState {
@@ -169,26 +169,24 @@ export function applySiteEvents(m: SiteModel, events: SiteEvent[]): boolean {
       m.requests.set(e.id, null);
     } else if (e.mainDocument) {
       m.requests.set(e.id, page);
-    } else if (external(u.hostname)) {
-      const svc = node(`service:${u.hostname}`, () => ({ kind: 'service', label: u.hostname, host: u.hostname, external: true, section: m.nodes[page].section, parent: page }));
-      link(page, svc, 'third');
-      m.nodes[svc].requests++;
-      m.requests.set(e.id, svc);
-    } else if (API_TYPES.has(e.resourceType)) {
-      const api = node(`${e.method} ${u.origin}${u.pathname}`, () => ({
-        kind: 'api',
-        label: `${e.method} ${u.pathname}`,
+    } else {
+      // A dot of this page: one per method and address, whatever else uses the same address.
+      const p = m.nodes[page];
+      const out = external(u.hostname);
+      const kind: SiteNodeKind = out ? 'service' : API_TYPES.has(e.resourceType) ? 'api' : 'asset';
+      const where = u.hostname === p.host ? u.pathname : `${u.hostname}${u.pathname}`;
+      const dot = node(`${p.key} ${e.method} ${u.origin}${u.pathname}`, () => ({
+        kind,
+        label: out ? `${u.hostname}${u.pathname}` : `${e.method} ${where}`,
         host: u.hostname,
-        external: false,
-        section: m.nodes[page].section,
+        external: out,
+        section: p.section,
         parent: page
       }));
-      link(page, api, 'api');
-      m.nodes[api].requests++;
-      m.requests.set(e.id, api);
-    } else {
-      m.nodes[page].assets++;
-      m.requests.set(e.id, page);
+      link(page, dot, kind === 'service' ? 'third' : kind);
+      m.nodes[dot].requests++;
+      if (kind === 'asset') p.assets++;
+      m.requests.set(e.id, dot);
     }
     changed = true;
     const early = m.earlyResponses.get(e.id);
@@ -235,89 +233,122 @@ export function applySiteEvents(m: SiteModel, events: SiteEvent[]): boolean {
 }
 
 // ---------------------------------------------------------------- graph shape
+//
+// The drawing is a tree, laid out like the sketch the emulated cosmos follows: the core (the first
+// page) at the centre, the pages reached from it evenly around it (six make a hexagon), deeper
+// pages fanning outward from the page they were reached from, and every page wearing its requests
+// as a sunflower cloud. Each branch claims a circle big enough for everything under it, and
+// sub-pages take separate slices of their parent's fan, so no drawn line can cross another.
+// Navigation that does not follow the tree (back to an earlier page, across sections) is kept as
+// routes (cross links) for the Routes lens. Places are computed from the whole model, outside the
+// scope too, so Scope only hides; growth re-flows the branches it touches.
 
-/** Distance between neighbouring cells of the honeycomb pages sit on, in space units. */
-export const CELL = 150;
+/** Between neighbouring dots of a page's cloud (sunflower spacing), in space units. */
+const DOT_SPACING = 9;
+/** The innermost dot's distance from its page, clear of the page's own disc. */
+const DOT_CLEAR = 16;
+/** Room a page takes without any requests. */
+const PAGE_ALONE = 18;
+/** Between the clouds of one ring and the next. */
+const GAP = 28;
+/** Between neighbouring branches. */
+const MARGIN = 16;
+/** Sub-pages share at most this much of their parent's slice, centred on it, so no line swings across. */
+const FAN = (2 * Math.PI) / 3;
+const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+const UP = -Math.PI / 2;
 
-// A flat-top hexagonal lattice in axial coordinates: the core's cell at the centre, ring k around
-// it holding 6k cells, neighbours CELL apart at 30 + 60n degrees (so none sits beside a label).
-const AXIAL: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-const HEX = CELL / Math.sqrt(3);
-interface Cell {
-  key: string;
-  q: number;
-  r: number;
-  ring: number;
-  x: number;
-  y: number;
-  /** Screen bearing from the core in degrees: 270 straight up, increasing clockwise. */
-  bearing: number;
+interface Tree {
+  root: number;
+  /** Pages under each page, in discovery order. */
+  kids: number[][];
+  /** Each page's requests, in discovery order. */
+  dots: number[][];
 }
-const byKey = new Map<string, Cell>();
-const rings: Cell[][] = [];
-/** Ring k's cells (around the core, or used as offsets around any cell), clockwise from the top. */
-const ring = (k: number): Cell[] => {
-  if (rings[k]) return rings[k];
-  const make = (q: number, r: number): Cell => {
-    const x = HEX * 1.5 * q;
-    const y = HEX * Math.sqrt(3) * (r + q / 2);
-    // Rounded so a cell straight along another's bearing turns 0 degrees, never 359.9999.
-    const bearing = k === 0 ? 270 : Math.round((((Math.atan2(y, x) * 180) / Math.PI + 360) % 360) * 1e6) / 1e6;
-    const cell = { key: `${q},${r}`, q, r, ring: k, x, y, bearing: bearing % 360 };
-    byKey.set(cell.key, cell);
-    return cell;
-  };
-  const cells: Cell[] = [];
-  if (k === 0) cells.push(make(0, 0));
-  let [q, r] = [AXIAL[4][0] * k, AXIAL[4][1] * k];
-  for (let side = 0; k > 0 && side < 6; side++)
-    for (let step = 0; step < k; step++) {
-      cells.push(make(q, r));
-      q += AXIAL[side][0];
-      r += AXIAL[side][1];
-    }
-  return (rings[k] = cells.sort((a, b) => ((a.bearing + 90) % 360) - ((b.bearing + 90) % 360)));
-};
-const cellAt = (q: number, r: number): Cell => {
-  ring(Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)));
-  return byKey.get(`${q},${r}`)!;
-};
-/** Degrees turned clockwise from bearing `from` to bearing `to`. */
-const clockwise = (from: number, to: number) => (to - from + 360) % 360;
 
-/**
- * Each page's cell. Pages grow like a crystal: the core takes the centre, and each new page
- * attaches beside the page it came from, on the free cell nearest the core, turning clockwise
- * (when every neighbour is taken, the nearest free cell beyond them, by the same order). A walk
- * winds around the hexagon and then the next ring, a hub gathers its pages around it, and
- * navigation runs along the honeycomb's edges. Decided in discovery order over every page, outside
- * the scope too, so nothing already placed ever moves as the site grows or Scope changes.
- */
-function honeycomb(m: SiteModel): Map<number, Cell> {
-  const cells = new Map<number, Cell>();
-  const taken = new Set<string>();
+/** Pages hang under the page they were first reached from; requests under their page. */
+function siteTree(m: SiteModel): Tree | null {
+  if (m.entry === null) return null;
+  const kids: number[][] = m.nodes.map(() => []);
+  const dots: number[][] = m.nodes.map(() => []);
   m.nodes.forEach((n, i) => {
-    if (n.kind !== 'page') return;
-    const from = (n.parent !== null ? cells.get(n.parent) : undefined) ?? (m.entry !== null ? cells.get(m.entry) : undefined);
-    if (i === m.entry || !from) {
-      const centre = ring(0)[0];
-      cells.set(i, centre);
-      taken.add(centre.key);
-      return;
-    }
-    const order = (a: Cell, b: Cell) => a.ring - b.ring || clockwise(from.bearing, a.bearing) - clockwise(from.bearing, b.bearing);
-    for (let d = 1; ; d++) {
-      const free = ring(d)
-        .map((o) => cellAt(from.q + o.q, from.r + o.r))
-        .filter((c) => !taken.has(c.key))
-        .sort(order);
-      if (!free.length) continue;
-      taken.add(free[0].key);
-      cells.set(i, free[0]);
-      return;
-    }
+    if (i === m.entry) return;
+    if (n.kind !== 'page') {
+      if (n.parent !== null) dots[n.parent].push(i);
+    } else kids[n.parent ?? m.entry!].push(i);
   });
-  return cells;
+  return { root: m.entry, kids, dots };
+}
+
+/** Each node's place relative to the centre. */
+function geometry(t: Tree): Map<number, [number, number]> {
+  const cloud = (p: number) => (t.dots[p].length ? DOT_CLEAR + DOT_SPACING * Math.sqrt(t.dots[p].length) : PAGE_ALONE);
+
+  // Rings by depth from the core, far enough apart for the widest clouds on either side.
+  const depth = new Map<number, number>([[t.root, 0]]);
+  const order = [t.root];
+  for (let i = 0; i < order.length; i++) for (const k of t.kids[order[i]]) depth.set(k, depth.get(order[i])! + 1), order.push(k);
+  const widest: number[] = [];
+  for (const p of order) widest[depth.get(p)!] = Math.max(widest[depth.get(p)!] ?? 0, cloud(p));
+  const ring = [0];
+  for (let d = 1; d < widest.length; d++) ring[d] = ring[d - 1] + widest[d - 1] + widest[d] + GAP;
+
+  // Bottom up: the angle each branch needs, its own cloud on its ring or its pages further out.
+  const need = new Map<number, number>();
+  for (const p of [...order].reverse()) {
+    if (p === t.root) continue;
+    const own = (2 * cloud(p) + MARGIN) / ring[depth.get(p)!];
+    need.set(p, Math.max(own, t.kids[p].reduce((s, k) => s + need.get(k)!, 0)));
+  }
+  const sum = (ks: number[]) => ks.reduce((s, k) => s + need.get(k)!, 0);
+  // Push every ring out together until each of the core's pages fits an equal share of the
+  // circle (sections evenly around the core, however unequal) and every fan fits FAN.
+  const sections = t.kids[t.root];
+  let scale = Math.max(1, (sections.length * Math.max(0, ...sections.map((k) => need.get(k)!))) / (2 * Math.PI));
+  for (const p of order) if (p !== t.root && t.kids[p].length) scale = Math.max(scale, sum(t.kids[p]) / FAN);
+  for (let d = 0; d < ring.length; d++) ring[d] *= scale;
+  for (const [k, a] of need) need.set(k, a / scale);
+
+  // Top down: each page in the middle of its slice, its pages sharing the slice (spare angle
+  // shared out evenly), its requests a sunflower around it.
+  const at = new Map<number, [number, number]>();
+  const spread = (p: number, from: number, span: number) => {
+    const kids = t.kids[p];
+    const spare = (span - sum(kids)) / kids.length;
+    let a = from;
+    for (const k of kids) {
+      const slice = need.get(k)! + spare;
+      place(k, a + slice / 2, slice);
+      a += slice;
+    }
+  };
+  const place = (p: number, angle: number, slice: number) => {
+    const r = ring[depth.get(p)!];
+    const [x, y] = [Math.cos(angle) * r, Math.sin(angle) * r];
+    at.set(p, [x, y]);
+    t.dots[p].forEach((dot, k) => {
+      const dr = DOT_CLEAR + DOT_SPACING * Math.sqrt(k);
+      const a = angle + k * GOLDEN;
+      at.set(dot, [x + Math.cos(a) * dr, y + Math.sin(a) * dr]);
+    });
+    if (!t.kids[p].length) return;
+    if (p === t.root) {
+      // Evenly around the core: the first page reached from it straight up, the rest clockwise.
+      const share = (2 * Math.PI) / t.kids[p].length;
+      t.kids[p].forEach((k, i) => place(k, UP + i * share, share));
+    } else {
+      const span = Math.min(slice, FAN);
+      spread(p, angle - span / 2, span);
+    }
+  };
+  place(t.root, UP, 2 * Math.PI);
+  // cosmos.gl draws within its space: a site too big for it is drawn smaller, all of it alike (the
+  // same shape, so still nothing crosses; only the clouds grow denser).
+  let far = 0;
+  for (const [x, y] of at.values()) far = Math.max(far, Math.hypot(x, y));
+  const room = SPACE_SIZE / 2 - 100;
+  if (far > room) for (const [k, [x, y]] of at) at.set(k, [(x * room) / far, (y * room) / far]);
+  return at;
 }
 
 const hash01 = (s: string): number => {
@@ -329,87 +360,101 @@ const pairKey = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
 
 export interface RecordedNetwork {
   data: NetworkData;
-  /** Model key of each graph index, to carry positions and selections across rebuilds. */
+  /** Model key of each graph index, to carry selections across rebuilds. */
   keys: string[];
-  /** Graph indices that hold their place: the core and every page, on their cells. */
+  /** Graph indices that hold their place: all of them (the drawing is computed, not simulated). */
   fixed: number[];
 }
 
 /**
  * The graph's network for the recorded site. `external: false` leaves out everything outside the
- * review scope. The core and pages sit on the honeycomb (fixed); endpoints and services float:
- * known ones keep their `positions`, new ones start next to the page that brought them in.
+ * review scope (a page whose parent is hidden hangs on its nearest shown ancestor).
  */
-export function toNetwork(m: SiteModel, o: { external: boolean; positions?: Map<string, [number, number]> }): RecordedNetwork {
+export function toNetwork(m: SiteModel, o: { external: boolean }): RecordedNetwork {
   const remap = new Array<number>(m.nodes.length).fill(-1);
   const keys: string[] = [];
   m.nodes.forEach((n, i) => {
     if (o.external || !n.external) remap[i] = keys.push(n.key) - 1;
   });
   const count = keys.length;
-  const entry = m.entry !== null ? remap[m.entry] : -1;
+  const tree = siteTree(m);
+  const places = tree ? geometry(tree) : new Map<number, [number, number]>();
+  const root = tree?.root ?? -1;
+  const C = SPACE_SIZE / 2;
+
+  // The tree as drawn: each node's nearest shown ancestor, and which section (page reached from
+  // the core) it belongs to.
+  const treeParent = (i: number): number | null => (i === root ? null : m.nodes[i].kind === 'page' ? (m.nodes[i].parent ?? root) : m.nodes[i].parent);
+  const shownParent = (i: number): number => {
+    let p = treeParent(i);
+    while (p !== null && remap[p] < 0) p = treeParent(p);
+    return p === null ? -1 : remap[p];
+  };
+  const sections = tree ? tree.kids[root] : [];
+  const sectionOf = (i: number): number => {
+    let p: number | null = i;
+    while (p !== null && treeParent(p) !== root && p !== root) p = treeParent(p);
+    return p === null || p === root ? -1 : sections.indexOf(p);
+  };
+
   const meta: NodeMeta[] = [];
   const pos = new Float32Array(count * 2);
-  const C = SPACE_SIZE / 2;
-  const cells = honeycomb(m);
-  const fixed: number[] = [];
-
   m.nodes.forEach((n, i) => {
     const idx = remap[i];
     if (idx < 0) return;
-    const isEntry = idx === entry;
-    const parent = !isEntry && n.parent !== null ? remap[n.parent] : -1;
+    const isRoot = i === root;
+    const section = sectionOf(i);
     meta.push({
       id: n.label,
-      tier: isEntry ? 'core' : n.kind === 'page' ? 'relay' : 'node',
-      sector: isEntry ? -1 : n.section % SECTOR_COUNT,
-      parent,
+      tier: isRoot ? 'core' : n.kind !== 'page' ? 'node' : treeParent(i) === root ? 'sector' : 'relay',
+      sector: section < 0 ? -1 : section % SECTOR_COUNT,
+      parent: shownParent(i),
       degree: 0,
       jitter: hash01(n.key),
       kind: n.kind,
       external: n.external
     });
-    const cell = cells.get(i);
-    const known = o.positions?.get(n.key);
-    if (cell) {
-      pos[idx * 2] = C + cell.x;
-      pos[idx * 2 + 1] = C + cell.y;
-      fixed.push(idx);
-    } else if (known) {
-      pos[idx * 2] = known[0];
-      pos[idx * 2 + 1] = known[1];
-    } else if (parent >= 0) {
-      const a = hash01(`${n.key}#a`) * Math.PI * 2;
-      const r = 50 + hash01(`${n.key}#r`) * 40;
-      pos[idx * 2] = pos[parent * 2] + Math.cos(a) * r;
-      pos[idx * 2 + 1] = pos[parent * 2 + 1] + Math.sin(a) * r;
-    } else {
-      pos[idx * 2] = C + (hash01(`${n.key}#x`) - 0.5) * 40;
-      pos[idx * 2 + 1] = C + (hash01(`${n.key}#y`) - 0.5) * 40;
-    }
+    const [x, y] = places.get(i) ?? [0, 0];
+    // Places are screen-minded (y down, clockwise on screen); cosmos.gl's space has y up.
+    pos[idx * 2] = C + x;
+    pos[idx * 2 + 1] = C - y;
   });
 
   const links: number[] = [];
   const linkKinds: LinkKind[] = [];
   const linkIndex = new Map<string, number>();
   const crossLinks: number[] = [];
-  for (const l of m.links) {
-    const a = remap[l.a];
-    const b = remap[l.b];
-    if (a < 0 || b < 0) continue;
-    const at = linkKinds.length;
+  const add = (a: number, b: number, kind: LinkKind) => {
+    const key = pairKey(a, b);
+    if (a === b || linkIndex.has(key)) return;
+    linkIndex.set(key, linkKinds.length);
+    if (kind === 'cross') crossLinks.push(linkKinds.length);
     links.push(a, b);
-    linkKinds.push(l.kind);
-    if (!linkIndex.has(pairKey(a, b))) linkIndex.set(pairKey(a, b), at);
-    if (l.kind === 'nav') crossLinks.push(at);
+    linkKinds.push(kind);
     meta[a].degree++;
     meta[b].degree++;
+  };
+  // One line per node, to its parent, in discovery order.
+  const DOT_LINK: Record<string, LinkKind> = { api: 'api', asset: 'leaf', service: 'third' };
+  meta.forEach((n, idx) => {
+    if (n.parent < 0) return;
+    add(n.parent, idx, n.kind === 'page' ? (meta[n.parent].tier === 'core' ? 'trunk' : 'branch') : DOT_LINK[n.kind!]);
+  });
+  // Navigation the tree does not already draw: routes.
+  for (const l of m.links) {
+    if (l.kind !== 'nav') continue;
+    const a = remap[l.a];
+    const b = remap[l.b];
+    if (a >= 0 && b >= 0) add(a, b, 'cross');
   }
 
-  const relays = meta.flatMap((n, i) => (n.kind === 'page' && i !== entry ? [i] : []));
+  const pagesAt = (tier: NodeMeta['tier']) => meta.flatMap((n, i) => (n.kind === 'page' && n.tier === tier ? [i] : []));
+  const core = root >= 0 ? remap[root] : -1;
+  const sectorsShown = pagesAt('sector');
+  const relays = pagesAt('relay');
   return {
     keys,
-    fixed,
+    fixed: meta.map((_, i) => i),
     data: {
       seed: 0,
       count,
@@ -419,10 +464,10 @@ export function toNetwork(m: SiteModel, o: { external: boolean; positions?: Map<
       linkKinds,
       linkCount: linkKinds.length,
       linkIndex,
-      core: entry >= 0 ? entry : 0,
-      sectors: [],
+      core: core >= 0 ? core : 0,
+      sectors: sectorsShown,
       relays,
-      hubs: entry >= 0 ? [entry, ...relays] : relays,
+      hubs: core >= 0 ? [core, ...sectorsShown, ...relays] : [...sectorsShown, ...relays],
       crossLinks,
       anomalies: m.nodes.flatMap((n, i) => (remap[i] >= 0 && n.errors > 0 ? [remap[i]] : [])),
       clusterPositions: []

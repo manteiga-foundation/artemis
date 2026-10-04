@@ -39,7 +39,7 @@ describe('the recorded cosmos', () => {
     attach();
     expect(controller.data.count).toBeGreaterThan(1000);
     controller.applySiteEvents(recording);
-    expect(ids()).toEqual(['/', 'GET /api/config', 'maps.googleapis.com', '/contact', 'GET /api/map']);
+    expect(ids()).toEqual(['/', 'GET /api/config', 'maps.googleapis.com/js', '/contact', 'GET /api/map']);
     expect(getState()).toMatchObject({ recorded: true, nodeCount: 5, linkCount: 4 });
     expect(controller.data.meta[getState().currentPage].id).toBe('/contact');
   });
@@ -105,27 +105,43 @@ describe('the recorded cosmos', () => {
     expect(getState().nodeCount).toBe(5);
   });
 
-  test('a recorded site has a handful of nodes: it gets room (long links, gentle gravity); the emulated network keeps its tuning', () => {
+  test('the recorded cosmos is drawn, not simulated: every node holds its computed place, the simulation stays off, growth glides', () => {
     const { main } = attach();
-    controller.applySiteEvents(recording);
-    expect(main.config).toMatchObject({ simulationLinkDistance: 45, simulationGravity: 0, simulationCluster: 0 });
-    controller.useEmulated();
-    expect(main.config).toMatchObject({ simulationLinkDistance: 9, simulationGravity: 0.22, simulationCluster: 0.22 });
-  });
-
-  test('the core and every page hold their cells; Hold pins on top of them, Clear releases only the holds', () => {
-    const { main } = attach();
-    controller.applySiteEvents(recording);
-    const pagesAt = ids().flatMap((id, i) => (id.startsWith('/') ? [i] : []));
-    expect(main.pinned!.slice().sort()).toEqual(pagesAt);
+    controller.applySiteEvents(recording.slice(0, 2));
+    expect(main.starts).toBe(0);
+    // The first nodes arrive in place (alpha 0: no simulation)...
+    expect(main.renderCalls.at(-1)).toEqual([0, 0]);
+    controller.applySiteEvents(recording.slice(2));
+    // ...and growth glides every node to its new place.
+    expect(main.renderCalls.at(-1)![0]).toBe(0);
+    expect(main.renderCalls.at(-1)![1]).toBeGreaterThan(200);
+    expect(main.starts).toBe(0);
+    expect(getState().simRunning).toBe(false);
+    const all = ids().map((_, i) => i);
+    expect(main.pinned!.slice().sort((a, b) => a - b)).toEqual(all);
+    // Hold and Clear never let a node drift.
     setState({ view: 'cosmos', stageView: 'cosmos', selected: 1 });
     controller.hold();
-    expect(main.pinned!.slice().sort()).toEqual([...pagesAt, 1].sort());
     controller.clear();
-    expect(main.pinned!.slice().sort()).toEqual(pagesAt);
-    // Growth keeps the structure pinned, new pages included.
-    controller.applySiteEvents([{ type: 'visit', id: 9, t: 9, url: `${S}/thanks`, kind: 'document', committed: true }]);
-    expect(main.pinned).toContain(ids().indexOf('/thanks'));
+    expect(main.pinned!.slice().sort((a, b) => a - b)).toEqual(all);
+    // Scope snaps (indices change, a glide would mix nodes up).
+    controller.scope();
+    expect(main.renderCalls.at(-1)).toEqual([0, 0]);
+  });
+
+  test('routes (navigation outside the tree) show in the Routes lens only; the overview draws the tree', () => {
+    const { main } = attach();
+    controller.applySiteEvents([
+      ...recording,
+      { type: 'visit', id: 3, t: 3, url: `${S}/thanks`, kind: 'document', committed: true },
+      { type: 'visit', id: 4, t: 4, url: `${S}/`, kind: 'document', committed: true }
+    ]);
+    const route = controller.data.crossLinks[0];
+    expect(route).toBeDefined();
+    expect(main.linkColors[route * 4 + 3]).toBe(0);
+    setState({ lens: 'routes' });
+    controller.applyLens();
+    expect(main.linkColors[route * 4 + 3]).toBeGreaterThan(0.5);
   });
 
   test('framing the whole recorded site leaves room for the page labels; the emulated cosmos keeps its framing', () => {
@@ -172,18 +188,16 @@ describe('the recorded cosmos', () => {
     expect(getState().nodeCount).toBe(1);
   });
 
-  test('the first recorded nodes are framed as their layout unfolds; once the operator aims, growth leaves the camera alone', () => {
+  test('the camera follows the recorded site as it grows, framing where nodes are going; once the operator aims, it stays put', () => {
     const { main } = attach();
     controller.applySiteEvents(recording.slice(0, 2));
-    controller.layoutStarted();
-    for (let i = 0; i < 300; i++) controller.layoutTick();
-    expect(main.fits).toBe(2);
+    expect(main.framed).toHaveLength(1);
+    controller.applySiteEvents(recording.slice(2, 4));
+    expect(main.framed).toHaveLength(2);
+    expect(main.framed[1]).toEqual([...controller.data.positions]);
     setState({ view: 'browser', stageView: 'browser' });
     controller.cycleView();
-    controller.applySiteEvents(recording.slice(2));
-    controller.layoutStarted();
-    for (let i = 0; i < 300; i++) controller.layoutTick();
-    controller.layoutSettled();
-    expect(main.fits).toBe(2);
+    controller.applySiteEvents(recording.slice(4));
+    expect(main.framed).toHaveLength(2);
   });
 });

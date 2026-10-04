@@ -1,7 +1,7 @@
 // Screenshots of the recorded cosmos in the owned browser: browse a real site in the shell, pull
 // back with V, and capture the console window (the site is hidden in the Cosmos view): the landing
-// on the current page, the whole recorded site zoomed out, and Scope on (outside hosts hidden).
-// bun run scripts/screenshots-recorded.ts <port> [outDir] [site] [clicks]
+// on the current page, the whole recorded site, and Scope on (outside hosts hidden).
+// bun run scripts/screenshots-recorded.ts <port> [outDir] [site] [pages]
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import { launchShell } from '../server/shell';
 const port = Number(process.argv[2] ?? 5173);
 const outDir = process.argv[3] ?? new URL('../docs/screenshots', import.meta.url).pathname;
 const target = process.argv[4] ?? 'https://en.wikipedia.org/wiki/Main_Page';
-const clicks = Number(process.argv[5] ?? 6);
+const pages = Number(process.argv[5] ?? 10);
 await mkdir(outDir, { recursive: true });
 const scratch = await mkdtemp(join(tmpdir(), 'artemis-recorded-'));
 const shell = await launchShell({
@@ -43,36 +43,49 @@ try {
   let site = shell.site()!;
   for (let i = 0; i < 100 && !site.url().startsWith('http'); i++) (await Bun.sleep(100), (site = shell.site()!));
   await site.waitForLoadState('load', { timeout: 20000 });
-  // Follow in-site links the way a reviewer would: a few branches from the home page, each a
-  // couple of links deep, a different link each time, staying on the target's host.
+
+  // Browse the way a reviewer would: a few branches from the home page, each two pages deep,
+  // never the same page twice, staying on the target's host.
   const host = new URL(target).host;
-  for (let i = 0; i < clicks; i++) {
-    if (i > 0 && i % 2 === 0) {
-      await site.goto(target).catch(() => {});
-      await Bun.sleep(1200);
-    }
-    const href = (await site.evaluate(`(() => {
-      const n = ${i}, host = ${JSON.stringify(host)}, here = location.pathname;
+  const seen = new Set<string>([new URL(site.url()).pathname]);
+  const next = async (k: number) => {
+    const hrefs = (await site.evaluate(`(() => {
       const scope = document.querySelector('main, #content, [role="main"]') || document.body;
-      const links = [...scope.querySelectorAll('a[href]')].filter(
-        (a) => a.host === host && a.pathname !== here && !/[:]|index\\.php/.test(a.pathname) && a.offsetParent !== null
-      );
-      return links.length ? links[(n * 7 + 3) % links.length].href : null;
-    })()`)) as string | null;
-    if (!href) break;
-    await site.locator(`a[href="${new URL(href).pathname}"], a[href="${href}"]`).first().click({ timeout: 5000 }).catch(() => site.goto(href));
+      return [...scope.querySelectorAll('a[href]')]
+        .filter((a) => a.host === ${JSON.stringify(host)} && !/:|index\\.php/.test(a.pathname) && a.offsetParent !== null)
+        .map((a) => a.origin + a.pathname);
+    })()`)) as string[];
+    const fresh = [...new Set(hrefs)].filter((h) => !seen.has(new URL(h).pathname));
+    return fresh.length ? fresh[(k * 7 + 3) % fresh.length] : null;
+  };
+  const go = async (href: string) => {
+    seen.add(new URL(href).pathname);
+    await site.goto(href).catch(() => {});
     await site.waitForLoadState('load', { timeout: 20000 }).catch(() => {});
     await Bun.sleep(1200);
+  };
+  for (let b = 0; seen.size <= pages && b < pages; b++) {
+    if (b > 0) await go(target);
+    for (let depth = 0; depth < 2; depth++) {
+      const href = await next(b * 2 + depth);
+      if (!href) break;
+      await go(href);
+    }
   }
   await Bun.sleep(1000);
+
   await c.getByRole('button', { name: 'View (V)' }).click();
   await c.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', null, { timeout: 5000 });
   await Bun.sleep(2500);
   await capture('cosmos-recorded-landing');
-  // The whole recorded site: Clear the selection, then Focus frames everything.
-  await c.getByRole('button', { name: 'Clear (X)' }).click();
-  await c.getByRole('button', { name: 'Focus (F)' }).click();
-  await Bun.sleep(2500);
+  // The whole recorded site: drop the selection (Esc); Focus then tours the sections and, the
+  // press after the last one, fits the whole network.
+  await c.keyboard.press('Escape');
+  for (let i = 0; i < 60; i++) {
+    await c.getByRole('button', { name: 'Focus (F)' }).click();
+    if ((await c.evaluate('window.__artemis().status')) === 'Full network in view.') break;
+  }
+  await Bun.sleep(2000);
   await capture('cosmos-recorded');
   await c.getByRole('button', { name: 'Scope (E)' }).click();
   await Bun.sleep(2500);

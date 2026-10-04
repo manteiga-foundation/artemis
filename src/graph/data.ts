@@ -13,7 +13,7 @@ export interface NodeMeta {
   degree: number;
   jitter: number; // 0..1, stable per node, used for colour variation
   /** Recorded networks only: what the node is (src/site-model.ts). */
-  kind?: 'page' | 'api' | 'service';
+  kind?: 'page' | 'api' | 'asset' | 'service';
   external?: boolean;
 }
 

@@ -110,20 +110,24 @@ describe('the recorder', () => {
       await Bun.sleep(400);
       path = shell.recorder!.path();
 
-      // Meanwhile the console's cosmos became the recording, live: the two pages, the shared
-      // config endpoint and the map endpoint, and the third party outside the scope.
+      // Meanwhile the console's cosmos became the recording, live: the two pages, each wearing its
+      // own requests as dots (both read their config; Contact's button loaded the map; Home showed
+      // the outside pixel), whatever else the browser fetched or took from its cache.
       const nodes = () => c.evaluate('window.__artemisNodes()') as Promise<string[]>;
-      const expected = ['/', '/contact', '127.0.0.1', 'GET /api/config', 'GET /api/map'];
-      await c.waitForFunction(`window.__artemis().recorded && window.__artemisNodes().length === ${expected.length}`, null, { timeout: 5000 });
-      expect((await nodes()).sort()).toEqual(expected);
+      const expected = ['/', '/contact', 'GET /api/config', 'GET /api/config', 'GET /api/map', '127.0.0.1/pixel.gif'];
+      const holds = `(() => { const n = window.__artemisNodes(); return ${JSON.stringify(expected)}.every((id, i, all) => n.filter((x) => x === id).length >= all.filter((x) => x === id).length); })()`;
+      await c.waitForFunction(`window.__artemis().recorded && ${holds}`, null, { timeout: 5000 });
+      const live = (await nodes()).sort();
+      expect(live.filter((id) => id.startsWith('/'))).toEqual(['/', '/contact']);
+      expect(live.filter((id) => id === 'GET /api/config')).toHaveLength(2);
       await c.getByRole('button', { name: 'View (V)' }).click();
       await c.waitForFunction('window.__artemis().view === "cosmos"');
       expect(((await c.evaluate('window.__artemis()')) as { status: string }).status).toBe('View: Cosmos. Current page /contact selected.');
 
       // A console reload rebuilds the same cosmos from the session database.
       await c.reload();
-      await c.waitForFunction(`typeof window.__artemis === "function" && window.__artemis().recorded && window.__artemisNodes().length === ${expected.length}`, null, { timeout: 10000 });
-      expect((await nodes()).sort()).toEqual(expected);
+      await c.waitForFunction(`typeof window.__artemis === "function" && window.__artemis().recorded && window.__artemisNodes().length === ${live.length}`, null, { timeout: 10000 });
+      expect((await nodes()).sort()).toEqual(live);
     } finally {
       await shell.close();
     }

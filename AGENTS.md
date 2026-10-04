@@ -143,9 +143,12 @@ console reload resumes on the same page; `C` panels fold with header switch; rea
 readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
 SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,
 bodies; observations only, categorisation later and recomputable), with a video of the site and of
-the console and a HAR next to it (on by default until the configuration view); in the owned
-browser the Cosmos is the live recording (pages, first-party endpoints, outside services; Scope
-`E`; V lands on the current page; a console reload rebuilds it from the database).
+the console and a HAR next to it (on by default until the configuration view), saved whole however
+the app is closed (window, Cmd+Q, Ctrl+C; leftovers of a crash recovered at the next launch); in
+the owned browser the Cosmos is the live recording, drawn as a computed radial tree like the
+emulated sketch (core at the centre, sections evenly around it, sub-pages outward, every request a
+dot in its page's cloud, no line crossing another, routes in the Routes lens; Scope `E`; V lands on
+the current page; a console reload rebuilds it from the database).
 
 Next (user's order): the configuration view (the user is drafting it: recording defaults such as
 video and HAR); DOM session replay (spike first), a policy-aware HAR export from the database,

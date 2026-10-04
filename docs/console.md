@@ -253,51 +253,70 @@ rebuilds the same cosmos. In an ordinary browser the first such event switches t
 
 | Node | What | Look |
 | --- | --- | --- |
-| Page | an address without query or fragment (the database keeps full URLs); the first page is the core | blue, labelled; sign-in pages on other hosts are pages too, in amber |
-| Endpoint | a first-party API call (`fetch`, XHR, beacon, stream), one per method and path, shared by every page that calls it: `GET /api/map` | small, light blue |
-| Service | a host outside the review scope, one per host, shared: Google Maps hangs off every page that loads it | amber (the view's attention accent) |
+| Page | an address without query or fragment (the database keeps full URLs), hanging under the page it was first reached from; the first page is the core | the core a white hexagon; pages reached from it are sections (large), deeper pages relays; labelled; sign-in pages on other hosts are pages too, in amber |
+| API call | a dot of its page: a first-party `fetch`, XHR, beacon or stream, one per method and path: `GET /api/map` | small, light blue |
+| File | a dot of its page: a script, style, image or font from the scope host or its subdomains | small, in the cloud's blues |
+| Outside request | a dot of its page: anything from a host outside the review scope, named by host and path | small, amber (the view's attention accent) |
 
-Links: navigation between pages in the order page views committed (bright; the Routes lens lights
-the operator's path), page to endpoint, page to service. First-party assets (scripts, styles,
-images, fonts) are a count on their page, not nodes. A node that answered with an error status or
-failed is an anomaly (lens 5). Clusters (lens 2) group by first path segment. Scope (`E`, where
-Regenerate sits in the emulated cosmos) hides and shows everything outside the scope host and
-its subdomains; selection and holds follow their node.
+Every request is a dot of the page that made it, so two pages calling the same endpoint get a dot
+each and no line runs from one page's cloud to another's (the earlier shared endpoint and service
+nodes drew lines across the whole cosmos). A node that answered with an error status or failed is
+an anomaly (lens 5). Clusters (lens 2) colour each section's branch. Scope (`E`, where Regenerate
+sits in the emulated cosmos) hides and shows everything outside the scope host and its
+subdomains; selection follows its node.
 
 The model only grows and ignores events it has seen, so live events and a replayed snapshot
 cannot double anything.
 
-### Geometry: the core and the honeycomb
+### Geometry: a computed radial tree, like the sketch
 
-Every site gets its own shape from one rule. The core (the first page) is a hexagon pinned at the
-centre of the space, so it never drifts. Pages sit on a flat-top hexagonal lattice around it,
-`CELL` (150) apart, and grow like a crystal: each new page attaches beside the page it came from,
-on the free cell nearest the core, turning clockwise (when every neighbour is taken, the nearest
-free cell beyond them, by the same order). A walk winds around the hexagon and then the next ring;
-a hub gathers its pages around it; navigation runs along the honeycomb's edges. Cells are decided
-in discovery order over every page (outside the scope too), so growth and Scope never move a page.
-The core and pages are pinned (`fixed`); Hold pins come on top and Clear releases only those.
-Endpoints and services float under the forces (links of 45, no gravity, no cluster pull), orbiting
-their pages; a service shared by many pages settles between them. Framing the whole recorded site
-keeps a wider margin (0.3) for page labels. The emulated cosmos keeps its physics; its core is a
-hexagon too.
+The recorded cosmos takes the emulated cosmos's shape, but every node is an observation: the core
+at the centre, the pages reached from it evenly around it (the first straight up, then clockwise;
+six make a hexagon), deeper pages further out along their branch, and each page wearing its
+requests as a sunflower cloud. Each node hangs on exactly one line, to its parent.
 
-Rejected on the way: free force layout (the core wandered as the site grew; a dozen nodes knotted
-into one dot under the emulated tuning), and "go one ring out along the parent's bearing" (a walk
-became a straight ray from the core instead of a composition around it).
+- Pages sit on rings by depth from the core, far enough apart for the widest clouds on either
+  side. The core's pages always get equal slices of the circle (the rings are pushed out until
+  the largest section fits its share), so sections sit evenly around the core however unequal
+  they are. Deeper, each branch takes a slice sized to what it holds on every ring, spare angle
+  shared out evenly; sub-pages share at most 120 degrees of their parent's slice, centred on it.
+- A site too big for cosmos.gl's space (4,096 units) is drawn smaller, all of it alike: the same
+  shape, so still nothing crosses; only the clouds grow denser.
+- So no drawn line can cross another: children stay inside their parent's slice on the next ring
+  out, and no fan is wide enough to swing a line across. A walk from page to page is a straight
+  line out from the core: a flow reads as a line.
+- Navigation that the tree does not draw (back to an earlier page, across sections) is kept as
+  routes: cross links, invisible in the overview and lit by the Routes lens (4).
+- Places are computed from the whole model (outside the scope too), so Scope only hides; the same
+  model always gives the same places.
+- The drawing is computed, not simulated: every node is pinned, the simulation stays off
+  (`render(0, ...)`), and growth glides every node to its new place (cosmos.gl's own position
+  transition, 450 ms; Scope snaps, because it renumbers nodes). Until the operator aims the camera,
+  it frames where the nodes are going (`fitViewByPointPositions`), not where they are mid-glide.
+- The geometry is written screen-minded (y down) and flipped once into cosmos.gl's space, whose y
+  points up. The honeycomb before it was drawn upside down: its "top first" ring started at the
+  bottom. Unit tests could not see it (they read space coordinates); the integration test now
+  compares where the labels land on screen.
+
+Rejected on the way: free force layout (the core wandered; a dozen nodes knotted into one dot);
+the honeycomb with floating, shared endpoints and services (lines from every page to every shared
+node crossed the whole picture: the user's report); and "balloon" circles per branch (a long flow
+claimed a circle as wide as itself and pushed every section out to 5,600 units, beyond cosmos.gl's
+4,096 space; the ring layout keeps the same site within 900).
 
 cosmos.gl cannot measure a graph with no points (reading positions or fitting the view throws),
 and the owned browser now starts with one: `fitAll()` and the position reads do nothing on an
 empty graph. Found by the end-to-end shell test (Engage framed the empty graph); pinned by a unit
 test that fails without the guards.
 
-Screenshots (`scripts/screenshots-recorded.ts`: Wikipedia, three branches of two links from the
-main page): `cosmos-recorded-landing.png` (V lands on the current page), `cosmos-recorded.png` (the
-whole site after Clear and Focus: the hexagon core, its ring of six pages, shared services inside),
-`cosmos-recorded-scope.png` (Scope: only en.wikipedia.org).
+Screenshots (`scripts/screenshots-recorded.ts`: Wikipedia, branches two pages deep from the main
+page, never the same page twice): `cosmos-recorded-landing.png` (V lands on the current page),
+`cosmos-recorded.png` (the whole site, Focus toured to its end: the core, its sections evenly
+around it, sub-pages outward, a cloud on every page), `cosmos-recorded-scope.png` (Scope: only
+en.wikipedia.org; nothing moved).
 
-Not yet: actions as their own marks on the links, a pulse when a node is added, page titles and
-full-URL lists in a node panel, the assets count behind a Requests layer.
+Not yet: actions between a page and the requests they caused (the event contract carries no
+actions yet), a pulse when a node is added, page titles and full-URL lists in a node panel.
 
 ## Tests
 
@@ -305,15 +324,15 @@ full-URL lists in a node panel, the assets count behind a Requests layer.
 - `tests/views.test.ts` — view order and depth, the Page view kept but hidden (V cycles Browser <-> Cosmos), palettes carry the approved values and the same tokens.
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, landing on the current page when pulling back from the Browser (selected, focused, zoomed in on, labelled, announced; an earlier selection gives way), the first layout's auto-fit and its cancellation by any operator camera move (landing, Focus, wheel/drag), Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, V hints for the two shown views, Depth and Route, Page subgraph (BFS) and framing, minimap context (the Page view's behaviour stays tested while hidden).
-- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in both views, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V pulls back to the Cosmos and returns, palette variables change, command card and tab strip swap, no Page view on the way; the Cosmos opens on the current page (selected, label at the stage centre, zoom readout x4, named in the readout) and stays there while the first layout settles; the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working; fed recorder events, the cosmos becomes the recording and grows live with labelled pages, V lands on the current recorded page, the camera stays put as it grows, the core stays exactly at the centre of the space and pages sit one honeycomb step out, Scope (where Regenerate was) hides the outside host and brings it back, with no page errors.
+- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in both views, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V pulls back to the Cosmos and returns, palette variables change, command card and tab strip swap, no Page view on the way; the Cosmos opens on the current page (selected, label at the stage centre, zoom readout x4, named in the readout) and stays there while the first layout settles; the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working; fed recorder events, the cosmos becomes the recording and grows live with labelled pages, V lands on the current recorded page, the camera stays put as it grows, the core stays exactly at the centre of the space, the first page reached from it sits straight up with the next one further out on the same line, and on screen (by where the labels land) the first section is above the core, Scope (where Regenerate was) hides the outside host and brings it back, with no page errors.
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
 - `tests/session-store.test.ts` — the session database: target and scope; actions belong to the page view open at the time and credit the next page view (also when reported late, never long after); requests credited to the latest earlier action in their page view, re-credited when an action arrives late; the actor column; typed values kept with password fields marked; responses with status, headers (credentials marked sensitive), body and timing; request bodies; bodies stored once by hash; missing bodies noted (too large, unavailable); the file opens in another process; body, sensitive-header and scope policies.
 - `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic. Next to the database: a WebM video of the website and of the console and a HAR holding the site's API call with its body and none of the console's requests, all listed in the `artifacts` table, with no temporary folder left behind. Meanwhile the console's cosmos became the recording, live (the two pages, the shared config endpoint, the map endpoint, the outside host); V lands on `/contact`; a console reload rebuilds the same cosmos from the database. The fixture page reads its config before the test moves on (clicking away mid-call cuts it off, and Electron then reports it neither finished nor failed: recorded as open, which made the assertion flaky). Closing the way a person does keeps the recording whole: closing the window, and Cmd+Q, each still produce the HAR, both videos, an ended session and no hidden folder (both failed before: no HAR).
 - `tests/recordings.test.ts` — recovering an interrupted session from its folder's manifest: the videos move next to the database and are listed in it; a launch that never opened a website is removed; the recording in progress and folders without a manifest are left alone.
 - `tests/artemis-cli.test.ts` — `bun run artemis <site>` (the package script, its `bun run` wrapper included) in its own process group, given one SIGINT to the whole group as a terminal Ctrl+C does (the wrapper passes it on, so the launcher receives it twice): read as one press, exit 0, "session saved", the database, both videos and the HAR, no hidden folder (without the signal handling it exits 130, the reported symptom).
-- `tests/site-model.test.ts` — events to drawing: pages keyed without the query, linked in commit order, the last one current; a page appears at its final address once its navigation commits, with the requests made meanwhile; shared endpoint nodes per method and path; shared service nodes per outside host; subdomains in scope, first-party assets counted not drawn; errors and failures on the node that answered; replays change nothing, reset starts over; outside sign-in pages are external pages. The network: core, hubs, small nodes, navigation as the route; Scope drops external nodes and links; positions kept across rebuilds, new nodes beside their parent; anomalies; an empty recording. The honeycomb: the core at the centre, its pages on the six cells around it (top first, clockwise), the seventh one ring out; a walk winds around the core one edge at a time, then steps out; a hub's pages sit beside it, inner cells first; pages never move (positions handed in, growth, Scope); the core and pages are the fixed points.
-- `tests/recorded-cosmos.test.ts` — the controller with the recording: the first events replace the emulated network; growth keeps every node; V lands on the current recorded page, or says nothing is recorded yet; Scope hides and restores outside hosts with the selection kept on its node; Scope replaces Regenerate, which refuses; the recorded physics and back; the core and every page pinned, Hold on top, Clear releasing only holds; whole-site framing with room for labels; the core a hexagon in both cosmos; an empty graph is never measured; the first nodes are framed, growth after the operator aims is not.
+- `tests/site-model.test.ts` — events to drawing: pages keyed without the query, linked in commit order, each under the page it was first reached from, the last one current; a page appears at its final address once its navigation commits, with the requests made meanwhile; every request a dot of its page, one per method and address (two pages calling the same endpoint get a dot each): API calls, the page's own files (subdomains in scope), outside requests marked external; errors and failures on the node that answered; replays change nothing, reset starts over; outside sign-in pages are external pages. The network: the core, sections, relays and dots, one line each; navigation outside the tree as cross links (routes); Scope drops external nodes and lines; anomalies; an empty recording. The geometry: the core at the centre and its pages evenly around it, the first straight up, then clockwise, even when one section holds far more than the others; no drawn line crosses another on a site with sections, sub-pages, a chain through a sign-in provider and back-and-forth navigation (checked segment by segment, with and without Scope; fails when sub-pages may spread around the full circle); every node on exactly one line, to its parent; each page's dots nearer their page than any other, none on top of another; sub-pages farther out than their parent, within 113 degrees of straight on; a walk is a straight line out from the core; Scope and recomputation move nothing; a site too big for the space (a 60-page flow) is drawn smaller, inside it, the core still at the centre; every node fixed.
+- `tests/recorded-cosmos.test.ts` — the controller with the recording: the first events replace the emulated network; growth keeps every node; V lands on the current recorded page, or says nothing is recorded yet; Scope hides and restores outside hosts with the selection kept on its node; Scope replaces Regenerate, which refuses; drawn, not simulated (every node pinned, no simulation start, the first nodes arrive in place, growth glides, Scope snaps, Hold and Clear never release a node); routes hidden in the overview and lit by the Routes lens; whole-site framing with room for labels; the core a hexagon in both cosmos; an empty graph is never measured; the camera frames where the growing site is going until the operator aims.
 - `tests/shell-logic.test.ts` — where the native site view goes (shown only engaged, in the Browser view, not diving), which clicks pass through to the site (everywhere but the panels), resuming the engaged website after a console reload (garbage, non-web addresses and refusing storage resume nothing).
 - `tests/shell.test.ts` — the owned browser as an Electron shell under Playwright, windows hidden: launching without a console server fails fast and says why; a fixture site that refuses framing and hides its body unless it is the top window (the Microsoft sign-in defense) runs top-level and visible under the console, with no iframe, sits exactly in the slot, and is followed through a redirect by the address strip; `V` typed in the site dives (the site view steps aside and returns on the same page), `v` typed in a site field stays in the field; clicks pass through over the site and stay over the header; a `target="_blank"` link loads in the site view (no bare window) while a sign-in popup opened with window features still opens; a console reload comes back engaged on the same site page without sending the site back to the start; machine readouts arrive.
 - `tests/owned-browser.test.ts` — the earlier framed owned browser (still in the tree, no longer launched): CSP/cookie rewriting; machine readouts (CPU, ARTEMIS, MEM) arrive from the Bun side; a framable site goes live in an ordinary browser and fills the stage edge to edge; clicking into the page shows the keyboard hint there; a site refusing framing stays blank in an ordinary browser and works, with its session, in the owned browser, where `V` still switches views with the keyboard inside the page. Links aimed at the top window or a new tab, and redirects, stay inside the frame and land on the final address with no extra window.

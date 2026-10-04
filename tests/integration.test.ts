@@ -161,8 +161,8 @@ test('the recorded cosmos grows live from the feed; V lands on the current page;
     await page.waitForFunction('window.__artemisSiteFeed === true');
     await feed(page, [{ type: 'reset' }, { type: 'session', target: `${S}/`, scopeHost: 'shop.example' }, ...recorded(1, ['/', '/contact'])]);
     await page.waitForFunction('window.__artemis().recorded === true');
-    // pages /, /contact; endpoints /api/, /api/contact; one shared maps service
-    expect(await stateOf(page)).toMatchObject({ nodeCount: 5 });
+    // pages /, /contact, each wearing its API call and the maps script as dots of its own
+    expect(await stateOf(page)).toMatchObject({ nodeCount: 6 });
 
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 4000 });
@@ -182,20 +182,37 @@ test('the recorded cosmos grows live from the feed; V lands on the current page;
     const positions = () => page.evaluate('window.__artemisPositions()') as Promise<number[]>;
     const coreBefore = (await positions()).slice(0, 2);
     await feed(page, recorded(3, ['/thanks']));
-    await page.waitForFunction('window.__artemis().nodeCount === 7');
+    await page.waitForFunction('window.__artemis().nodeCount === 9');
     await page.waitForFunction(() => [...document.querySelectorAll('.hub-label .hub-text')].some((e) => e.textContent === '/thanks'));
     expect(((await stateOf(page)) as { selected: number }).selected).not.toBeNull();
     expect(await zoomReadout(page)).toBeGreaterThanOrEqual(3.9);
 
-    // The core is the fixed centre of the cosmos and the pages sit on their cells (one honeycomb
-    // step from the core), however the layout moves around them.
+    // The core is the fixed centre of the cosmos; the first page reached from it sits straight
+    // up, and the page reached from that one further out on the same line, once the growth glided.
     await page.waitForTimeout(1500);
     const p = await positions();
     expect(coreBefore).toEqual([2048, 2048]);
     expect(p.slice(0, 2)).toEqual([2048, 2048]);
     const names = (await page.evaluate('window.__artemisNodes()')) as string[];
-    const contact = names.indexOf('/contact');
-    expect(Math.hypot(p[contact * 2] - 2048, p[contact * 2 + 1] - 2048)).toBeCloseTo(150, 1);
+    const [contact, thanks] = ['/contact', '/thanks'].map((id) => names.indexOf(id));
+    // Offsets from the core as seen on screen (cosmos.gl's space has y up).
+    const from = (i: number) => [p[i * 2] - 2048, 2048 - p[i * 2 + 1]];
+    expect(Math.abs(from(contact)[0])).toBeLessThan(0.5);
+    expect(from(contact)[1]).toBeLessThan(-50);
+    expect(Math.abs(from(thanks)[0])).toBeLessThan(0.5);
+    expect(from(thanks)[1]).toBeLessThan(from(contact)[1] - 50);
+    // "Up" means up on screen: the labels say where the graph really drew them.
+    const labelY = (text: string) =>
+      page.evaluate((t) => {
+        const el = [...document.querySelectorAll<HTMLElement>('.hub-label')].find((e) => e.textContent === t);
+        const m = el && /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(el.style.transform);
+        return m ? Number(m[2]) : null;
+      }, text);
+    await page.keyboard.press('f'); // frame the selection's surroundings so both labels are on screen
+    await page.waitForTimeout(1200);
+    const [coreY, contactY] = [await labelY('/'), await labelY('/contact')];
+    expect(coreY).not.toBeNull();
+    expect(contactY!).toBeLessThan(coreY!);
 
     // Scope sits where Regenerate was; it hides the outside host and brings it back.
     expect(await anyCount(page, 'button', 'Regenerate (R)')).toBe(0);
@@ -204,7 +221,7 @@ test('the recorded cosmos grows live from the feed; V lands on the current page;
     await page.waitForFunction('window.__artemis().nodeCount === 6');
     expect(await page.getByRole('button', { name: 'Scope (E)' }).getAttribute('aria-pressed')).toBe('true');
     await page.keyboard.press('e');
-    await page.waitForFunction('window.__artemis().nodeCount === 7');
+    await page.waitForFunction('window.__artemis().nodeCount === 9');
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();

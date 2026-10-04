@@ -46,12 +46,19 @@ export class Renderer {
     }
     return out;
   }
-  render() { this.renders++; }
-  start() {}
+  renderCalls: [number | undefined, number | undefined][] = [];
+  render(alpha?: number, duration?: number) {
+    this.renders++;
+    this.renderCalls.push([alpha, duration]);
+  }
+  starts = 0;
+  start() { this.starts++; }
   fitPadding: number | undefined;
   fitView(_duration?: number, padding?: number) { this.fits++; this.fitPadding = padding; }
   fittedTo: number[] | null = null;
   fitViewByPointIndices(indices: number[]) { this.fittedTo = [...indices]; }
+  framed: number[][] = [];
+  fitViewByPointPositions(positions: number[]) { this.framed.push([...positions]); }
   getZoomLevel() { return 1; }
   zoomToPointByIndex(i: number, _duration?: number, scale?: number) {
     this.zoomed.push(i);

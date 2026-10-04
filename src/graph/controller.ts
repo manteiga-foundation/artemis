@@ -23,6 +23,8 @@ type Listener = () => void;
 const BASE_REPULSION = 0.9;
 /** Zoom level the camera closes in to when the cosmos opens on the current page. */
 const PAGE_ZOOM = 4;
+/** How long the recorded cosmos takes to glide into its new shape as the site grows. */
+const GROW_GLIDE_MS = 450;
 
 const LINK_WIDTH: Record<string, number> = {
   trunk: 2.4,
@@ -44,12 +46,10 @@ class GraphController {
   /** In the owned browser the cosmos is the live recording (src/site-model.ts); elsewhere, emulated. */
   recorded = inShell();
   site: SiteModel = emptySiteModel();
-  /** Model key of each graph index (recorded cosmos), to carry positions and selections across rebuilds. */
+  /** Model key of each graph index (recorded cosmos), to carry selections across rebuilds. */
   private siteKeys: string[] = [];
-  /** Last known position of every recorded node, hidden ones included, so they return where they were. */
-  private positionsByKey = new Map<string, [number, number]>();
   private showExternal = true;
-  /** Recorded cosmos: the core and pages, pinned to their honeycomb cells. */
+  /** Recorded cosmos: every node, held at its computed place. */
   private fixedPoints: number[] = [];
   data: NetworkData = this.recorded ? toNetwork(emptySiteModel(), { external: true }).data : generateNetwork(getState().seed);
 
@@ -167,7 +167,8 @@ class GraphController {
             c = rgba(P.azure, 0.6);
             break;
           case 'cross':
-            c = rgba(P.azure, 0.35);
+            // Recorded: routes outside the tree belong to the Routes lens, not the overview.
+            c = rgba(P.azure, this.recorded ? 0 : 0.35);
             break;
           case 'mesh':
             c = rgba(P.royal, 0.2);
@@ -193,7 +194,18 @@ class GraphController {
     const out = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       const m = meta[i];
-      const base = m.kind === 'api' ? 5 : m.kind === 'service' ? 8 : m.tier === 'core' ? 32 : m.tier === 'sector' ? 16 : m.tier === 'relay' ? (m.kind ? 11 : 8) : 2.6 + m.jitter * 1.8;
+      const base =
+        m.kind === 'api' || m.kind === 'service'
+          ? 4.2
+          : m.tier === 'core'
+            ? 32
+            : m.tier === 'sector'
+              ? 16
+              : m.tier === 'relay'
+                ? m.kind
+                  ? 11
+                  : 8
+                : 2.6 + m.jitter * 1.8;
       out[i] = base * scale;
     }
     return out;
@@ -353,9 +365,9 @@ class GraphController {
   // ---------------------------------------------------------------- the recorded cosmos
 
   /**
-   * The emulated network spreads by sheer numbers. A recorded site's core and pages sit on the
-   * honeycomb (pinned, site-model.ts); only endpoints and services move: short links keep them in
-   * orbit around their pages, and no gravity drags them toward the core.
+   * The emulated network spreads by sheer numbers under these forces. The recorded cosmos is
+   * computed instead (site-model.ts: every node pinned, the simulation kept off), so its values
+   * only matter for the emulated network it replaces.
    */
   private physics() {
     return this.recorded
@@ -380,7 +392,6 @@ class GraphController {
       this.recorded = true;
       this.site = emptySiteModel();
       this.siteKeys = [];
-      this.positionsByKey.clear();
       setState({ recorded: true, selected: null, pinned: [], targetMode: false });
       this.fixedPoints = [];
       this.applyPins();
@@ -394,7 +405,7 @@ class GraphController {
     if (!this.recorded) return this.done({ ok: false, message: 'Scope applies to a recorded site.', sfx: 'command-error' });
     this.showExternal = !this.showExternal;
     setState({ showExternal: this.showExternal });
-    this.rebuildRecorded();
+    this.rebuildRecorded(false, true);
     const host = this.site.scopeHost ?? 'the target';
     return this.done({
       ok: true,
@@ -404,15 +415,13 @@ class GraphController {
   }
 
   /** `fresh`: the graph held the emulated network, so nothing on screen is the recording yet. */
-  private rebuildRecorded(fresh = false) {
+  private rebuildRecorded(fresh = false, snap = false) {
     const prevCount = fresh ? 0 : this.data.count;
-    const p = this.livePositions();
-    this.siteKeys.forEach((k, i) => i * 2 + 1 < p.length && this.positionsByKey.set(k, [p[i * 2], p[i * 2 + 1]]));
     const s = getState();
     const keyOf = (i: number | null) => (i === null ? undefined : this.siteKeys[i]);
     const selectedKey = keyOf(s.selected);
     const pinnedKeys = s.pinned.map(keyOf);
-    const { data, keys, fixed } = toNetwork(this.site, { external: this.showExternal, positions: this.positionsByKey });
+    const { data, keys, fixed } = toNetwork(this.site, { external: this.showExternal });
     this.data = data;
     this.siteKeys = keys;
     this.fixedPoints = fixed;
@@ -426,6 +435,7 @@ class GraphController {
       currentPage: current,
       selected: selected >= 0 ? selected : null,
       pinned,
+      simRunning: false,
       graphVersion: st.graphVersion + 1
     }));
     for (const [g, scale] of [
@@ -437,10 +447,17 @@ class GraphController {
     this.applyPins();
     this.main?.trackPointPositionsByIndices(this.trackedIndices());
     this.applyLens();
-    // The first nodes are framed as they unfold, unless the operator already aimed the camera.
-    if (prevCount === 0 && data.count > 0 && !this.operatorAimed) this.needsFit = true;
-    this.main?.start(prevCount === 0 ? 1 : 0.3);
-    window.setTimeout(() => this.syncMini(true), 60);
+    // The drawing is computed (site-model.ts), not simulated: alpha 0 keeps the simulation off.
+    // Growth glides every node to its new place; the first nodes and Scope (which renumbers
+    // nodes, so a glide would mix them up) arrive in place.
+    const glide = prevCount === 0 || snap ? 0 : GROW_GLIDE_MS;
+    this.main?.render(0, glide);
+    this.mini?.render(0, 0);
+    // The camera follows the site as it grows, framing where nodes are going, until the operator aims.
+    if (data.count > 0 && !this.operatorAimed) {
+      this.main?.fitViewByPointPositions([...data.positions], prevCount === 0 ? 0 : glide, 0.3);
+    }
+    window.setTimeout(() => this.syncMini(true), glide + 60);
   }
 
   /** Back to the emulated network (tests; an ordinary browser never leaves it). */
@@ -448,7 +465,6 @@ class GraphController {
     this.recorded = false;
     this.site = emptySiteModel();
     this.siteKeys = [];
-    this.positionsByKey.clear();
     this.showExternal = true;
     this.operatorAimed = false;
     this.data = generateNetwork(getState().seed);
@@ -637,7 +653,7 @@ class GraphController {
   labelIndices(): number[] {
     const d = this.data;
     if (!d.count) return [];
-    return this.recorded ? [d.core, ...d.relays.slice(0, 60)] : [d.core, ...d.sectors];
+    return this.recorded ? [d.core, ...d.sectors, ...d.relays].slice(0, 61) : [d.core, ...d.sectors];
   }
 
   private trackedIndices(): number[] {

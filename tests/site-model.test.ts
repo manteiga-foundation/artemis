@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { CELL, applySiteEvents, emptySiteModel, toNetwork } from '../src/site-model';
+import { applySiteEvents, emptySiteModel, toNetwork } from '../src/site-model';
 import { SPACE_SIZE } from '../src/graph/data';
 import type { SiteEvent } from '../src/site-events';
 
-// The live cosmos is built from the recorder's events: pages are nodes, navigation links them,
-// first-party API endpoints and outside hosts are shared nodes, assets are a count per page.
+// The live cosmos is built from the recorder's events: pages are nodes, each hanging under the
+// page it was first reached from; every request a page makes is a small dot in that page's cloud.
 
 const S = 'http://shop.example';
 const session: SiteEvent = { type: 'session', target: `${S}/`, scopeHost: 'shop.example' };
@@ -37,6 +37,7 @@ describe('the site model', () => {
     ]);
     expect(m.current).toBe(0);
     expect(m.entry).toBe(0);
+    expect(m.nodes[1].parent).toBe(0);
   });
 
   test('a page appears when its navigation commits, at its final address, with the requests made meanwhile', () => {
@@ -47,49 +48,51 @@ describe('the site model', () => {
     expect(labels(m)).toEqual(['page:/final', 'api:GET /api/me']);
   });
 
-  test('first-party API calls become one shared endpoint node per method and path, linked to each page using it', () => {
+  test("every request a page makes is a dot of that page, one per method and address: two pages calling the same endpoint get a dot each", () => {
     const m = build([
       session,
       visit(1, `${S}/`),
       req(1, `${S}/api/config?page=/`, 'fetch'),
+      req(1, `${S}/api/config?page=/again`, 'fetch'),
       visit(2, `${S}/contact`),
       req(2, `${S}/api/config?page=/contact`, 'fetch'),
       req(2, `${S}/api/contact`, 'xhr', 'POST')
     ]);
-    expect(labels(m)).toEqual(['page:/', 'api:GET /api/config', 'page:/contact', 'api:POST /api/contact']);
+    expect(labels(m)).toEqual(['page:/', 'api:GET /api/config', 'page:/contact', 'api:GET /api/config', 'api:POST /api/contact']);
+    expect(m.nodes.map((n) => n.parent)).toEqual([null, 0, 0, 2, 2]);
     expect(m.links.filter((l) => l.kind === 'api')).toEqual([
       { a: 0, b: 1, kind: 'api' },
-      { a: 2, b: 1, kind: 'api' },
-      { a: 2, b: 3, kind: 'api' }
+      { a: 2, b: 3, kind: 'api' },
+      { a: 2, b: 4, kind: 'api' }
     ]);
     expect(m.nodes[1].requests).toBe(2);
   });
 
-  test('requests to hosts outside the scope become one shared service node per host, marked external', () => {
+  test('requests to hosts outside the scope are dots of their page too, marked external, named by host and path', () => {
     const m = build([session, visit(1, `${S}/`), req(1, 'https://maps.googleapis.com/maps/api/js', 'script'), visit(2, `${S}/contact`), req(2, 'https://maps.googleapis.com/tiles', 'image')]);
-    expect(labels(m)).toEqual(['page:/', 'service:maps.googleapis.com', 'page:/contact']);
-    expect(m.nodes[1].external).toBe(true);
-    expect(m.nodes[0].external).toBe(false);
+    expect(labels(m)).toEqual(['page:/', 'service:maps.googleapis.com/maps/api/js', 'page:/contact', 'service:maps.googleapis.com/tiles']);
+    expect(m.nodes.map((n) => n.external)).toEqual([false, true, false, true]);
     expect(m.links.filter((l) => l.kind === 'third')).toEqual([
       { a: 0, b: 1, kind: 'third' },
-      { a: 2, b: 1, kind: 'third' }
+      { a: 2, b: 3, kind: 'third' }
     ]);
   });
 
-  test('subdomains of the scope host are inside it; in-scope assets are counted on their page, not drawn', () => {
+  test("a page's own files (scripts, styles, images, fonts) are dots of the page; subdomains of the scope host are inside it", () => {
     const m = build([session, visit(1, `${S}/`), req(1, `${S}/app.js`, 'script'), req(1, `${S}/logo.png`, 'image'), req(1, 'http://cdn.shop.example/style.css', 'stylesheet')]);
-    expect(labels(m)).toEqual(['page:/']);
-    expect(m.nodes[0].assets).toBe(3);
+    expect(labels(m)).toEqual(['page:/', 'asset:GET /app.js', 'asset:GET /logo.png', 'asset:GET cdn.shop.example/style.css']);
+    expect(m.nodes.some((n) => n.external)).toBe(false);
+    expect(m.links.map((l) => l.kind)).toEqual(['asset', 'asset', 'asset']);
   });
 
-  test('error responses and failures mark the node that answered: endpoint, service or page', () => {
+  test('error responses and failures mark the node that answered: the page or the dot', () => {
     const m = build([session, visit(1, `${S}/missing`), req(1, `${S}/missing`, 'document', 'GET', true)]);
     applySiteEvents(m, [{ type: 'response', id: rid, status: 404 }, req(1, `${S}/api/x`, 'fetch'), { type: 'response', id: rid, status: 500 }]);
     applySiteEvents(m, [req(1, 'https://ads.example.net/px', 'image'), { type: 'response', id: rid, status: null, failed: true }]);
     expect(m.nodes.map((n) => [n.label, n.errors])).toEqual([
       ['/missing', 1],
       ['GET /api/x', 1],
-      ['ads.example.net', 1]
+      ['ads.example.net/px', 1]
     ]);
   });
 
@@ -126,53 +129,49 @@ describe('the recorded network for the cosmos', () => {
       req(2, 'https://maps.googleapis.com/tiles', 'image')
     ]);
 
-  test('the entry page is the core, pages are hubs, endpoints and services are small nodes; navigation is the route', () => {
+  test('the entry page is the core; pages reached from it are sections, deeper pages relays, requests small dots: one line each', () => {
     const { data, keys } = toNetwork(model(), { external: true });
-    expect(data.count).toBe(5);
-    expect(keys).toHaveLength(5);
+    expect(keys).toHaveLength(6);
     expect(data.meta.map((n) => [n.id, n.tier, n.kind])).toEqual([
       ['/', 'core', 'page'],
       ['GET /api/config', 'node', 'api'],
-      ['maps.googleapis.com', 'node', 'service'],
-      ['/contact', 'relay', 'page'],
-      ['GET /api/map', 'node', 'api']
+      ['maps.googleapis.com/js', 'node', 'service'],
+      ['/contact', 'sector', 'page'],
+      ['GET /api/map', 'node', 'api'],
+      ['maps.googleapis.com/tiles', 'node', 'service']
     ]);
     expect(data.core).toBe(0);
-    expect(data.relays).toEqual([3]);
-    // api /->config, third /->maps, nav /->contact, api contact->map, third contact->maps
+    expect(data.sectors).toEqual([3]);
+    expect(data.relays).toEqual([]);
+    expect(data.hubs).toEqual([0, 3]);
+    // A tree: every node but the core hangs on exactly one line, to its parent.
     expect(data.linkCount).toBe(5);
-    expect(data.crossLinks.map((l) => data.linkKinds[l])).toEqual(['nav']);
-    expect(data.meta[3].parent).toBe(0);
+    expect(data.meta.map((n) => n.parent)).toEqual([-1, 0, 0, 0, 3, 3]);
+    expect(data.linkKinds).toEqual(['api', 'third', 'trunk', 'api', 'third']);
+    expect(data.crossLinks).toEqual([]);
   });
 
-  test('hiding what is outside the scope drops the external nodes and their links', () => {
+  test('navigation outside the tree (back to an earlier page, across sections) is a route: a cross link for the Routes lens', () => {
+    // / -> /a -> /b (tree), /b -> / (back: not a tree line), / -> /a again (known), /a -> / (the tree line, reversed).
+    const m = build([session, visit(1, `${S}/`), visit(2, `${S}/a`), visit(3, `${S}/b`), visit(4, `${S}/`), visit(5, `${S}/a`), visit(6, `${S}/`)]);
+    const { data } = toNetwork(m, { external: true });
+    const pair = (l: number) => [data.meta[data.links[l * 2]].id, data.meta[data.links[l * 2 + 1]].id];
+    expect(data.crossLinks.map(pair)).toEqual([['/b', '/']]);
+    expect(data.crossLinks.map((l) => data.linkKinds[l])).toEqual(['cross']);
+    expect(data.linkKinds.filter((k) => k !== 'cross')).toEqual(['trunk', 'branch']);
+  });
+
+  test('hiding what is outside the scope drops the external nodes and their lines', () => {
     const { data } = toNetwork(model(), { external: false });
     expect(data.meta.map((n) => n.id)).toEqual(['/', 'GET /api/config', '/contact', 'GET /api/map']);
     expect(data.linkKinds.includes('third')).toBe(false);
-  });
-
-  test('floating nodes keep their positions across rebuilds; new ones start next to the page that brought them in', () => {
-    const first = toNetwork(model(), { external: true });
-    const positions = new Map(first.keys.map((k, i) => [k, [1000 + i, 2000 + i] as [number, number]]));
-    const m = model();
-    applySiteEvents(m, [visit(3, `${S}/thanks`), req(3, `${S}/api/receipt`, 'fetch')]);
-    const next = toNetwork(m, { external: true, positions });
-    first.data.meta.forEach((n, i) => {
-      if (n.kind !== 'page') expect([next.data.positions[i * 2], next.data.positions[i * 2 + 1]]).toEqual([1000 + i, 2000 + i]);
-    });
-    const added = next.data.count - 1;
-    expect(next.data.meta[added].id).toBe('GET /api/receipt');
-    const parent = next.data.meta[added].parent;
-    const dx = next.data.positions[added * 2] - next.data.positions[parent * 2];
-    const dy = next.data.positions[added * 2 + 1] - next.data.positions[parent * 2 + 1];
-    expect(Math.hypot(dx, dy)).toBeLessThan(120);
   });
 
   test('nodes that answered with errors are the anomalies', () => {
     const m = model();
     applySiteEvents(m, [{ type: 'response', id: rid, status: 503 }]);
     const { data } = toNetwork(m, { external: true });
-    expect(data.anomalies.map((i) => data.meta[i].id)).toEqual(['maps.googleapis.com']);
+    expect(data.anomalies.map((i) => data.meta[i].id)).toEqual(['maps.googleapis.com/tiles']);
   });
 
   test('an empty recording is an empty network', () => {
@@ -182,67 +181,172 @@ describe('the recorded network for the cosmos', () => {
   });
 });
 
-describe('the honeycomb: a fixed core, pages on a hexagonal lattice around it', () => {
+describe('the geometry: a core, sections evenly around it, a cloud around every page, no line crossing another', () => {
   const C = SPACE_SIZE / 2;
-  const at = (d: { positions: Float32Array }, i: number): [number, number] => [d.positions[i * 2], d.positions[i * 2 + 1]];
-  const dist = (a: [number, number], b: [number, number]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-  /** Screen bearing in degrees: 270 is straight up (y grows downwards), increasing clockwise. */
-  const bearing = (from: [number, number], to: [number, number]) => Math.round(((Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI + 360) % 360);
+  type P = [number, number];
+  const at = (d: { positions: Float32Array }, i: number): P => [d.positions[i * 2], d.positions[i * 2 + 1]];
+  const dist = (a: P, b: P) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  /** Screen bearing in degrees: 270 is straight up, increasing clockwise (cosmos.gl's space has y up). */
+  const bearing = (from: P, to: P) => Math.round(((Math.atan2(from[1] - to[1], to[0] - from[0]) * 180) / Math.PI + 360) % 360);
   const index = (d: { meta: { id: string }[] }, id: string) => d.meta.findIndex((n) => n.id === id);
-  const pages = (...paths: string[]) => build([session, ...paths.map((p, i) => visit(i + 1, `${S}${p}`))]);
 
-  test('the core sits at the centre; the pages reached from it take the six cells around it, top first, then clockwise', () => {
-    const { data } = toNetwork(pages('/', '/a', '/', '/b', '/', '/c', '/', '/d', '/', '/e', '/', '/f', '/', '/g'), { external: true });
+  /** Pages reached in order (each from the one before), with `n` requests on each new page. */
+  const walk = (paths: string[], requestsPerPage = 0) => {
+    const events: SiteEvent[] = [session];
+    paths.forEach((p, i) => {
+      events.push(visit(i + 1, `${S}${p}`));
+      for (let k = 0; k < requestsPerPage; k++) events.push(req(i + 1, `${S}${p === '/' ? '' : p}/r${k}.js`, 'script'));
+    });
+    return build(events);
+  };
+
+  /** A site with sections, sub-pages, a long chain, outside hosts, back-and-forth navigation. */
+  const site = () => {
+    const events: SiteEvent[] = [session];
+    let v = 0;
+    const go = (path: string, requests: string[] = []) => {
+      events.push(visit(++v, path.startsWith('http') ? path : `${S}${path}`));
+      for (const r of requests) events.push(req(v, r.startsWith('http') ? r : `${S}${r}`, r.includes('/api/') ? 'fetch' : r.startsWith('http') ? 'image' : 'script'));
+    };
+    const files = (prefix: string, n: number) => Array.from({ length: n }, (_, k) => `${prefix}/f${k}.js`);
+    go('/', [...files('', 30), '/api/config', 'https://cdn.example.net/lib.js', 'https://fonts.example.org/a.woff']);
+    for (const section of ['/blog', '/shop', '/docs', '/about', '/careers']) {
+      go('/');
+      go(section, [...files(section, 12), `${section === '/shop' ? '/api/cart' : '/api/feed'}`, 'https://cdn.example.net/lib.js']);
+      for (let k = 1; k <= (section === '/blog' ? 6 : 3); k++) {
+        go(section);
+        go(`${section}/item-${k}`, files(`${section}/item-${k}`, 5 + k * 3));
+      }
+    }
+    // A flow: a chain of steps, each from the one before, out through a sign-in provider and back.
+    go('/shop');
+    for (const step of ['/shop/cart', '/shop/checkout', 'https://login.idp.example/authorize', '/shop/pay', '/shop/done']) go(step, files(step.replace(/^https?:\/\/[^/]+/, '/idp'), 6));
+    // Back and forth across sections: routes, not tree lines.
+    go('/docs/item-2');
+    go('/blog/item-4');
+    go('/');
+    return build(events);
+  };
+
+  /** Do segments ab and cd cross (properly: touching at a shared end does not count)? */
+  const cross = (a: P, b: P, c: P, d: P) => {
+    const o = (p: P, q: P, r: P) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+    return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+  };
+  const drawn = (data: ReturnType<typeof toNetwork>['data']) => {
+    const out: [number, number][] = [];
+    for (let l = 0; l < data.linkCount; l++) if (data.linkKinds[l] !== 'cross') out.push([data.links[l * 2], data.links[l * 2 + 1]]);
+    return out;
+  };
+
+  test('the core sits at the centre; the pages reached from it are evenly around it, the first straight up, then clockwise', () => {
+    const { data } = toNetwork(walk(['/', '/a', '/', '/b', '/', '/c', '/', '/d', '/', '/e', '/', '/f']), { external: true });
     const core = at(data, data.core);
     expect(core).toEqual([C, C]);
     const ring = ['/a', '/b', '/c', '/d', '/e', '/f'].map((p) => at(data, index(data, p)));
-    for (const p of ring) expect(dist(core, p)).toBeCloseTo(CELL, 3);
+    const r = dist(core, ring[0]);
+    for (const p of ring) expect(dist(core, p)).toBeCloseTo(r, 3);
     expect(ring.map((p) => bearing(core, p))).toEqual([270, 330, 30, 90, 150, 210]);
-    // The ring is full: the seventh goes one ring further out.
-    expect(dist(core, at(data, index(data, '/g')))).toBeGreaterThan(CELL * 1.5);
   });
 
-  test('a path winds around the core: each page next to the page it came from, on the free cell nearest the core, turning clockwise', () => {
-    const chain = ['/', '/a', '/b', '/c', '/d', '/e', '/f', '/g'];
-    const { data } = toNetwork(pages(...chain), { external: true });
+  test('sections stay evenly around the core even when one holds far more than the others', () => {
+    const events: SiteEvent[] = [session, visit(1, `${S}/`)];
+    let v = 1;
+    const go = (path: string, n = 0) => {
+      events.push(visit(++v, `${S}${path}`));
+      for (let k = 0; k < n; k++) events.push(req(v, `${S}${path}/f${k}.js`, 'script'));
+    };
+    go('/big', 40);
+    for (let k = 0; k < 6; k++) (go('/big'), go(`/big/${k}`, 20));
+    for (const s of ['/b', '/c', '/d']) (go('/'), go(s));
+    const { data } = toNetwork(build(events), { external: true });
     const core = at(data, data.core);
-    const p = chain.map((path) => at(data, index(data, path)));
-    // Every step along the walk is one honeycomb edge.
-    for (let i = 1; i < p.length; i++) expect(dist(p[i - 1], p[i])).toBeCloseTo(CELL, 3);
-    // Around the hexagon first, clockwise from the top...
-    expect(p.slice(1, 7).map((c) => [Math.round(dist(core, c)), bearing(core, c)])).toEqual(
-      [270, 330, 30, 90, 150, 210].map((b) => [CELL, b])
-    );
-    // ...then, the ring full, one ring out from where the walk stood.
-    expect(dist(core, p[7])).toBeCloseTo(CELL * 2, 3);
+    expect(['/big', '/b', '/c', '/d'].map((p) => bearing(core, at(data, index(data, p))))).toEqual([270, 0, 90, 180]);
   });
 
-  test('a page reached from a hub sits beside the hub, inner cells first', () => {
-    // /a is reached from the core; /a/1 and /a/2 from /a.
-    const { data } = toNetwork(pages('/', '/a', '/a/1', '/a', '/a/2'), { external: true });
-    const hub = at(data, index(data, '/a'));
-    for (const path of ['/a/1', '/a/2']) expect(dist(hub, at(data, index(data, path)))).toBeCloseTo(CELL, 3);
-    // The two ring-1 cells beside /a are taken before any outer one.
-    expect(dist(at(data, data.core), at(data, index(data, '/a/2')))).toBeCloseTo(CELL, 3);
-  });
-
-  test('pages never move: positions handed in, growth and Scope leave every page on its cell', () => {
-    const m = build([session, visit(1, `${S}/`), visit(2, 'https://login.idp.example/authorize'), visit(3, `${S}/home`), visit(4, `${S}/settings`)]);
-    const before = toNetwork(m, { external: true });
-    const cellOf = (net: typeof before, id: string) => at(net.data, index(net.data, id));
-    const elsewhere = new Map(before.keys.map((k) => [k, [1, 1] as [number, number]]));
-    applySiteEvents(m, [visit(5, `${S}/billing`)]);
-    for (const opts of [{ external: true, positions: elsewhere }, { external: false, positions: elsewhere }]) {
-      const after = toNetwork(m, opts);
-      for (const id of ['/', '/home', '/settings']) expect(cellOf(after, id)).toEqual(cellOf(before, id));
+  test('no drawn line crosses another, on a site with sections, sub-pages, a chain, outside hosts and back-and-forth navigation', () => {
+    for (const external of [true, false]) {
+      const { data } = toNetwork(site(), { external });
+      const lines = drawn(data);
+      expect(lines.length).toBeGreaterThan(150);
+      const crossings: string[] = [];
+      for (let i = 0; i < lines.length; i++)
+        for (let j = i + 1; j < lines.length; j++) {
+          const [a, b] = lines[i];
+          const [c, d] = lines[j];
+          if (a === c || a === d || b === c || b === d) continue;
+          if (cross(at(data, a), at(data, b), at(data, c), at(data, d))) crossings.push(`${data.meta[a].id}-${data.meta[b].id} x ${data.meta[c].id}-${data.meta[d].id}`);
+        }
+      expect(crossings.slice(0, 5)).toEqual([]);
     }
   });
 
-  test('the core and the pages are the fixed points; endpoints and services float', () => {
-    const { data, fixed } = toNetwork(
-      build([session, visit(1, `${S}/`), req(1, `${S}/api/a`, 'fetch'), req(1, 'https://cdn.example.net/x.js', 'script'), visit(2, `${S}/b`)]),
-      { external: true }
-    );
-    expect(fixed.map((i) => data.meta[i].id)).toEqual(['/', '/b']);
+  test('every node hangs on exactly one drawn line, to its parent: the drawing is a tree', () => {
+    for (const external of [true, false]) {
+      const { data } = toNetwork(site(), { external });
+      const lines = drawn(data);
+      expect(lines.length).toBe(data.count - 1);
+      const child = new Set(lines.map(([a, b]) => (data.meta[b].parent === a ? b : a)));
+      expect(child.size).toBe(data.count - 1);
+      expect(child.has(data.core)).toBe(false);
+    }
+  });
+
+  test("a page's requests form a cloud around it: every dot nearer its own page than any other, no two dots on top of each other", () => {
+    const { data } = toNetwork(site(), { external: true });
+    const pages = data.meta.flatMap((n, i) => (n.kind === 'page' ? [i] : []));
+    const dots = data.meta.flatMap((n, i) => (n.kind !== 'page' ? [i] : []));
+    for (const d of dots) {
+      const own = dist(at(data, d), at(data, data.meta[d].parent));
+      for (const p of pages) if (p !== data.meta[d].parent) expect(dist(at(data, d), at(data, p))).toBeGreaterThan(own);
+    }
+    let closest = Infinity;
+    for (let i = 0; i < dots.length; i++) for (let j = i + 1; j < dots.length; j++) closest = Math.min(closest, dist(at(data, dots[i]), at(data, dots[j])));
+    expect(closest).toBeGreaterThan(4);
+  });
+
+  test('sub-pages fan outward: each lies farther from the core than its parent, on the far side of it', () => {
+    const { data } = toNetwork(site(), { external: true });
+    const core = at(data, data.core);
+    data.meta.forEach((n, i) => {
+      if (n.kind !== 'page' || n.parent < 0 || n.parent === data.core) return;
+      const parent = at(data, n.parent);
+      const grand = at(data, data.meta[n.parent].parent);
+      expect(dist(core, at(data, i))).toBeGreaterThan(dist(core, parent));
+      // Within 112.5 degrees of straight on from the grandparent through the parent.
+      const turn = Math.abs(((bearing(parent, at(data, i)) - bearing(grand, parent) + 540) % 360) - 180);
+      expect(turn).toBeLessThanOrEqual(113);
+    });
+  });
+
+  test('a walk from page to page reads as a straight line out from the core: a flow', () => {
+    const chain = ['/', '/a', '/b', '/c', '/d'];
+    const { data } = toNetwork(walk(chain, 4), { external: true });
+    const core = at(data, data.core);
+    const bearings = chain.slice(1).map((p) => bearing(core, at(data, index(data, p))));
+    expect(new Set(bearings).size).toBe(1);
+  });
+
+  test('Scope and recomputation move nothing: the same model gives the same places, with or without outside hosts', () => {
+    const m = site();
+    const all = toNetwork(m, { external: true });
+    const again = toNetwork(m, { external: true });
+    expect([...again.data.positions]).toEqual([...all.data.positions]);
+    const inside = toNetwork(m, { external: false });
+    inside.keys.forEach((k, i) => expect(at(inside.data, i)).toEqual(at(all.data, all.keys.indexOf(k))));
+  });
+
+  test('a site too big for the space is drawn smaller, never outside it (cosmos.gl draws within 4096 units)', () => {
+    const chain = ['/', ...Array.from({ length: 60 }, (_, k) => `/step-${k}`)];
+    const { data } = toNetwork(walk(chain, 12), { external: true });
+    let far = 0;
+    for (let i = 0; i < data.count; i++) far = Math.max(far, dist([C, C], at(data, i)));
+    expect(far).toBeLessThan(SPACE_SIZE / 2 - 50);
+    expect(at(data, data.core)).toEqual([C, C]);
+  });
+
+  test('every node holds its computed place (the drawing is not simulated)', () => {
+    const { data, fixed } = toNetwork(site(), { external: true });
+    expect(fixed).toEqual(data.meta.map((_, i) => i));
   });
 });
