@@ -11,7 +11,7 @@
 // Environment: ARTEMIS_APP_URL (the console), ARTEMIS_USER_DATA (profile: cookies, logins),
 // ARTEMIS_SHELL_HIDDEN=1 (tests: windows never shown), ARTEMIS_GRACEFUL_QUIT=1 (a session is
 // recorded: quitting goes through Artemis so the recording is saved whole).
-import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain, nativeImage, type WebContents } from 'electron';
+import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain, nativeImage, nativeTheme, type WebContents } from 'electron';
 import path from 'node:path';
 import { actorAt, createAutopilot, onSiteInput, setActing, setSpeed } from './autopilot-state';
 
@@ -25,6 +25,8 @@ const HIDDEN = process.env.ARTEMIS_SHELL_HIDDEN === '1';
 // the window (elsewhere) at launch.
 const ICON = process.env.ARTEMIS_ICON ? nativeImage.createFromPath(process.env.ARTEMIS_ICON) : nativeImage.createEmpty();
 app.name = 'Artemis';
+// The window's native title bar follows the dark appearance: a white bar sat over the dark console.
+nativeTheme.themeSource = 'dark';
 // As in Chrome, a page may close only a window a script opened (a sign-in popup closing itself),
 // never the tab it was opened in. Electron lets any page close itself: a link handler that opens
 // its app in a popup and calls window.close() destroyed the site view, the autopilot lost its page

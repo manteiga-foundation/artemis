@@ -423,6 +423,15 @@ describe('the owned browser is an Electron shell', () => {
     }
   }, 30000);
 
+  test("the window's native title bar is dark: the shell asks macOS for the dark appearance so the bar no longer sits white over the console", async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      expect(await shell.app.evaluate(({ nativeTheme }) => ({ source: nativeTheme.themeSource, dark: nativeTheme.shouldUseDarkColors }))).toEqual({ source: 'dark', dark: true });
+    } finally {
+      await shell.close();
+    }
+  }, 30000);
+
   test("the site's developer console shows only the site's own messages: Electron's security warning never appears in it", async () => {
     const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
     try {
