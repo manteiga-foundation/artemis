@@ -32,6 +32,11 @@ const site = Bun.serve({
       return plain(`<h1>Tabs</h1><a href="/tabs/next" target="_blank">open in a new tab</a> <button onclick="window.open('/tabs/popup', 'signin', 'width=480,height=600')">Sign in</button>`);
     if (url.pathname === '/tabs/next') return plain('<h1>Next</h1>');
     if (url.pathname === '/tabs/popup') return plain('<h1>Popup</h1>');
+    // A page that tries to close itself (a link handler: it opens the app elsewhere, then closes),
+    // and a popup that closes itself once it is done (a sign-in window).
+    if (url.pathname === '/closer/')
+      return plain(`<h1>Closer</h1><button onclick="window.close()">Close this page</button> <button onclick="window.open('/closer/popup', 'signin', 'width=420,height=320')">Open a popup that closes itself</button>`);
+    if (url.pathname === '/closer/popup') return plain('<h1>Signed in</h1><script>setTimeout(() => window.close(), 400)</script>');
     // Echoes its query and counts its loads (Reload must really reload).
     if (url.pathname === '/q/') return plain(`<h1>Query a=${url.searchParams.get('a')}</h1><p id="hits">${++queryHits}</p>`);
     // A slow page that walks through every loading phase: the answer waits 1.2 s (started), the
@@ -259,6 +264,60 @@ describe('the owned browser is an Electron shell', () => {
       expect(await c.evaluate('window.__sawBar')).toBe(true);
     } finally {
       await shell.close();
+    }
+  }, 60000);
+
+  test('a page that tries to close itself stays, as in Chrome (scripts close only the windows they opened); a popup the site opened still closes itself', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      const c = shell.console;
+      await engage(c, `${siteUrl}/closer/`);
+      const page = await sitePage(shell, `${siteUrl}/closer/`);
+      await page.getByRole('heading', { name: 'Closer' }).waitFor({ timeout: 10000 });
+      // Electron let any page close itself: the site view was destroyed, the autopilot lost its
+      // page and the next navigation threw in the shell.
+      await page.getByRole('button', { name: 'Close this page' }).click();
+      await Bun.sleep(800);
+      expect(page.isClosed()).toBe(false);
+      const address = c.getByRole('textbox', { name: 'Address' });
+      await address.fill(`${siteUrl}/tabs/next`);
+      await address.press('Enter');
+      await page.getByRole('heading', { name: 'Next' }).waitFor({ timeout: 10000 });
+
+      // A popup it opened closes itself when done, as sign-in windows do.
+      await address.fill(`${siteUrl}/closer/`);
+      await address.press('Enter');
+      await page.getByRole('heading', { name: 'Closer' }).waitFor({ timeout: 10000 });
+      const before = shell.app.windows().length;
+      await page.getByRole('button', { name: 'Open a popup that closes itself' }).click();
+      for (let i = 0; i < 30 && shell.app.windows().length === before; i++) await Bun.sleep(100);
+      expect(shell.app.windows().length).toBe(before + 1);
+      for (let i = 0; i < 40 && shell.app.windows().length > before; i++) await Bun.sleep(100);
+      expect(shell.app.windows().length).toBe(before);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
+  test('if the site\'s page is ever gone, the shell does not crash: navigating, Back, Forward and Reload do nothing instead of throwing', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      const c = shell.console;
+      await engage(c, `${siteUrl}/tabs/next`);
+      const page = await sitePage(shell, `${siteUrl}/tabs/next`);
+      await page.getByRole('heading', { name: 'Next' }).waitFor({ timeout: 10000 });
+      // Lose the site's web contents from the shell's side (what a self-closing page used to do).
+      await shell.app.evaluate(({ webContents }, origin) => {
+        webContents.getAllWebContents().find((w) => w.getURL().startsWith(origin))?.close();
+      }, siteUrl);
+      for (let i = 0; i < 30 && !page.isClosed(); i++) await Bun.sleep(100);
+      expect(page.isClosed()).toBe(true);
+      await Promise.race([c.evaluate(`(() => { const s = window.artemisShell; s.navigate('${siteUrl}/tabs/'); s.back(); s.forward(); s.reload(); })()`), Bun.sleep(3000)]);
+      // An uncaught exception would put up Electron's modal error box and stall the main process.
+      const answer = await Promise.race([shell.app.evaluate(() => 'answering'), Bun.sleep(3000).then(() => 'stalled')]);
+      expect(answer).toBe('answering');
+    } finally {
+      await Promise.race([shell.close(), Bun.sleep(10000)]);
     }
   }, 60000);
 

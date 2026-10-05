@@ -124,7 +124,8 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
 - The owned browser must be a genuine browser: a bug a reviewer finds must be the site's, never
   Artemis's. It is the Electron shell (spike 003, confirmed by the user with a real MFA sign-in):
   the site is an unmodified native page; nothing rewrites its headers or cookies; only an
-  isolated-world preload runs in it. The framed owned browser (blanks Microsoft sign-in) and the
+  isolated-world preload runs in it. Where Electron departs from Chrome, the shell restores
+  Chrome's rule (a page cannot close the tab it was opened in: `--blink-settings`). The framed owned browser (blanks Microsoft sign-in) and the
   streamed tab (imitates input and widgets, spike 002) were set aside; injecting HUD panels into
   the site's DOM was rejected. "Sign in with Google" blocked in embedded browsers is accepted.
 - Browser view: the website fills the stage edge to edge from a glass address strip under the header

@@ -11,7 +11,7 @@
 // Environment: ARTEMIS_APP_URL (the console), ARTEMIS_USER_DATA (profile: cookies, logins),
 // ARTEMIS_SHELL_HIDDEN=1 (tests: windows never shown), ARTEMIS_GRACEFUL_QUIT=1 (a session is
 // recorded: quitting goes through Artemis so the recording is saved whole).
-import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain } from 'electron';
+import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain, type WebContents } from 'electron';
 import path from 'node:path';
 import { actorAt, createAutopilot, onSiteInput, setActing, setSpeed } from './autopilot-state';
 
@@ -20,6 +20,11 @@ const APP_URL = process.env.ARTEMIS_APP_URL ?? 'http://127.0.0.1:5173';
 // launcher says where the bundle is; Electron's app path is the folder of main.cjs otherwise).
 const SHELL_DIR = process.env.ARTEMIS_SHELL_DIR ?? app.getAppPath();
 const HIDDEN = process.env.ARTEMIS_SHELL_HIDDEN === '1';
+// As in Chrome, a page may close only a window a script opened (a sign-in popup closing itself),
+// never the tab it was opened in. Electron lets any page close itself: a link handler that opens
+// its app in a popup and calls window.close() destroyed the site view, the autopilot lost its page
+// and the next navigation threw. Chromium's own rule, through its Blink setting.
+app.commandLine.appendSwitch('blink-settings', 'allowScriptsToCloseWindows=false');
 if (process.env.ARTEMIS_USER_DATA) app.setPath('userData', process.env.ARTEMIS_USER_DATA);
 // Sites see Chrome, not Electron.
 app.userAgentFallback = app.userAgentFallback.replace(/ Electron\/\S+/, '').replace(/ artemis\/\S+/i, '');
@@ -117,16 +122,24 @@ app.whenReady().then(() => {
   const toConsole = (channel: string, ...args: unknown[]) => {
     if (!consoleWin.isDestroyed()) consoleWin.webContents.send(channel, ...args);
   };
+  // The site's web contents while they exist. Handlers that act later go through this: if the page
+  // is ever gone, they do nothing rather than throw (an uncaught exception puts up Electron's modal
+  // error box and stalls the shell).
+  const siteContents = (): WebContents | null => {
+    const wc = site.webContents as WebContents | undefined;
+    return wc && !wc.isDestroyed() ? wc : null;
+  };
   // The site view starts on about:blank before Engage: that entry is not somewhere to go back to.
   const canGoBack = () => {
-    const h = site.webContents.navigationHistory;
-    return h.canGoBack() && h.getEntryAtIndex(h.getActiveIndex() - 1)?.url !== 'about:blank';
+    const h = siteContents()?.navigationHistory;
+    return !!h && h.canGoBack() && h.getEntryAtIndex(h.getActiveIndex() - 1)?.url !== 'about:blank';
   };
   const reportNav = () => {
-    const url = site.webContents.getURL();
+    const wc = siteContents();
+    if (!wc) return;
+    const url = wc.getURL();
     state.siteUrl = url;
-    if (url && url !== 'about:blank')
-      toConsole('site-nav', { url, title: site.webContents.getTitle(), canGoBack: canGoBack(), canGoForward: site.webContents.navigationHistory.canGoForward() });
+    if (url && url !== 'about:blank') toConsole('site-nav', { url, title: wc.getTitle(), canGoBack: canGoBack(), canGoForward: wc.navigationHistory.canGoForward() });
   };
   // A reloaded console learns where the site already is.
   consoleWin.webContents.on('did-finish-load', reportNav);
@@ -138,7 +151,7 @@ app.whenReady().then(() => {
   // features stay popups: that is how sign-in popups (Microsoft, Google) work.
   site.webContents.setWindowOpenHandler(({ url, disposition }) => {
     if (disposition === 'new-window') return { action: 'allow' };
-    if (/^https?:\/\//i.test(url)) void site.webContents.loadURL(url);
+    if (/^https?:\/\//i.test(url)) void siteContents()?.loadURL(url);
     return { action: 'deny' };
   });
   // A navigation drops the old page's focus without a focusout: each page starts not editable.
@@ -176,11 +189,12 @@ app.whenReady().then(() => {
     applyPassThrough();
   });
   ipcMain.on('navigate', (_e, url: string) => {
-    if (/^https?:\/\//i.test(url)) void site.webContents.loadURL(url);
+    if (/^https?:\/\//i.test(url)) void siteContents()?.loadURL(url);
   });
   // The console's Back, Forward and Reload buttons (the right-click menu does the same).
   ipcMain.on('site-go', (_e, where: string) => {
-    const wc = site.webContents;
+    const wc = siteContents();
+    if (!wc) return;
     if (where === 'back' && canGoBack()) wc.navigationHistory.goBack();
     else if (where === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
     else if (where === 'reload') wc.reload();
@@ -227,15 +241,15 @@ app.whenReady().then(() => {
   site.webContents.on('context-menu', (_e, p) => {
     const wc = site.webContents;
     Menu.buildFromTemplate([
-      { label: 'Back', enabled: canGoBack(), click: () => canGoBack() && wc.navigationHistory.goBack() },
-      { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
-      { label: 'Reload', click: () => wc.reload() },
+      { label: 'Back', enabled: canGoBack(), click: () => canGoBack() && siteContents()?.navigationHistory.goBack() },
+      { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => siteContents()?.navigationHistory.goForward() },
+      { label: 'Reload', click: () => siteContents()?.reload() },
       { type: 'separator' },
       { role: 'cut', enabled: p.editFlags.canCut },
       { role: 'copy', enabled: p.editFlags.canCopy },
       { role: 'paste', enabled: p.editFlags.canPaste },
       { type: 'separator' },
-      { label: 'Inspect Element', click: () => wc.inspectElement(p.x, p.y) }
+      { label: 'Inspect Element', click: () => siteContents()?.inspectElement(p.x, p.y) }
     ]).popup();
   });
 });
