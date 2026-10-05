@@ -55,16 +55,38 @@ describe('the recorded cosmos', () => {
     expect(getState().graphVersion).toBeGreaterThan(version);
   });
 
-  test('pulling back from the browser lands on the current page of the recording', () => {
+  test('pulling back from the browser lands on the current page of the recording: selected, centred, with the whole recording in view', () => {
     const { main } = attach();
     controller.applySiteEvents(recording);
     setState({ view: 'browser', stageView: 'browser' });
+    main.framed = [];
     controller.cycleView();
     const page = getState().currentPage;
     expect(controller.data.meta[page].id).toBe('/contact');
     expect(getState().selected).toBe(page);
-    expect(main.zoomed.at(-1)).toBe(page);
+    // Not a fixed close-up: on a big site whose current page sits at the edge it showed one dot.
+    expect(main.zoomed).toEqual([]);
+    const frame = main.framed.at(-1)!;
+    const xs = frame.filter((_, i) => i % 2 === 0);
+    const ys = frame.filter((_, i) => i % 2 === 1);
+    const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    const p = controller.data.positions;
+    expect((box.x0 + box.x1) / 2).toBeCloseTo(p[page * 2], 6);
+    expect((box.y0 + box.y1) / 2).toBeCloseTo(p[page * 2 + 1], 6);
+    for (let i = 0; i < controller.data.count; i++) {
+      expect(p[i * 2] >= box.x0 && p[i * 2] <= box.x1 && p[i * 2 + 1] >= box.y0 && p[i * 2 + 1] <= box.y1).toBe(true);
+    }
     expect(getState().status).toBe('View: Cosmos. Current page /contact selected.');
+  });
+
+  test('a recording of one bare page still lands at a sensible distance, not an infinitely close one', () => {
+    const { main } = attach();
+    controller.applySiteEvents(recording.slice(0, 2));
+    setState({ view: 'browser', stageView: 'browser' });
+    controller.cycleView();
+    const frame = main.framed.at(-1)!;
+    const xs = frame.filter((_, i) => i % 2 === 0);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThanOrEqual(400);
   });
 
   test('with nothing recorded yet, the pull-back shows the (empty) cosmos and says so', () => {
@@ -197,7 +219,9 @@ describe('the recorded cosmos', () => {
     expect(main.framed[1]).toEqual([...controller.data.positions]);
     setState({ view: 'browser', stageView: 'browser' });
     controller.cycleView();
+    // V frames its landing; after that, growth leaves the camera where it is.
+    const landed = main.framed.length;
     controller.applySiteEvents(recording.slice(4));
-    expect(main.framed).toHaveLength(2);
+    expect(main.framed).toHaveLength(landed);
   });
 });

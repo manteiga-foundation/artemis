@@ -292,6 +292,8 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   left: 0;
   top: 0;
   will-change: transform;
+  /* Labels that collide give way (HubLabels.tsx) with a short fade rather than a blink. */
+  transition: opacity 0.18s ease-out;
 }
 
 .hub-line {

@@ -34,6 +34,8 @@ export interface ShellBridge {
   /** Returns an unsubscribe function. The shell replays the current address when the console loads. */
   onSiteNav(fn: (nav: SiteNav) => void): () => void;
   onKey(fn: (key: string) => void): () => void;
+  /** Where the pointer is over the site (site coordinates), or that it left the site view; sent while clicks pass through. */
+  onSitePointer(fn: (p: { x?: number; y?: number; left?: boolean }) => void): () => void;
   /** The autopilot's speed (0 off, 1 slow, 2 regular, 3 max), set from the console. */
   autopilot(speed: number): void;
   /** Reports from the flight (src/autopilot.ts AutopilotStatus). */

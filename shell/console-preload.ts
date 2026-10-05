@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('artemisShell', {
     return listen('site-nav', fn);
   },
   onKey: (fn: Listener<string>) => listen('site-key', fn),
+  onSitePointer: (fn: Listener<unknown>) => listen('site-pointer', fn),
   // The autopilot: the console sets the speed; the shell reports the flight.
   autopilot: (speed: number) => ipcRenderer.send('autopilot', speed),
   onAutopilot: (fn: Listener<unknown>) => listen('autopilot-status', fn)

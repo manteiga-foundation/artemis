@@ -175,6 +175,7 @@ test('the recorded cosmos grows live from the feed; V lands on the current page;
       const label = (await selectedLabel(page))!;
       expect([Math.abs(label.dx) < 80, Math.abs(label.dy) < 80]).toEqual([true, true]);
     }
+    const landedZoom = await zoomReadout(page);
     // Pages are labelled as they appear.
     expect(await page.locator('.hub-label .hub-text').allTextContents()).toEqual(expect.arrayContaining(['/', '/contact']));
 
@@ -185,7 +186,7 @@ test('the recorded cosmos grows live from the feed; V lands on the current page;
     await page.waitForFunction('window.__artemis().nodeCount === 9');
     await page.waitForFunction(() => [...document.querySelectorAll('.hub-label .hub-text')].some((e) => e.textContent === '/thanks'));
     expect(((await stateOf(page)) as { selected: number }).selected).not.toBeNull();
-    expect(await zoomReadout(page)).toBeGreaterThanOrEqual(3.9);
+    expect(await zoomReadout(page)).toBeCloseTo(landedZoom, 2);
 
     // The core is the fixed centre of the cosmos; the first page reached from it sits straight
     // up, and the page reached from that one further out on the same line, once the growth glided.
@@ -474,6 +475,63 @@ test('autopilot (the sketch): D in the old bulb slot with a yoke and three squar
     await page.keyboard.press('v');
     await page.waitForFunction(() => (window as unknown as { __artemis: () => { viewTransition: unknown; view: string } }).__artemis().view === 'cosmos' && !(window as unknown as { __artemis: () => { viewTransition: unknown } }).__artemis().viewTransition);
     await page.getByRole('button', { name: 'Disperse (D)' }).waitFor({ state: 'visible' });
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
+test('a big recording whose current page is a leaf at its edge: V centres that page with the core in view', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.waitForFunction('window.__artemisSiteFeed === true');
+    // Like an ASP.NET back office: six sections with two pages each, fifty calls a page, and last a
+    // handler link (a download) reached from the far end.
+    const sections = ['admin', 'reports', 'documents', 'billing', 'calls', 'setup'];
+    const paths = ['/', ...sections.flatMap((s) => [`/${s}`, `/${s}/one`, `/${s}/two`]), '/setup/two/Link.ashx'];
+    const events: unknown[] = [{ type: 'reset' }, { type: 'session', target: `${S}/`, scopeHost: 'shop.example' }];
+    paths.forEach((path, i) => {
+      const id = i + 1;
+      events.push({ type: 'visit', id, t: id, url: `${S}${path}`, kind: 'document', committed: true });
+      const calls = path.endsWith('.ashx') ? 0 : 50;
+      for (let k = 0; k < calls; k++) events.push({ type: 'request', id: id * 1000 + k, visitId: id, method: 'GET', url: `${S}/scripts/${id}/${k}.js`, resourceType: 'script', mainDocument: false });
+      // Back to the section's page or the core between pages, as a person (or the autopilot) does.
+      const back = path === '/' || path.split('/').length > 2 ? '/' : path;
+      if (back !== path) events.push({ type: 'visit', id: 500 + id, t: id + 0.5, url: `${S}${back}`, kind: 'document', committed: true });
+    });
+    events.push({ type: 'visit', id: 999, t: 999, url: `${S}/setup/two`, kind: 'document', committed: true }, { type: 'visit', id: 1000, t: 1000, url: `${S}/setup/two/Link.ashx`, kind: 'document', committed: true });
+    await feed(page, events);
+    await page.waitForFunction('window.__artemis().recorded === true && window.__artemis().nodeCount > 900');
+
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 4000 });
+    await page.waitForTimeout(1300);
+    const label = (await selectedLabel(page))!;
+    expect(label.text).toBe('/setup/two/Link.ashx');
+    expect([Math.abs(label.dx) < 80, Math.abs(label.dy) < 80]).toEqual([true, true]);
+    // The whole recording is present: the core's label is on the stage too.
+    const core = await page.evaluate(() => {
+      const el = [...document.querySelectorAll<HTMLElement>('.hub-label')].find((e) => e.textContent === '/');
+      const stage = document.querySelector('.graph-layer')!.getBoundingClientRect();
+      const m = el && /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(el.style.transform);
+      return m ? { x: Number(m[1]), y: Number(m[2]), w: stage.width, h: stage.height } : null;
+    });
+    expect(core).not.toBeNull();
+    expect([core!.x > 0 && core!.x < core!.w, core!.y > 0 && core!.y < core!.h]).toEqual([true, true]);
+    // Seen whole, the labels give way rather than pile up: no two shown labels overlap, and the
+    // selected page's always shows.
+    await page.waitForTimeout(300);
+    const boxes = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.hub-label')]
+        .filter((el) => Number(getComputedStyle(el).opacity) > 0.5)
+        .map((el) => {
+          const r = el.querySelector('.hub-text')!.getBoundingClientRect();
+          return { text: el.textContent, selected: el.classList.contains('is-selected'), x0: r.left, x1: r.right, y0: r.top, y1: r.bottom };
+        })
+    );
+    expect(boxes.some((b) => b.selected)).toBe(true);
+    const overlaps = boxes.flatMap((a, i) => boxes.slice(i + 1).filter((b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1).map((b) => `${a.text} / ${b.text}`));
+    expect(overlaps).toEqual([]);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();

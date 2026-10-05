@@ -146,15 +146,23 @@ app.whenReady().then(() => {
     if (d.isMainFrame && !d.isSameDocument) state.editable = false;
   });
 
+  // Click pass-through: the console says whether it wants clicks to go to the site; they do only
+  // while the site is visible. Remembering the wish makes the order of 'layout' and
+  // 'pass-through' irrelevant (asked before the site showed, it used to be refused while the
+  // console believed it on).
+  let passThroughWanted = false;
+  const applyPassThrough = () => {
+    const on = passThroughWanted && state.siteVisible;
+    if (on === state.passThrough) return;
+    state.passThrough = on;
+    consoleWin.setIgnoreMouseEvents(on, { forward: true });
+  };
   ipcMain.on('layout', (_e, l: Layout) => {
     state.layout = l;
     state.siteVisible = !!l.visible;
     if (l.visible) site.setBounds({ x: Math.round(l.x), y: Math.round(l.y), width: Math.round(l.w), height: Math.round(l.h) });
     site.setVisible(!!l.visible);
-    if (!l.visible && state.passThrough) {
-      state.passThrough = false;
-      consoleWin.setIgnoreMouseEvents(false);
-    }
+    applyPassThrough();
   });
   ipcMain.on('navigate', (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void site.webContents.loadURL(url);
@@ -167,8 +175,14 @@ app.whenReady().then(() => {
     else if (where === 'reload') wc.reload();
   });
   ipcMain.on('pass-through', (_e, through: boolean) => {
-    state.passThrough = !!through && state.siteVisible;
-    consoleWin.setIgnoreMouseEvents(state.passThrough, { forward: true });
+    passThroughWanted = !!through;
+    applyPassThrough();
+  });
+  // While clicks pass through, the console hears the pointer only through macOS forwarding, which
+  // can stop (after a click in the site). The site's own pointer reports go to the console then,
+  // so it can take the clicks back under a panel or when the pointer leaves the site view.
+  ipcMain.on('site-pointer', (e, p: unknown) => {
+    if (e.sender === site.webContents && state.passThrough) toConsole('site-pointer', p);
   });
   ipcMain.on('site-editable', (_e, editable: boolean) => {
     state.editable = !!editable;

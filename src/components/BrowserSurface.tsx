@@ -29,9 +29,11 @@ export function BrowserSurface() {
     if (!shell) return;
     const slot = slotRef.current;
     let visible = false;
+    let at = { x: 0, y: 0 };
     const report = () => {
       const layout = slotLayout(getState(), slot ? slot.getBoundingClientRect() : null);
       visible = layout.visible;
+      at = { x: layout.x, y: layout.y };
       shell.layout(layout);
     };
     report();
@@ -39,15 +41,21 @@ export function BrowserSurface() {
     if (slot) resize.observe(slot);
     window.addEventListener('resize', report);
     let through = false;
-    const onMove = (e: MouseEvent) => {
-      const next = passesThrough(visible, document.elementFromPoint(e.clientX, e.clientY));
+    const decide = (next: boolean) => {
       if (next !== through) {
         through = next;
         shell.passThrough(next);
       }
     };
+    const onMove = (e: MouseEvent) => decide(passesThrough(visible, document.elementFromPoint(e.clientX, e.clientY)));
     document.addEventListener('mousemove', onMove, true);
+    // The site's own reports, for when macOS stops forwarding the pointer to this window: under a
+    // panel, or out of the site view (toward the header), the clicks come back to the console.
+    const offSitePointer = shell.onSitePointer((p) =>
+      decide(!p.left && typeof p.x === 'number' && typeof p.y === 'number' && passesThrough(visible, document.elementFromPoint(p.x + at.x, p.y + at.y)))
+    );
     return () => {
+      offSitePointer();
       resize.disconnect();
       window.removeEventListener('resize', report);
       document.removeEventListener('mousemove', onMove, true);

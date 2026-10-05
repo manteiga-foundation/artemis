@@ -174,5 +174,24 @@ const touched = (e: Event) => {
   if (e.isTrusted) ipcRenderer.send('site-input', { t: Date.now(), kind: e.type });
 };
 addEventListener('pointerdown', touched, true);
+
+// ---------------------------------------------------------------- the pointer, for click pass-through
+
+// The top page reports where the pointer is (at most every 40 ms) and when it leaves the site view;
+// the shell passes this on only while clicks go to the site (shell/main.ts). Frames inside the
+// site would report in their own coordinates, so only the top page speaks.
+if (window === window.top) {
+  let lastMove = 0;
+  addEventListener(
+    'mousemove',
+    (e) => {
+      if (!e.isTrusted || e.timeStamp - lastMove < 40) return;
+      lastMove = e.timeStamp;
+      ipcRenderer.send('site-pointer', { x: e.clientX, y: e.clientY });
+    },
+    { capture: true, passive: true }
+  );
+  addEventListener('mouseout', (e) => !e.relatedTarget && ipcRenderer.send('site-pointer', { left: true }), true);
+}
 addEventListener('wheel', touched, { capture: true, passive: true });
 addEventListener('keydown', (e) => (editable(e.target) || SCROLL_KEYS.has(e.key)) && touched(e), true);

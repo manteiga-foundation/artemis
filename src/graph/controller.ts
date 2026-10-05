@@ -23,6 +23,8 @@ type Listener = () => void;
 const BASE_REPULSION = 0.9;
 /** Zoom level the camera closes in to when the cosmos opens on the current page. */
 const PAGE_ZOOM = 4;
+/** Half the least width the recorded cosmos is framed at around the current page (space units). */
+const LAND_MIN_EXTENT = 220;
 /** How long the recorded cosmos takes to glide into its new shape as the site grows. */
 const GROW_GLIDE_MS = 450;
 
@@ -503,6 +505,19 @@ class GraphController {
     return this.main && this.data.count > 0 ? this.main.getPointPositions() : [];
   }
 
+  /**
+   * Points whose frame is centred on a page and holds every node: each node with its mirror
+   * through the page, and a least extent so a lone page is not zoomed in on without end.
+   */
+  private aroundPage(page: number): number[] {
+    const p = this.data.positions;
+    const cx = p[page * 2];
+    const cy = p[page * 2 + 1];
+    const out: number[] = [cx - LAND_MIN_EXTENT, cy - LAND_MIN_EXTENT, cx + LAND_MIN_EXTENT, cy + LAND_MIN_EXTENT];
+    for (let i = 0; i < this.data.count; i++) out.push(p[i * 2], p[i * 2 + 1], 2 * cx - p[i * 2], 2 * cy - p[i * 2 + 1]);
+    return out;
+  }
+
   /** Copy current simulated positions from the main graph into the minimap. */
   syncMini(force = false) {
     const now = performance.now();
@@ -726,7 +741,11 @@ class GraphController {
       }
       this.select(page);
       this.aimed();
-      this.main?.zoomToPointByIndex(page, 900, PAGE_ZOOM, true, false);
+      if (this.recorded) {
+        // The recording: centred on the page with the whole drawing in view. A fixed close-up
+        // left a big site's leaf page alone on screen with everything else outside it.
+        this.main?.fitViewByPointPositions(this.aroundPage(page), 900, 0.12);
+      } else this.main?.zoomToPointByIndex(page, 900, PAGE_ZOOM, true, false);
       return this.done({ ok: true, message: `View: ${spec.label}. Current page ${this.data.meta[page].id} selected.`, sfx: 'view-dive' });
     }
     this.applyLens();

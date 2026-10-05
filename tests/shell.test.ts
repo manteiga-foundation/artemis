@@ -210,6 +210,50 @@ describe('the owned browser is an Electron shell', () => {
     }
   }, 60000);
 
+  test('when the console stops hearing the pointer (macOS stops forwarding after a click in the site), the site hands it back: under a panel or out of the site view, clicks return to the console', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      const c = shell.console;
+      await engage(c, `${siteUrl}/tabs/next`);
+      const page = await sitePage(shell, `${siteUrl}/tabs/next`);
+      await page.getByRole('heading', { name: 'Next' }).waitFor({ timeout: 10000 });
+      // The entry screen fades out over the site first, and keeps the clicks while it does.
+      await c.waitForFunction(() => !document.querySelector('.boot'), null, { timeout: 5000 });
+      const slot = (await c.locator('.browser-slot').boundingBox())!;
+      const passThrough = async () => (await shell.state()).passThrough;
+      const settle = async (want: boolean) => {
+        for (let i = 0; i < 20 && (await passThrough()) !== want; i++) await Bun.sleep(50);
+        return passThrough();
+      };
+      const throughOverSite = async () => {
+        // A move to where the pointer already is fires nothing (Engage leaves it at the slot's centre).
+        await c.mouse.move(slot.x + slot.width / 2 - 60, slot.y + slot.height / 3 - 40);
+        await c.mouse.move(slot.x + slot.width / 2, slot.y + slot.height / 3);
+        expect(await settle(true)).toBe(true);
+      };
+      const { x: ox, y: oy } = (await shell.state()).layout!;
+
+      // Under the command card, which floats over the site: only the site sees the pointer now.
+      await throughOverSite();
+      const card = (await c.locator('.command-card').boundingBox())!;
+      await page.mouse.move(card.x + card.width / 2 - ox, card.y + card.height / 2 - oy);
+      expect(await settle(false)).toBe(false);
+
+      // Over the open page the site's own reports keep the clicks with the site.
+      await throughOverSite();
+      await page.mouse.move(slot.width / 2, slot.height / 3 + 20);
+      await Bun.sleep(300);
+      expect(await passThrough()).toBe(true);
+
+      // Out of the site view, up toward the address strip and the header.
+      await page.mouse.move(slot.width / 2, 4);
+      await page.mouse.move(slot.width / 2, -30);
+      expect(await settle(false)).toBe(false);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
   test('a link aimed at a new tab stays in the site view; a sign-in popup still opens as a popup', async () => {
     const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
     try {
