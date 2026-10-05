@@ -25,8 +25,6 @@ const HIDDEN = process.env.ARTEMIS_SHELL_HIDDEN === '1';
 // the window (elsewhere) at launch.
 const ICON = process.env.ARTEMIS_ICON ? nativeImage.createFromPath(process.env.ARTEMIS_ICON) : nativeImage.createEmpty();
 app.name = 'Artemis';
-/** Height of the window's own top band (the traffic lights' home) above the console. */
-const BAND = 28;
 // As in Chrome, a page may close only a window a script opened (a sign-in popup closing itself),
 // never the tab it was opened in. Electron lets any page close itself: a link handler that opens
 // its app in a popup and calls window.close() destroyed the site view, the autopilot lost its page
@@ -50,10 +48,6 @@ const state = {
   siteVisible: false,
   editable: false,
   layout: null as Layout | null,
-  /** Where the site view was last placed in the parent window (the console's slot, a band lower). */
-  siteBounds: null as { x: number; y: number; width: number; height: number } | null,
-  /** The window's own top band above the console (px): the traffic lights' home, no native title bar. */
-  band: BAND,
   siteUrl: '',
   /** The app icon in place (its pixel size), or null when none was given or it could not be read. */
   icon: null as { width: number; height: number } | null,
@@ -100,20 +94,7 @@ app.whenReady().then(() => {
     if (process.platform === 'darwin') app.dock?.setIcon(ICON);
     state.icon = ICON.getSize();
   }
-  // The window's top band is Artemis's own: no native title bar (its white strip over the dark
-  // console), the traffic lights on a band painted in the console's night colour, the console's
-  // window starting under it with the site; the band still drags the window as a title bar does.
-  // The console keeps its full size: the window is the band taller.
-  const win = new BaseWindow({
-    width: 1440,
-    height: 900 + BAND,
-    title: 'Artemis',
-    backgroundColor: '#02061a',
-    show: !HIDDEN,
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 14, y: (BAND - 12) / 2 },
-    ...(ICON.isEmpty() ? {} : { icon: ICON })
-  });
+  const win = new BaseWindow({ width: 1440, height: 900, title: 'Artemis', backgroundColor: '#02061a', show: !HIDDEN, ...(ICON.isEmpty() ? {} : { icon: ICON }) });
   const site = new WebContentsView({
     webPreferences: { preload: path.join(SHELL_DIR, 'site-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegrationInSubFrames: true }
   });
@@ -131,10 +112,7 @@ app.whenReady().then(() => {
     show: !HIDDEN,
     webPreferences: { preload: path.join(SHELL_DIR, 'console-preload.cjs'), contextIsolation: true }
   });
-  const fit = () => {
-    const b = win.getContentBounds();
-    consoleWin.setBounds({ x: b.x, y: b.y + BAND, width: b.width, height: b.height - BAND });
-  };
+  const fit = () => consoleWin.setBounds(win.getContentBounds());
   fit();
   win.on('resize', fit);
   win.on('move', fit);
@@ -217,11 +195,7 @@ app.whenReady().then(() => {
   ipcMain.on('layout', (_e, l: Layout) => {
     state.layout = l;
     state.siteVisible = !!l.visible;
-    // The console reports the slot in its own window; the site view lives in the parent, a band lower.
-    if (l.visible) {
-      state.siteBounds = { x: Math.round(l.x), y: Math.round(l.y) + BAND, width: Math.round(l.w), height: Math.round(l.h) };
-      site.setBounds(state.siteBounds);
-    }
+    if (l.visible) site.setBounds({ x: Math.round(l.x), y: Math.round(l.y), width: Math.round(l.w), height: Math.round(l.h) });
     site.setVisible(!!l.visible);
     applyPassThrough();
   });

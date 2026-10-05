@@ -423,31 +423,6 @@ describe('the owned browser is an Electron shell', () => {
     }
   }, 30000);
 
-  test("the window's top band is Artemis's own: no native title bar, the traffic lights on a night band above the console, the console and the site shifted down as one unit at full size", async () => {
-    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
-    try {
-      const state = await shell.state();
-      expect(state.band).toBe(28);
-      // The parent window holds the band; the console's window starts under it.
-      const bounds = await shell.app.evaluate(({ BaseWindow }) => {
-        const [parent, child] = BaseWindow.getAllWindows().sort((a, b) => a.id - b.id);
-        return { parent: parent.getContentBounds(), child: child.getBounds(), bar: parent.getContentBounds().height === parent.getBounds().height };
-      });
-      expect(bounds.bar).toBe(true);
-      expect(bounds.child).toEqual({ x: bounds.parent.x, y: bounds.parent.y + 28, width: bounds.parent.width, height: bounds.parent.height - 28 });
-      expect(await shell.console.evaluate(() => [innerWidth, innerHeight])).toEqual([1440, 900]);
-
-      // The site view keeps its place under the console's slot: the band's height added once.
-      await engage(shell.console, `${siteUrl}/tabs/`);
-      await sitePage(shell, `${siteUrl}/tabs/`);
-      let s = await shell.state();
-      for (let i = 0; i < 30 && !s.siteVisible; i++) s = (await Bun.sleep(100), await shell.state());
-      expect(s.siteBounds).toEqual({ x: Math.round(s.layout!.x), y: Math.round(s.layout!.y) + 28, width: Math.round(s.layout!.w), height: Math.round(s.layout!.h) });
-    } finally {
-      await shell.close();
-    }
-  }, 30000);
-
   test("the site's developer console shows only the site's own messages: Electron's security warning never appears in it", async () => {
     const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
     try {
