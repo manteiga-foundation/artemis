@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { ViewId } from './views';
 import type { MachineStats, PerfStats } from './metrics';
 import { browserStorage, loadSettings, startsMuted, type Settings } from './settings';
+import type { PageLoad } from './page-load';
 
 export type { ViewId } from './views';
 
@@ -33,6 +34,8 @@ export interface UIState {
   /** Whether the site's own history has somewhere to go (owned browser only). */
   canGoBack: boolean;
   canGoForward: boolean;
+  /** The page loading now, for the address field's progress bar (src/page-load.ts); null when none. */
+  pageLoad: PageLoad | null;
   muted: boolean;
   view: ViewId;
   viewTransition: ViewTransition | null;
@@ -91,6 +94,7 @@ let state: UIState = {
   pageUrl: null,
   canGoBack: false,
   canGoForward: false,
+  pageLoad: null,
   muted: startsMuted(savedSettings),
   view: 'cosmos',
   viewTransition: null,

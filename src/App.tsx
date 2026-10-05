@@ -7,6 +7,7 @@ import { MiniMap } from './components/MiniMap';
 import { Console, stepLens } from './components/Console';
 import { CommandCard, runCommand } from './components/CommandCard';
 import { BootOverlay, TARGET_FIELD_ID } from './components/BootOverlay';
+import { pageLoadSignal } from './page-load';
 import { commandByKey } from './commands';
 import { controller } from './graph/controller';
 import { LENSES, getState, setState, useStore } from './store';
@@ -123,6 +124,7 @@ function Hotkeys() {
 /** The owned browser reports where the website is as it navigates (and again after a reload). */
 function SiteAddress() {
   useEffect(() => shellBridge()?.onSiteNav((nav) => setState({ pageUrl: nav.url, canGoBack: !!nav.canGoBack, canGoForward: !!nav.canGoForward })), []);
+  useEffect(() => shellBridge()?.onSiteLoad(pageLoadSignal), []);
   return null;
 }
 

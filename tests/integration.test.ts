@@ -538,6 +538,59 @@ test('a big recording whose current page is a leaf at its edge: V centres that p
   }
 }, 40000);
 
+test('while a page loads, the address field itself is a soft progress bar and the strip says LOADING; once loaded it fills and goes', async () => {
+  const { page, errors } = await engaged();
+  try {
+    // The slow page answers only when the test lets it.
+    let release = () => {};
+    const gated = async () => {
+      await page.context().unroute('https://slow.example/**');
+      const gate = new Promise<void>((r) => (release = r));
+      await page.context().route('https://slow.example/**', async (route) => {
+        await gate;
+        await route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Slow page</h1>' });
+      });
+    };
+    await gated();
+    const bar = page.locator('.browser-bar');
+    const address = page.getByRole('textbox', { name: 'Address' });
+    const progress = bar.getByRole('progressbar', { name: 'Page loading' });
+    const noBar = () => page.waitForFunction(() => !document.querySelector('.browser-bar [role="progressbar"]'), null, { timeout: 15000 });
+    const value = async () => Number(await progress.getAttribute('aria-valuenow'));
+    await address.waitFor({ state: 'visible' });
+    await noBar(); // the first page (example.com) has loaded
+
+    await address.fill('https://slow.example/');
+    await address.press('Enter');
+    await progress.waitFor({ state: 'visible', timeout: 3000 });
+    // The bar is the address field: same box.
+    const [pb, ab] = [(await progress.boundingBox())!, (await address.boundingBox())!];
+    for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(pb[k] - ab[k])).toBeLessThanOrEqual(1);
+    const first = await value();
+    await page.waitForTimeout(700);
+    const later = await value();
+    expect([first > 0, later > first, later < 100]).toEqual([true, true, true]);
+    expect(await address.getAttribute('aria-busy')).toBe('true');
+    expect(await bar.locator('.browser-state').textContent()).toContain('LOADING');
+
+    release();
+    await page.waitForFunction(() => document.querySelector('.browser-bar [role="progressbar"]')?.getAttribute('aria-valuenow') === '100', null, { timeout: 5000 });
+    await noBar();
+    expect(await address.getAttribute('aria-busy')).not.toBe('true');
+    expect(await bar.locator('.browser-state').textContent()).toContain('LIVE');
+
+    // Reload shows it again.
+    await gated();
+    await bar.getByRole('button', { name: 'Reload', exact: true }).click();
+    await progress.waitFor({ state: 'visible', timeout: 3000 });
+    release();
+    await noBar();
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('the address strip: small Back, Forward and Reload beside LIVE PAGE; the address (its query too) is editable and Enter goes there', async () => {
   const { page, errors } = await engaged();
   try {

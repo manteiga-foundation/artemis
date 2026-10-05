@@ -105,6 +105,7 @@ src/components/Stage.tsx  the dive                           src/components/Brow
 src/metrics.ts          FPS sampler (header readouts)        src/quality.ts       graph pixel-ratio budget
 src/settings.ts         settings: categories, defaults, search  src/settings-session.ts  the draft, Apply, close
 src/autopilot.ts        the D control, reports from the shell  server/autopilot.ts  flight plan (pure)
+src/page-load.ts        the address field's loading bar (phases, progress)
 server/autopilot-driver.ts  flies the site (Playwright)     shell/autopilot-state.ts  speed, actor, disengage
 src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/           /debug page, synth presets
 shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
@@ -143,8 +144,8 @@ dive; pulling back from the Browser opens the Cosmos on the current page, select
 on, and an operator camera move cancels the first layout's pending auto-fit; entry screen with the
 website field; Browser view
 showing the real site; the owned browser is the Electron shell (`bun run artemis`): genuine site,
-click pass-through, hotkeys from the site, live address strip with Back/Forward/Reload buttons and an
-editable address (GET parameters rewritable), right-click Back/Forward/Reload,
+click pass-through, hotkeys from the site, live address strip with Back/Forward/Reload buttons, an
+editable address (GET parameters rewritable) that doubles as the page's loading bar, right-click Back/Forward/Reload,
 console reload resumes on the same page; `C` panels fold with header switch; real resource
 readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
 SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,

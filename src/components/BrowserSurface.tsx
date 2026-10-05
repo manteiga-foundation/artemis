@@ -5,6 +5,7 @@ import { getState, setState, useStore } from '../store';
 import { isOwnedBrowser } from '../owned';
 import { passesThrough, shellBridge, slotLayout } from '../shell';
 import { normalizeTarget } from '../target';
+import { loadProgress, pageLoadSignal } from '../page-load';
 
 // Browser view centre: the website under review fills the stage from under the header to the
 // bottom edge, running behind the bottom panels. In the owned browser (the Electron shell,
@@ -64,11 +65,16 @@ export function BrowserSurface() {
     };
   }, [shell, engaged, stageView, diving, settingsOpen]);
 
+  const loading = useStore((s) => s.pageLoad !== null && s.pageLoad.phase !== 'done');
   const live = shell ? pageUrl !== null : loaded;
-  const state = !targetUrl ? 'DETACHED' : live ? 'LIVE' : 'CONNECTING';
+  const state = !targetUrl ? 'DETACHED' : loading ? 'LOADING' : live ? 'LIVE' : 'CONNECTING';
   // In an ordinary browser the frame shows what the address strip last went to.
   const frameUrl = pageUrl ?? targetUrl;
   const [reloads, setReloads] = useState(0);
+  // The frame only says when it has loaded; each new address or reload starts a load.
+  useEffect(() => {
+    if (!shell && frameUrl) pageLoadSignal('start');
+  }, [shell, frameUrl, reloads]);
   const canGoBack = useStore((s) => s.canGoBack);
   const canGoForward = useStore((s) => s.canGoForward);
   const go = (url: string) => (shell ? shell.navigate(url) : setState({ pageUrl: url }));
@@ -91,7 +97,7 @@ export function BrowserSurface() {
               <FaRotateRight aria-hidden />
             </button>
           </span>
-          <AddressField address={pageUrl ?? targetUrl} onGo={go} />
+          <AddressField address={pageUrl ?? targetUrl} onGo={go} busy={loading} />
           {targetUrl && !owned && (
             <span className="browser-hint" title="Run `bun run artemis` for the browser Artemis owns">
               external browser · sites that refuse framing stay blank
@@ -113,7 +119,10 @@ export function BrowserSurface() {
                 // No allow-top-navigation: a frame-busting site cannot take over the console.
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
                 referrerPolicy="no-referrer-when-downgrade"
-                onLoad={() => setLoaded(true)}
+                onLoad={() => {
+                  setLoaded(true);
+                  pageLoadSignal('done');
+                }}
               />
             )
           ) : (
@@ -134,17 +143,20 @@ export function BrowserSurface() {
  * and press Enter to go there; Escape puts back the address of the page shown. While it is being
  * edited, the site's own navigation does not overwrite what is typed.
  */
-function AddressField({ address, onGo }: { address: string | null; onGo: (url: string) => void }) {
+function AddressField({ address, onGo, busy }: { address: string | null; onGo: (url: string) => void; busy: boolean }) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = address ?? '';
   return (
-    <input
+    <span className="browser-address">
+      <LoadBar />
+      <input
       className="browser-url"
       aria-label="Address"
       title="Address of the page the browser is on: edit it and press Enter to go there"
       spellCheck={false}
       autoComplete="off"
       disabled={!address}
+      aria-busy={busy || undefined}
       value={draft ?? shown}
       placeholder="--"
       onChange={(e) => setDraft(e.target.value)}
@@ -164,6 +176,40 @@ function AddressField({ address, onGo }: { address: string | null; onGo: (url: s
           e.currentTarget.blur();
         }
       }}
-    />
+      />
+    </span>
+  );
+}
+
+/**
+ * The address field as a soft progress bar: a fill sweeps under the address while the page loads,
+ * fills when it has loaded, and fades. Keyed by the load, so a new page starts its sweep afresh
+ * instead of sliding back from full.
+ */
+function LoadBar() {
+  const load = useStore((s) => s.pageLoad);
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    if (!load) return;
+    setNow(performance.now());
+    const id = window.setInterval(() => {
+      const t = performance.now();
+      setNow(t);
+      if (loadProgress(load, t) === null) window.clearInterval(id);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [load]);
+  const p = loadProgress(load, now);
+  const percent = Math.round((p ?? 1) * 100);
+  return (
+    <span
+      key={load?.since ?? 0}
+      className={`browser-load${p === null ? ' is-idle' : ''}`}
+      {...(p === null
+        ? { 'aria-hidden': true }
+        : { role: 'progressbar', 'aria-label': 'Page loading', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': percent })}
+    >
+      <span className="browser-load-fill" style={{ width: `${p === null && !load ? 0 : percent}%` }} />
+    </span>
   );
 }

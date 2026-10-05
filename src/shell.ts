@@ -5,6 +5,7 @@
 // there is no bridge and the Browser view falls back to an iframe.
 import type { ViewId } from './views';
 import type { AutopilotStatus } from './autopilot';
+import type { LoadEvent } from './page-load';
 
 /** Where the native site view sits, in the console's CSS pixels; hidden when `visible` is false. */
 export interface SlotLayout {
@@ -36,6 +37,8 @@ export interface ShellBridge {
   onKey(fn: (key: string) => void): () => void;
   /** Where the pointer is over the site (site coordinates), or that it left the site view; sent while clicks pass through. */
   onSitePointer(fn: (p: { x?: number; y?: number; left?: boolean }) => void): () => void;
+  /** The site's page loading: started, document committed, DOM ready, done (or failed). */
+  onSiteLoad(fn: (event: LoadEvent) => void): () => void;
   /** The autopilot's speed (0 off, 1 slow, 2 regular, 3 max), set from the console. */
   autopilot(speed: number): void;
   /** Reports from the flight (src/autopilot.ts AutopilotStatus). */

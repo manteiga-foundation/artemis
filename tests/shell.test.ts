@@ -33,9 +33,28 @@ const site = Bun.serve({
     if (url.pathname === '/tabs/popup') return plain('<h1>Popup</h1>');
     // Echoes its query and counts its loads (Reload must really reload).
     if (url.pathname === '/q/') return plain(`<h1>Query a=${url.searchParams.get('a')}</h1><p id="hits">${++queryHits}</p>`);
+    // A slow page that walks through every loading phase: the answer waits 1.2 s (started), the
+    // document arrives in two parts 0.6 s apart (committed, then DOM ready), an image takes another
+    // 0.6 s (then loading stops).
+    if (url.pathname === '/slow/' || url.pathname === '/slow/next') return slowPage(url.pathname === '/slow/' ? 'Slow page' : 'Slow next');
+    if (url.pathname === '/slow/img') return Bun.sleep(600).then(() => new Response(PIXEL, { headers: { 'content-type': 'image/gif' } }));
     return new Response('not found', { status: 404 });
   }
 });
+const PIXEL = Uint8Array.from(atob('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'), (c) => c.charCodeAt(0));
+async function slowPage(title: string) {
+  await Bun.sleep(1200);
+  const text = new TextEncoder();
+  const body = new ReadableStream({
+    async start(c) {
+      c.enqueue(text.encode(`<!doctype html><title>${title}</title><body><h1>${title}</h1>`));
+      await Bun.sleep(600);
+      c.enqueue(text.encode(`<a href="/slow/next">next slow page</a><img src="/slow/img?${Math.random()}" alt=""></body>`));
+      c.close();
+    }
+  });
+  return new Response(body, { headers: { 'content-type': 'text/html' } });
+}
 let queryHits = 0;
 const siteUrl = `http://localhost:${site.port}`;
 
@@ -205,6 +224,38 @@ describe('the owned browser is an Electron shell', () => {
       await shell.console.mouse.move(header.x + 40, header.y + header.height / 2);
       await Bun.sleep(150);
       expect((await shell.state()).passThrough).toBe(false);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
+  test('the address field shows the page loading from the site\'s own signals: started, committed, ready, stopped', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      const c = shell.console;
+      // Watch the console's load phases (and whether the bar shows) from before Engage.
+      await c.evaluate(`window.__phases = []; window.__sawBar = false; setInterval(() => {
+        const l = window.__artemis().pageLoad; const ph = l ? l.phase : null;
+        if (ph && window.__phases[window.__phases.length - 1] !== ph) window.__phases.push(ph);
+        if (document.querySelector('.browser-bar [role="progressbar"][aria-label="Page loading"]')) window.__sawBar = true;
+      }, 15)`);
+      const phases = () => c.evaluate('window.__phases.slice()') as Promise<string[]>;
+      await engage(c, `${siteUrl}/slow/`);
+      const page = await sitePage(shell, `${siteUrl}/slow/`);
+      await page.getByRole('heading', { name: 'Slow page' }).waitFor({ timeout: 15000 });
+      await c.waitForFunction('window.__phases[window.__phases.length - 1] === "done"', null, { timeout: 10000 });
+      expect(await phases()).toEqual(['start', 'commit', 'dom', 'done']);
+      expect(await c.evaluate('window.__sawBar')).toBe(true);
+      await c.waitForFunction(() => !document.querySelector('.browser-bar [role="progressbar"]'), null, { timeout: 3000 });
+
+      // A link followed in the site: the bar again, from the start. (The list restarts from the
+      // phase last seen, the first load's done, so the watcher does not record it again.)
+      await c.evaluate("window.__phases = ['done']; window.__sawBar = false");
+      await page.getByRole('link', { name: 'next slow page' }).click();
+      await page.getByRole('heading', { name: 'Slow next' }).waitFor({ timeout: 15000 });
+      await c.waitForFunction('window.__phases.length > 1 && window.__phases[window.__phases.length - 1] === "done"', null, { timeout: 10000 });
+      expect((await phases()).slice(1)).toEqual(['start', 'commit', 'dom', 'done']);
+      expect(await c.evaluate('window.__sawBar')).toBe(true);
     } finally {
       await shell.close();
     }

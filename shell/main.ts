@@ -142,8 +142,19 @@ app.whenReady().then(() => {
     return { action: 'deny' };
   });
   // A navigation drops the old page's focus without a focusout: each page starts not editable.
+  // Page loading, for the address field's progress bar (src/page-load.ts): a new page starts,
+  // its document commits, its DOM is ready, loading stops. A load cut short by a newer one
+  // (ERR_ABORTED) is not a failure: the newer one has already started its bar.
   site.webContents.on('did-start-navigation', (d) => {
-    if (d.isMainFrame && !d.isSameDocument) state.editable = false;
+    if (!d.isMainFrame || d.isSameDocument) return;
+    state.editable = false;
+    toConsole('site-load', 'start');
+  });
+  site.webContents.on('did-navigate', () => toConsole('site-load', 'commit'));
+  site.webContents.on('dom-ready', () => toConsole('site-load', 'dom'));
+  site.webContents.on('did-stop-loading', () => toConsole('site-load', 'done'));
+  site.webContents.on('did-fail-load', (_e, code, _text, _url, isMainFrame) => {
+    if (isMainFrame && code !== -3) toConsole('site-load', 'fail');
   });
 
   // Click pass-through: the console says whether it wants clicks to go to the site; they do only

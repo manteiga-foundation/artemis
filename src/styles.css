@@ -132,7 +132,35 @@ kbd {
   color: var(--azure);
 }
 
+.browser-address {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+/* The address field doubles as the page's loading bar (BrowserSurface.tsx LoadBar). */
+.browser-load {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.browser-load-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--sky) 3%, transparent), color-mix(in srgb, var(--sky) 20%, transparent));
+  border-right: 1px solid color-mix(in srgb, var(--sky) 55%, transparent);
+  transition: width 0.35s ease-out, opacity 0.45s ease-out;
+}
+
+.browser-load.is-idle .browser-load-fill {
+  opacity: 0;
+}
+
 .browser-url {
+  position: relative;
   flex: 1;
   min-width: 0;
   overflow: hidden;
