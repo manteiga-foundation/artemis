@@ -50,10 +50,11 @@ const HIDDEN: SlotLayout = { visible: false, x: 0, y: 0, w: 0, h: 0 };
  * diving (a native view cannot travel with the stage's animation).
  */
 export function slotLayout(
-  s: { engaged: boolean; stageView: ViewId; viewTransition: unknown },
+  s: { engaged: boolean; stageView: ViewId; viewTransition: unknown; settingsOpen?: boolean },
   rect: { x: number; y: number; width: number; height: number } | null
 ): SlotLayout {
-  if (!rect || !s.engaged || s.stageView !== 'browser' || s.viewTransition || rect.width <= 0 || rect.height <= 0) return HIDDEN;
+  // The configuration view covers the stage: the site steps aside until it closes.
+  if (!rect || !s.engaged || s.stageView !== 'browser' || s.viewTransition || s.settingsOpen || rect.width <= 0 || rect.height <= 0) return HIDDEN;
   return { visible: true, x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) };
 }
 

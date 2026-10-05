@@ -1,10 +1,11 @@
 import { Animated, Animator, BleepsOnAnimator, FrameLines, Text } from '@arwes/react';
-import { GiSpeaker, GiSpeakerOff } from 'react-icons/gi';
+import { GiCog, GiSpeaker, GiSpeakerOff } from 'react-icons/gi';
 import { useClock } from '../hooks';
 import { setState, useStore } from '../store';
 import { useSfx } from '../sfx';
 import { hostOf } from '../target';
 import { VIEW_BY_ID } from '../views';
+import { toggleSettings } from '../settings-session';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
@@ -58,6 +59,7 @@ export function Header() {
   const panelsHidden = useStore((s) => s.panelsHidden);
   const perf = useStore((s) => s.perf);
   const machine = useStore((s) => s.machine);
+  const settingsOpen = useStore((s) => s.settingsOpen);
   const play = useSfx();
 
   const hh = String(now.getHours()).padStart(2, '0');
@@ -95,8 +97,8 @@ export function Header() {
             </Text>
           </Animator>
           <Animator>
-            <Text as="span" className="view-badge" manager="decipher" fixed title={VIEW_BY_ID.get(view)!.tagline}>
-              {VIEW_BY_ID.get(view)!.label.toUpperCase()}
+            <Text as="span" className="view-badge" manager="decipher" fixed title={settingsOpen ? 'Configuration' : VIEW_BY_ID.get(view)!.tagline}>
+              {settingsOpen ? 'SETTINGS' : VIEW_BY_ID.get(view)!.label.toUpperCase()}
             </Text>
           </Animator>
           {targetUrl && (
@@ -137,6 +139,19 @@ export function Header() {
           }}
         >
           <span className="dot" /> PANELS {panelsHidden ? 'OFF' : 'ON'}
+        </button>
+
+        <button
+          className={`icon-btn settings-toggle${settingsOpen ? ' is-on' : ''}`}
+          aria-label="Settings (,)"
+          aria-pressed={settingsOpen}
+          title={settingsOpen ? 'Close the settings (,)' : 'Settings (,)'}
+          onClick={() => {
+            toggleSettings();
+            play('click');
+          }}
+        >
+          <GiCog />
         </button>
 
         <button

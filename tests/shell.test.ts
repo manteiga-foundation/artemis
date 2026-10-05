@@ -151,6 +151,18 @@ describe('the owned browser is an Electron shell', () => {
       await address.click();
       await address.press('v');
       expect(((await c.evaluate('window.__artemis()')) as { view: string }).view).toBe('browser');
+
+      // The configuration view covers the stage: the site steps aside and comes back on close.
+      await address.press('Escape');
+      for (let i = 0; i < 30 && !(await shell.state()).siteVisible; i++) await Bun.sleep(100);
+      expect((await shell.state()).siteVisible).toBe(true);
+      await c.getByRole('button', { name: 'Settings (,)' }).click();
+      await c.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'visible' });
+      for (let i = 0; i < 30 && (await shell.state()).siteVisible; i++) await Bun.sleep(100);
+      expect((await shell.state()).siteVisible).toBe(false);
+      await c.keyboard.press('Escape');
+      for (let i = 0; i < 30 && !(await shell.state()).siteVisible; i++) await Bun.sleep(100);
+      expect((await shell.state()).siteVisible).toBe(true);
       expect(errors).toEqual([]);
     } finally {
       await shell.close();

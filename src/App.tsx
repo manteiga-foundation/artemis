@@ -16,6 +16,7 @@ import { FRAME_KEY_MESSAGE, isOwnedBrowser } from './owned';
 import { shellBridge } from './shell';
 import { SITE_EVENT, SITE_FEED_READY, type SiteEvent } from './site-events';
 import { usePerfSampler } from './metrics';
+import { closeSettings, toggleSettings } from './settings-session';
 
 function Hotkeys() {
   const play = useSfx();
@@ -30,11 +31,24 @@ function Hotkeys() {
         return false;
       }
       const k = key.length === 1 ? key.toUpperCase() : key;
-      const cmd = commandByKey(s.view, k, s.recorded);
+      // The configuration view: "," opens and closes it, Escape closes it; while it is open the
+      // card holds the settings commands and the lenses rest (the graph is behind it).
+      if (k === ',') {
+        toggleSettings();
+        play('click');
+        return true;
+      }
+      if (k === 'Escape' && s.settingsOpen) {
+        closeSettings();
+        play('click');
+        return true;
+      }
+      const cmd = commandByKey(s.view, k, s.recorded, s.settingsOpen);
       if (cmd) {
         runCommand(cmd, play);
         return true;
       }
+      if (s.settingsOpen && (k === 'ArrowLeft' || k === 'ArrowRight' || /^[1-9]$/.test(k))) return false;
       if (k === 'ArrowLeft' || k === 'ArrowRight') {
         controller.setLens(stepLens(k === 'ArrowLeft' ? -1 : 1));
         play('click');
@@ -67,8 +81,10 @@ function Hotkeys() {
 
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      // Text fields keep their keys; a checkbox or a button does not (hotkeys still work there).
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const textEntry = t && ((t.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'range'].includes((t as HTMLInputElement).type)) || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      if (textEntry) return;
       if (dispatch(e.key)) e.preventDefault();
     };
 

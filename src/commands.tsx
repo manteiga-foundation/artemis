@@ -14,12 +14,31 @@ import {
   GiLightBulb,
   GiPathDistance,
   GiFamilyTree,
-  GiRadarSweep
+  GiRadarSweep,
+  GiCheckMark,
+  GiMagnifyingGlass,
+  GiNextButton,
+  GiSave,
+  GiOpenFolder,
+  GiBackwardTime,
+  GiAnticlockwiseRotation,
+  GiTrashCan
 } from 'react-icons/gi';
 import { FaLayerGroup } from 'react-icons/fa6';
 import { controller, type CommandResult } from './graph/controller';
-import type { UIState } from './store';
+import { getState, setState, type UIState } from './store';
 import { VIEW_BY_ID, nextView, viewDepth, type ViewId } from './views';
+import {
+  applySettings,
+  closeSettings,
+  discardChanges,
+  exportSettings,
+  focusSearch,
+  nextCategory,
+  pendingChanges,
+  resetCategory,
+  restoreDefaults
+} from './settings-session';
 
 export interface CommandDef {
   key: string; // hotkey (single uppercase letter)
@@ -187,7 +206,41 @@ const scope: CommandDef = {
 };
 const RECORDED_COSMOS_COMMANDS: CommandDef[] = COSMOS_COMMANDS.map((c) => (c.key === 'R' ? scope : c));
 
-export const commandsFor = (view: ViewId, recorded = false): CommandDef[] => (recorded && view === 'cosmos' ? RECORDED_COSMOS_COMMANDS : SETS[view]);
+// The configuration view keeps the card: A applies, S searches, V closes back to the view it was
+// opened over; the rest edit the draft. Each answers on the console like any command.
+const settingsCommand = (key: string, name: string, hint: string, Icon: IconType, act: () => unknown, isActive?: CommandDef['isActive']): CommandDef => ({
+  key,
+  name,
+  hint,
+  Icon,
+  isActive,
+  run: () => {
+    const ok = act() !== false;
+    return { ok, message: getState().status };
+  }
+});
 
-export const commandByKey = (view: ViewId, key: string, recorded = false): CommandDef | undefined =>
-  commandsFor(view, recorded).find((c) => c.key === key);
+const settingsCommands = (view: ViewId): CommandDef[] => [
+  settingsCommand('A', 'Apply', 'Apply the changes and keep them for the next start.', GiCheckMark, () => applySettings(), (s) => pendingChanges(s) > 0),
+  settingsCommand('S', 'Search', 'Search the settings by name.', GiMagnifyingGlass, focusSearch),
+  settingsCommand('N', 'Next', 'Show the next category (only those a search found).', GiNextButton, nextCategory),
+  { ...settingsCommand('V', 'View', `Close the settings and return to the ${VIEW_BY_ID.get(view)!.label} view.`, FaLayerGroup, closeSettings) },
+  settingsCommand('E', 'Export', 'Save the settings in effect as a file (artemis-settings.json).', GiSave, exportSettings),
+  settingsCommand('I', 'Import', 'Load settings from a file: interface only for now.', GiOpenFolder, () => {
+    setState((s) => ({ status: 'Import: interface only for now.', statusTone: 'info', statusId: s.statusId + 1 }));
+  }),
+  settingsCommand('D', 'Defaults', 'Every setting back to its default (Apply to keep).', GiBackwardTime, restoreDefaults),
+  settingsCommand('R', 'Reset', 'This category back to its defaults (Apply to keep).', GiAnticlockwiseRotation, resetCategory),
+  settingsCommand('X', 'Discard', 'Drop the changes not applied yet.', GiTrashCan, discardChanges)
+];
+const SETTINGS_SETS = new Map<ViewId, CommandDef[]>();
+const settingsSet = (view: ViewId) => {
+  if (!SETTINGS_SETS.has(view)) SETTINGS_SETS.set(view, settingsCommands(view));
+  return SETTINGS_SETS.get(view)!;
+};
+
+export const commandsFor = (view: ViewId, recorded = false, settings = false): CommandDef[] =>
+  settings ? settingsSet(view) : recorded && view === 'cosmos' ? RECORDED_COSMOS_COMMANDS : SETS[view];
+
+export const commandByKey = (view: ViewId, key: string, recorded = false, settings = false): CommandDef | undefined =>
+  commandsFor(view, recorded, settings).find((c) => c.key === key);

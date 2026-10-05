@@ -108,7 +108,7 @@ A and S hold the top row and V the middle row in every view, as drawn in the ske
 | R | Regenerate topology (emulated); in the owned browser the slot holds **E Scope**: show or hide hosts outside the review scope | Route: path to the core (toggle) | Reload |
 | X | Clear selection, holds, targeting | Clear | Clear annotations |
 
-Also: `C` hides and shows the bottom panels in every view (the header stays, with a `PANELS ON/OFF`
+Also: `,` opens and closes the configuration view (below), `C` hides and shows the bottom panels in every view (the header stays, with a `PANELS ON/OFF`
 switch for when C was pressed by mistake; handy for reading a page in the Browser view), `1-5` /
 `Left` / `Right` lenses, `Esc` cancel, `M` mute.
 
@@ -116,6 +116,51 @@ Hotkeys reach the console from inside the website too: in the owned browser an i
 preload in every frame of the site forwards plain keys (not while typing in a field) to the
 console, so `V` works after clicking into the page; the page still receives the key. An external browser cannot hear keys inside a cross-origin frame; the
 command card then says "Keyboard is in the page. Click the console to use hotkeys."
+
+## Configuration view (`,`)
+
+From the user's sketch: Settings with a search field and the categories on the left, the chosen
+category's description and options as checkboxes on the right, Apply at the bottom right; the
+side panel of the sketch is the command card and the rounded square the scope map, both where they
+always are. It is not a third view in the V cycle: the header's cog button (`Settings (,)`) or the
+`,` key opens it over whichever view is shown, and `,`, `Esc` or V closes it back to that view. The
+header badge and the command card's title read SETTINGS while it is open. In the owned browser the
+native website steps aside while it is open (`slotLayout`) and comes back on close.
+
+The window covers the stage from under the header to just above the bottom panels. Its bottom edge
+is measured from the panels (the command card is the tallest), not set per screen size: the first
+version used fixed offsets and the Apply button sat under the command card, which the integration
+test caught; with the panels folded away (C) it takes the whole height.
+
+Categories, in the sketch's order: Scope (include subdomains, ...), Export (HAR, JSON, CSV, masking),
+LLM connections (one per role: Categorization, Intelligence, Security), Sound, Autopilot (logic
+based), Copilot (LLM), Defaults (site video, console video, HAR, asset bodies). Only Sound works
+for real in this slice ("Sound on when Artemis starts": Artemis starts muted when it is off, and
+Apply sets it at once); every other category is interface with emulated options and says
+"Interface only for now". Search matches category names and descriptions (all of the category) or
+option labels and hints (only those options), shows a count per category, and says when nothing
+matches.
+
+Changes wait in a draft: the footer counts them ("1 change not applied"), the card's A lights while
+one waits, Apply saves them to the browser's storage (`artemis.settings`, merged with the defaults on
+load so options added later get their default) and closing discards what was not applied, saying
+so. Settings live in `src/settings.ts` (categories, defaults, load, save, search) and
+`src/settings-session.ts` (the draft over the store, shared by the surface and the card).
+
+| Key | Settings command |
+| --- | --- |
+| A | Apply the changes (lit while one waits) |
+| S | Search: focus the search field |
+| N | Next category (only those a search found) |
+| V | Close and return to the view it was opened over |
+| E | Export the settings in effect as `artemis-settings.json` |
+| I | Import: interface only for now |
+| D | Defaults: every setting back to its default (Apply to keep) |
+| R | Reset: this category back to its defaults (Apply to keep) |
+| X | Discard the changes not applied |
+
+Hotkeys now skip only text fields: a focused checkbox or button no longer swallows them (`,` closes
+the settings with a checkbox focused).
 
 ## Debug page and sounds
 
@@ -324,6 +369,7 @@ actions yet), a pulse when a node is added, page titles and full-URL lists in a 
 - `tests/views.test.ts` — view order and depth, the Page view kept but hidden (V cycles Browser <-> Cosmos), palettes carry the approved values and the same tokens.
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, landing on the current page when pulling back from the Browser (selected, focused, zoomed in on, labelled, announced; an earlier selection gives way), the first layout's auto-fit and its cancellation by any operator camera move (landing, Focus, wheel/drag), Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, V hints for the two shown views, Depth and Route, Page subgraph (BFS) and framing, minimap context (the Page view's behaviour stays tested while hidden).
+- `tests/settings.test.ts` — the configuration view's settings: the sketch's seven categories in order, one LLM connection per role, only Sound live; defaults (sound on, subdomains in scope, video and HAR kept); saved settings come back, missing options take their default, unknown ones are dropped, a broken store gives the defaults; search by option words or category name; change counting; the sound default decides muting at start. The session: ticking changes only the draft, Apply saves it and the sound default applies at once; closing discards and says so; Reset, Defaults and Discard; Next walks only the categories a search found. The settings card keeps A and S on top and V in the middle with the right hints; the native site steps aside while the settings are open.
 - `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in both views, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V pulls back to the Cosmos and returns, palette variables change, command card and tab strip swap, no Page view on the way; the Cosmos opens on the current page (selected, label at the stage centre, zoom readout x4, named in the readout) and stays there while the first layout settles; the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working; fed recorder events, the cosmos becomes the recording and grows live with labelled pages, V lands on the current recorded page, the camera stays put as it grows, the core stays exactly at the centre of the space, the first page reached from it sits straight up with the next one further out on the same line, and on screen (by where the labels land) the first section is above the core, Scope (where Regenerate was) hides the outside host and brings it back, with no page errors. The address strip: small Back, Forward and Reload right after LIVE PAGE, in order; Back and Forward off in an ordinary browser; the address editable (new GET parameters load in the frame, a typed key is not a hotkey, Escape restores, a non-address goes nowhere and says so); Reload gives a fresh load of the same address.
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.

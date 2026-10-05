@@ -17,6 +17,7 @@ export function BrowserSurface() {
   const engaged = useStore((s) => s.engaged);
   const stageView = useStore((s) => s.stageView);
   const diving = useStore((s) => s.viewTransition !== null);
+  const settingsOpen = useStore((s) => s.settingsOpen);
   const [loaded, setLoaded] = useState(false);
   const owned = isOwnedBrowser();
   const shell = shellBridge();
@@ -53,7 +54,7 @@ export function BrowserSurface() {
       shell.passThrough(false);
       shell.layout(slotLayout(getState(), null));
     };
-  }, [shell, engaged, stageView, diving]);
+  }, [shell, engaged, stageView, diving, settingsOpen]);
 
   const live = shell ? pageUrl !== null : loaded;
   const state = !targetUrl ? 'DETACHED' : live ? 'LIVE' : 'CONNECTING';

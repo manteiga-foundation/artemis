@@ -373,6 +373,71 @@ test('the entry screen asks for the website and nothing starts until a valid one
   }
 }, 40000);
 
+test('the configuration view (the sketch): opens from the header or with ",", searches, ticks, applies; Esc returns; the sound default is real', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.getByRole('button', { name: 'Settings (,)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Settings' });
+    await dialog.waitFor({ state: 'visible' });
+    const nav = dialog.getByRole('navigation', { name: 'Setting categories' });
+    const categories = async () => (await nav.getByRole('button').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label'))));
+    expect(await categories()).toEqual(['Scope', 'Export', 'LLM connections', 'Sound', 'Autopilot', 'Copilot', 'Defaults']);
+    await dialog.getByRole('heading', { name: 'Scope', exact: true }).waitFor({ state: 'visible' });
+    await dialog.getByText('Interface only for now').waitFor({ state: 'visible' });
+    // The map card and the command card stay; the card holds the settings commands.
+    expect(await page.locator('.minimap').isVisible()).toBe(true);
+    for (const name of ['Apply (A)', 'Search (S)', 'View (V)']) await page.getByRole('button', { name, exact: true }).waitFor({ state: 'visible' });
+    expect(await page.locator('.command-card .panel-title-right').textContent()).toBe('SETTINGS');
+
+    // Search finds settings by their words.
+    const search = dialog.getByRole('searchbox', { name: 'Search settings' });
+    await search.fill('subdomain');
+    expect(await categories()).toEqual(['Scope']);
+    expect(await dialog.getByRole('checkbox').count()).toBe(1);
+    await dialog.getByRole('checkbox', { name: /Include subdomains/ }).waitFor({ state: 'visible' });
+    await search.fill('nothing like this');
+    await dialog.getByText('No setting matches').waitFor({ state: 'visible' });
+    await search.fill('');
+
+    // Sound works for real: nothing changes until Apply, then it does.
+    await nav.getByRole('button', { name: 'Sound', exact: true }).click();
+    const sound = dialog.getByRole('checkbox', { name: /Sound on when Artemis starts/ });
+    expect(await sound.isChecked()).toBe(true);
+    expect(await dialog.getByText('Interface only for now').count()).toBe(0);
+    await sound.uncheck();
+    await dialog.getByText('1 change not applied').waitFor({ state: 'visible' });
+    expect(await stateOf(page)).toMatchObject({ muted: false });
+    // The card's Apply lights while a change waits.
+    expect(await page.getByRole('button', { name: 'Apply (A)' }).getAttribute('aria-pressed')).toBe('true');
+    await dialog.getByRole('button', { name: 'Apply', exact: true }).click();
+    expect(await stateOf(page)).toMatchObject({ muted: true, status: 'Settings applied: 1 change.' });
+    expect(await page.getByRole('button', { name: 'Apply (A)' }).getAttribute('aria-pressed')).toBe('false');
+
+    // Esc closes it and the view is where it was.
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Settings"]'));
+    expect(await stateOf(page)).toMatchObject({ view: 'browser', settingsOpen: false });
+
+    // "," opens it again, the applied setting kept; a change not applied is discarded on close,
+    // and "," still works with a checkbox focused (only text fields keep their keys).
+    await page.keyboard.press(',');
+    await dialog.waitFor({ state: 'visible' });
+    expect(await sound.isChecked()).toBe(false);
+    await sound.check();
+    await page.keyboard.press(',');
+    await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Settings"]'));
+    expect(await stateOf(page)).toMatchObject({ muted: true, status: 'Settings closed: 1 change not applied, discarded.' });
+
+    // Kept for the next start: Artemis starts muted.
+    await page.reload();
+    await page.waitForFunction(() => typeof (window as unknown as { __artemis?: unknown }).__artemis === 'function');
+    expect(await stateOf(page)).toMatchObject({ muted: true });
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('the address strip: small Back, Forward and Reload beside LIVE PAGE; the address (its query too) is editable and Enter goes there', async () => {
   const { page, errors } = await engaged();
   try {

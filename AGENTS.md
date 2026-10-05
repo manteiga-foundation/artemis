@@ -30,6 +30,8 @@ Stack: Bun, Vite, React 18, `@arwes/react` (alpha), `@cosmos.gl/graph` (WebGL gr
 - **Owned browser** - the Electron shell `bun run artemis` launches: the website as a genuine native
   page, the console in a transparent window over it.
 - **Dive** - the depth transition between views.
+- **Configuration view** - the settings (`,` or the header cog), opened over the current view, not
+  part of the V cycle; changes wait in a draft until Apply.
 
 ## How we work: the methodology
 
@@ -101,6 +103,7 @@ src/views.ts            ViewSpec, order, palettes            src/store.ts       
 src/commands.tsx        per-view command sets                src/graph/controller.ts  graph + commands
 src/components/Stage.tsx  the dive                           src/components/BrowserSurface.tsx  the website frame
 src/metrics.ts          FPS sampler (header readouts)        src/quality.ts       graph pixel-ratio budget
+src/settings.ts         settings: categories, defaults, search  src/settings-session.ts  the draft, Apply, close
 src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/           /debug page, synth presets
 shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
 server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
@@ -144,15 +147,17 @@ console reload resumes on the same page; `C` panels fold with header switch; rea
 readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
 SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,
 bodies; observations only, categorisation later and recomputable), with a video of the site and of
-the console and a HAR next to it (on by default until the configuration view), saved whole however
+the console and a HAR next to it (on by default), saved whole however
 the app is closed (window, Cmd+Q, Ctrl+C; leftovers of a crash recovered at the next launch); in
 the owned browser the Cosmos is the live recording, drawn as a computed radial tree like the
 emulated sketch (core at the centre, sections evenly around it, sub-pages outward, every request a
 dot in its page's cloud, no line crossing another, routes in the Routes lens; Scope `E`; V lands on
-the current page; a console reload rebuilds it from the database).
+the current page; a console reload rebuilds it from the database); the configuration view from the
+user's sketch (`,`: search, seven categories, checkboxes, Apply; the command card and scope map
+stay; only the sound default is live, the rest interface with emulated options).
 
-Next (user's order): the configuration view (the user is drafting it: recording defaults such as
-video and HAR); DOM session replay (spike first), a policy-aware HAR export from the database,
+Next (user's order): wire the configuration view's options as each feature arrives (recording
+defaults read by `bun run artemis`, Scope subdomains, export formats); DOM session replay (spike first), a policy-aware HAR export from the database,
 then categorisation and autopilot. No LLMs or new dependencies for now;
 strong open-source tools are welcome; a small model for categorisation (and compliance mapping
 such as NIST CSF 2.0 or PCI) comes later, because hard-coded heuristics would put wrong labels in

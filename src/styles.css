@@ -1100,6 +1100,288 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   }
 }
 
+/* ---------------------------------------------------------------- configuration view */
+
+/* The settings cover the stage between the header and the bottom panels, so the scope map sits
+   under the categories and the command card under the options, as in the sketch. The bottom edge
+   is measured from the panels (SettingsSurface); this is the first frame's guess. */
+.stage .settings-surface {
+  position: absolute;
+  top: 58px;
+  left: 14px;
+  right: 14px;
+  bottom: 340px;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(220px, 264px) 1fr;
+  padding: 22px 26px 20px;
+  color: var(--frost);
+  --arwes-frames-bg-color: color-mix(in srgb, var(--deep) 90%, transparent);
+}
+
+.settings-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  padding-right: 22px;
+  border-right: 1px solid color-mix(in srgb, var(--azure) 28%, transparent);
+}
+
+.settings-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--white);
+}
+
+.settings-search {
+  height: 30px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--white);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--azure) 45%, transparent);
+  outline: none;
+}
+
+.settings-search::placeholder {
+  color: color-mix(in srgb, var(--sky) 60%, transparent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.settings-search:focus {
+  border-color: var(--azure);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--azure) 35%, transparent);
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-align: left;
+  color: var(--sky);
+  background: transparent;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.settings-nav button:hover {
+  color: var(--white);
+  background: color-mix(in srgb, var(--azure) 10%, transparent);
+}
+
+.settings-nav button.is-current {
+  color: var(--white);
+  background: color-mix(in srgb, var(--azure) 18%, transparent);
+  border-left-color: var(--azure);
+}
+
+.settings-count {
+  min-width: 18px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--azure);
+}
+
+.settings-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-left: 28px;
+}
+
+.settings-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.settings-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--white);
+}
+
+.settings-tag {
+  padding: 2px 8px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--mist);
+  border: 1px solid color-mix(in srgb, var(--mist) 45%, transparent);
+}
+
+.settings-desc,
+.settings-empty {
+  margin: 8px 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--frost) 82%, transparent);
+}
+
+.settings-options {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.settings-options li + li {
+  margin-top: 4px;
+}
+
+.settings-options label {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.settings-options label:hover {
+  background: color-mix(in srgb, var(--azure) 8%, transparent);
+}
+
+/* The real checkbox stays in place for the keyboard and the accessibility tree; the square drawn
+   next to it is what shows. */
+.settings-options input {
+  position: absolute;
+  z-index: 1;
+  left: 10px;
+  top: 9px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.settings-box {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border: 1px solid color-mix(in srgb, var(--azure) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+/* Checked reads at a glance: a full fill and a check mark, not a tint. */
+.settings-box::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4px;
+  height: 9px;
+  border: solid var(--deep);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+}
+
+.settings-options input:checked + .settings-box {
+  background: var(--sky);
+  border-color: var(--sky);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--azure) 60%, transparent);
+}
+
+.settings-options input:checked + .settings-box::after {
+  opacity: 1;
+}
+
+.settings-options input:focus-visible + .settings-box {
+  outline: 1px solid var(--white);
+  outline-offset: 2px;
+}
+
+.settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--white);
+}
+
+.settings-label small {
+  font-size: 11.5px;
+  color: color-mix(in srgb, var(--sky) 80%, transparent);
+}
+
+.settings-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding-top: 12px;
+}
+
+.settings-pending {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--sky) 70%, transparent);
+}
+
+.settings-pending.is-pending {
+  color: var(--alert);
+}
+
+.settings-apply {
+  min-width: 96px;
+  height: 30px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--white);
+  background: color-mix(in srgb, var(--azure) 26%, transparent);
+  border: 1px solid var(--azure);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.settings-apply:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--azure) 42%, transparent);
+}
+
+.settings-apply:disabled {
+  color: color-mix(in srgb, var(--sky) 45%, transparent);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--azure) 30%, transparent);
+  cursor: default;
+}
+
+.settings-toggle.is-on {
+  color: var(--white);
+  border-color: var(--azure);
+  background: color-mix(in srgb, var(--azure) 30%, transparent);
+}
+
 /* ---------------------------------------------------------------- responsive */
 
 @media (max-width: 1280px) {

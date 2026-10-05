@@ -53,6 +53,15 @@ for (let i = 0; i < 7; i++) {
 }
 await page.waitForTimeout(1800);
 await shot(page, 'cosmos');
+
+// The configuration view over the cosmos, Sound chosen, one change waiting for Apply.
+await page.keyboard.press(',');
+await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'visible' });
+await page.getByRole('navigation', { name: 'Setting categories' }).getByRole('button', { name: 'Autopilot', exact: true }).click();
+await page.getByRole('checkbox', { name: /Start exploring after Engage/ }).check();
+await page.waitForTimeout(900);
+await shot(page, 'settings');
+await page.keyboard.press(',');
 await page.close();
 
 // 1280x800 check.
@@ -64,6 +73,13 @@ await page.keyboard.press('v');
 await settled(page);
 await page.waitForTimeout(1500);
 await shot(page, 'cosmos-current-page-1280');
+await page.keyboard.press('v');
+await settled(page);
+await page.keyboard.press(',');
+await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'visible' });
+await page.getByRole('searchbox', { name: 'Search settings' }).fill('video');
+await page.waitForTimeout(900);
+await shot(page, 'settings-browser-1280');
 await page.close();
 
 await browser.close();

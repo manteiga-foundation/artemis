@@ -4,6 +4,7 @@ import { setState, useStore } from '../store';
 import { GraphCanvas } from './GraphCanvas';
 import { HubLabels } from './HubLabels';
 import { BrowserSurface } from './BrowserSurface';
+import { SettingsSurface } from './SettingsSurface';
 
 // The stage is the centre of the console: the cosmos / page graph or the browser surface.
 // A view switch is a dive along the camera's axis. The outgoing view rushes past the camera
@@ -38,6 +39,7 @@ export function Stage() {
   const ref = useRef<HTMLDivElement>(null);
   const transition = useStore((s) => s.viewTransition);
   const shown = useStore((s) => s.stageView);
+  const settingsOpen = useStore((s) => s.settingsOpen);
 
   useEffect(() => {
     if (!transition) return;
@@ -82,6 +84,7 @@ export function Stage() {
       <GraphCanvas />
       <HubLabels />
       {shown === 'browser' && <BrowserSurface />}
+      {settingsOpen && <SettingsSurface />}
     </div>
   );
 }

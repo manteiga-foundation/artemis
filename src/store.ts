@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { ViewId } from './views';
 import type { MachineStats, PerfStats } from './metrics';
+import { browserStorage, loadSettings, startsMuted, type Settings } from './settings';
 
 export type { ViewId } from './views';
 
@@ -68,7 +69,17 @@ export interface UIState {
   showExternal: boolean;
   /** Bumped whenever the graph's nodes change (labels follow it). */
   graphVersion: number;
+  /** The settings in effect (saved in the browser's storage, src/settings.ts). */
+  settings: Settings;
+  /** The configuration view is open over the current view (`,`). */
+  settingsOpen: boolean;
+  /** The settings as edited, until Apply; null while the configuration view is closed. */
+  settingsDraft: Settings | null;
+  settingsCategory: string;
+  settingsQuery: string;
 }
+
+const savedSettings = loadSettings(browserStorage());
 
 let state: UIState = {
   engaged: false,
@@ -76,7 +87,7 @@ let state: UIState = {
   pageUrl: null,
   canGoBack: false,
   canGoForward: false,
-  muted: false,
+  muted: startsMuted(savedSettings),
   view: 'cosmos',
   viewTransition: null,
   stageView: 'cosmos',
@@ -101,7 +112,12 @@ let state: UIState = {
   seed: 7,
   recorded: false,
   showExternal: true,
-  graphVersion: 0
+  graphVersion: 0,
+  settings: savedSettings,
+  settingsOpen: false,
+  settingsDraft: null,
+  settingsCategory: 'scope',
+  settingsQuery: ''
 };
 
 const listeners = new Set<() => void>();
