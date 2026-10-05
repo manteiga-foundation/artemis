@@ -6,6 +6,7 @@ import { useSfx } from '../sfx';
 import { hostOf } from '../target';
 import { VIEW_BY_ID } from '../views';
 import { toggleSettings } from '../settings-session';
+import { flightBar } from '../autopilot';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
 
@@ -60,6 +61,7 @@ export function Header() {
   const perf = useStore((s) => s.perf);
   const machine = useStore((s) => s.machine);
   const settingsOpen = useStore((s) => s.settingsOpen);
+  const flying = useStore((s) => s.autopilot > 0);
   const play = useSfx();
 
   const hh = String(now.getHours()).padStart(2, '0');
@@ -120,8 +122,9 @@ export function Header() {
           <Stat label="NODES" value={fmt(nodes)} />
         </div>
 
-        <div className="wave" title="Frame rate, last 60 s">
+        <div className={`wave${flying ? ' is-flying' : ''}`} title={flying ? undefined : 'Frame rate, last 60 s'}>
           <Sparkline values={perf && perf.history.length > 1 ? perf.history : [0, 0]} floor={0} />
+          {flying && <FlightBar />}
         </div>
 
         <div className={`sim-badge ${paused ? 'is-halted' : simRunning ? 'is-active' : ''}`}>
@@ -172,5 +175,32 @@ export function Header() {
         </div>
       </header>
     </Animator>
+  );
+}
+
+/**
+ * The autopilot's progress, in the frame-rate graph's box while it flies (the user's pick from four
+ * candidates rendered in place): pages visited of pages known so far, and the time left.
+ */
+function FlightBar() {
+  const progress = useStore((s) => s.autopilotProgress);
+  const bar = flightBar(progress);
+  return (
+    <div
+      className="flight-bar"
+      role="progressbar"
+      aria-label="Autopilot progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={bar.percent ?? undefined}
+      aria-valuetext={bar.valueText}
+      title={`Autopilot: ${bar.valueText}. The bar can step back when the site turns out bigger than it knew.`}
+    >
+      <span className="flight-bar-fill" style={{ width: `${bar.percent ?? 0}%` }} />
+      <span className="flight-bar-label">
+        <span className="flight-bar-full">{bar.label}</span>
+        <span className="flight-bar-short">{bar.short}</span>
+      </span>
+    </div>
   );
 }

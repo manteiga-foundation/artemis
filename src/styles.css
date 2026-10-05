@@ -536,6 +536,61 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   width: 100%;
   height: 100%;
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--azure) 80%, transparent));
+  transition: opacity 0.3s ease-out;
+}
+
+/* While the autopilot flies, the frame-rate graph's box shows its progress (Header.tsx FlightBar). */
+.wave {
+  position: relative;
+  /* The flight bar picks its label by the room it has (1280 wide leaves the box at its minimum). */
+  container-type: inline-size;
+}
+
+.wave.is-flying .sparkline {
+  opacity: 0.3;
+}
+
+.flight-bar {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--alert) 55%, transparent);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+.flight-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--alert) 45%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--alert) 70%, transparent);
+  transition: width 0.5s ease-out;
+}
+
+.flight-bar-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 600 9px var(--mono);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--white);
+}
+
+.flight-bar-short {
+  display: none;
+}
+
+@container (max-width: 140px) {
+  .flight-bar-full {
+    display: none;
+  }
+
+  .flight-bar-short {
+    display: inline;
+  }
 }
 
 .sim-badge {

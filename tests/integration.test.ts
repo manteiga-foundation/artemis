@@ -439,6 +439,75 @@ test('the configuration view (the sketch): opens from the header or with ",", se
   }
 }, 40000);
 
+test('the autopilot\'s progress lives in the top bar: the frame-rate graph\'s box becomes the flight bar while it flies, in both views and with the panels folded', async () => {
+  const { page, errors } = await engaged();
+  try {
+    const bar = page.locator('.hud-header').getByRole('progressbar', { name: 'Autopilot progress' });
+    const sparkOpacity = () => page.evaluate(() => Number(getComputedStyle(document.querySelector('.wave .sparkline')!).opacity));
+    expect(await bar.count()).toBe(0);
+    const before = await sparkOpacity();
+    await page.keyboard.press('d');
+    await bar.waitFor({ state: 'visible', timeout: 3000 });
+    // In the graph's box, starting (no figures yet: no fill, no value), the graph dimmed behind it.
+    const [b, w] = [(await bar.boundingBox())!, (await page.locator('.wave').boundingBox())!];
+    for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(b[k] - w[k])).toBeLessThanOrEqual(1);
+    expect(await bar.innerText()).toBe('AP · STARTING');
+    expect(await bar.getAttribute('aria-valuenow')).toBeNull();
+    await page.waitForTimeout(400);
+    expect(await sparkOpacity()).toBeLessThan(before);
+    // The panels folded (C): the header and the bar stay.
+    await page.keyboard.press('c');
+    await page.waitForTimeout(300);
+    expect(await bar.isVisible()).toBe(true);
+    await page.keyboard.press('c');
+    // The Cosmos: still there.
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', null, { timeout: 4000 });
+    expect(await bar.isVisible()).toBe(true);
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "browser" && window.__artemis().viewTransition === null', null, { timeout: 4000 });
+    // Off (D through regular, max, off): gone, the graph back.
+    for (let i = 0; i < 3; i++) await page.keyboard.press('d');
+    await page.waitForFunction('window.__artemis().autopilot === 0');
+    expect(await bar.count()).toBe(0);
+    await page.waitForTimeout(400);
+    expect(await sparkOpacity()).toBeCloseTo(before, 2);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+  // At 1280 wide the graph's box is at its narrowest: the longest label still fits, and the header
+  // does not overflow for it.
+  const narrow = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const small = await narrow.newPage();
+  try {
+    await small.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
+    await small.getByRole('textbox', { name: 'Web App' }).fill('example.com');
+    await small.getByRole('button', { name: 'Engage', exact: true }).click();
+    await visible(small, 'View (V)');
+    await small.keyboard.press('d');
+    await small.waitForSelector('.flight-bar');
+    const fit = await small.evaluate(() => {
+      // The longest figures the bar can be asked to show; whichever label the room allows is measured.
+      document.querySelector('.flight-bar-full')!.textContent = 'AP 40/340 · 1 H 23 MIN';
+      document.querySelector('.flight-bar-short')!.textContent = '40/340';
+      const shown = [...document.querySelectorAll<HTMLElement>('.flight-bar-full, .flight-bar-short')].find((e) => getComputedStyle(e).display !== 'none')!;
+      const header = document.querySelector<HTMLElement>('.hud-header')!;
+      return {
+        label: Math.ceil(shown.getBoundingClientRect().width),
+        bar: document.querySelector<HTMLElement>('.flight-bar')!.clientWidth,
+        overflow: header.scrollWidth - header.clientWidth,
+        title: document.querySelector('.flight-bar')!.getAttribute('title')
+      };
+    });
+    expect(fit.label).toBeLessThanOrEqual(fit.bar - 8);
+    expect(fit.overflow).toBeLessThanOrEqual(0);
+    expect(fit.title).toContain('Autopilot:');
+  } finally {
+    await narrow.close();
+  }
+}, 40000);
+
 test('while the autopilot is on, a glow runs around the edges of the screen, breathing faster with the speed; it never takes a click, stays in the Cosmos and goes when the flight stops', async () => {
   const glow = (page: Page) =>
     page.evaluate(() => {

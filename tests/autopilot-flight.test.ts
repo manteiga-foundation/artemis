@@ -108,10 +108,21 @@ describe('the autopilot in the owned browser', () => {
       await engage(c, `${siteUrl}/`);
       const page = await sitePage(shell, siteUrl);
       await page.getByRole('heading', { name: 'Home' }).waitFor({ timeout: 10000 });
+      // The top bar's flight bar, read through the flight.
+      await c.evaluate(`window.__bars = []; setInterval(() => {
+        const b = document.querySelector('.hud-header [role="progressbar"][aria-label="Autopilot progress"]');
+        const r = b ? b.innerText + ' @' + b.getAttribute('aria-valuenow') : 'none';
+        if (window.__bars[window.__bars.length - 1] !== r) window.__bars.push(r);
+      }, 20)`);
       for (let i = 0; i < 3; i++) await c.keyboard.press('d');
       expect((await stateOf(c)).autopilot).toBe(3);
       await statusIs(c, 'Autopilot: the site is covered', 60000);
       expect(await stateOf(c)).toMatchObject({ autopilot: 0, status: 'Autopilot: the site is covered. 10 pages visited, nothing left to open.' });
+      // It showed the real figures (pages visited of pages known, a value), and went with the flight.
+      await c.waitForFunction('window.__bars[window.__bars.length - 1] === "none"', null, { timeout: 2000 });
+      const bars = (await c.evaluate('window.__bars')) as string[];
+      expect(bars.some((r) => /^AP [1-9]\d*\/\d+( · .+)? @\d+$/.test(r))).toBe(true);
+      expect(bars.at(-1)).toBe('none');
       expect((await shell.state()).autopilot.speed).toBe(0);
 
       // Never signed out, never more than three products, never a page twice by following a link.

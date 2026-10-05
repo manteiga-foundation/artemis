@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 // The command card imports the graph controller, which needs a window: the harness loads it under a fake one.
 import './harness';
-import { autopilotFromShell, etaText, stepAutopilot } from '../src/autopilot';
+import { autopilotFromShell, etaText, flightBar, stepAutopilot } from '../src/autopilot';
 import { commandByKey } from '../src/commands';
 import { YokeIcon } from '../src/icons';
 import { getState, setState } from '../src/store';
@@ -67,6 +67,20 @@ describe('the autopilot control', () => {
     setState({ autopilot: 0, status: 'Autopilot disengaged: you took the controls.' });
     autopilotFromShell({ speed: 3, event: 'note', text: 'closed a popup the site opened' });
     expect([getState().autopilot, getState().status]).toEqual([0, 'Autopilot disengaged: you took the controls.']);
+  });
+
+  test('the flight bar in the top bar: pages visited of pages known, short time left; starting until the first report', () => {
+    expect(flightBar({ visited: 12, pending: 28, etaMs: 180_000 })).toEqual({
+      percent: 30,
+      label: 'AP 12/40 · 3 MIN',
+      short: '12/40',
+      valueText: '12 of 40 pages known so far, about 3 min left'
+    });
+    expect(flightBar(null)).toEqual({ percent: null, label: 'AP · STARTING', short: 'AP', valueText: 'starting' });
+    expect(flightBar({ visited: 0, pending: 0, etaMs: 0 })).toEqual({ percent: null, label: 'AP · STARTING', short: 'AP', valueText: 'starting' });
+    expect(flightBar({ visited: 1, pending: 2, etaMs: 20_000 })).toMatchObject({ percent: 33, label: 'AP 1/3 · <1 MIN' });
+    expect(flightBar({ visited: 7, pending: 0, etaMs: 0 })).toMatchObject({ percent: 100, label: 'AP 7/7' });
+    expect(flightBar({ visited: 40, pending: 300, etaMs: 4_980_000 })).toMatchObject({ percent: 12, label: 'AP 40/340 · 1 H 23 MIN' });
   });
 
   test('time left reads plainly', () => {

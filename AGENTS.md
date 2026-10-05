@@ -164,7 +164,7 @@ browser it flies the site branch by branch at slow, regular or max, never repeat
 has, two or three pages of each kind, never signing out, its clicks recorded as the autopilot's,
 disengaged by the operator's hand on the site; the site's dialogs are the operator's (Electron's
 native box; Playwright no longer answers them), while flying it answers them (OK, Leave, Cancel),
-moves on and closes the popups it caused; a glow breathes around the window's edges while it flies.
+moves on and closes the popups it caused; a glow breathes around the window's edges while it flies, and its progress fills the top bar's graph box.
 
 Next (user's order): wire the configuration view's options as each feature arrives (recording
 defaults read by `bun run artemis`, Scope subdomains, export formats); DOM session replay (spike first), a policy-aware HAR export from the database,

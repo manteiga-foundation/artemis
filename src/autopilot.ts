@@ -39,6 +39,31 @@ export function etaText(ms: number): string {
   return `about ${Math.floor(minutes / 60)} h ${minutes % 60} min left`;
 }
 
+const etaShort = (ms: number): string => {
+  if (ms <= 0) return '';
+  if (ms < 60_000) return '<1 MIN';
+  const minutes = Math.round(ms / 60_000);
+  return minutes < 60 ? `${minutes} MIN` : `${Math.floor(minutes / 60)} H ${minutes % 60} MIN`;
+};
+
+/**
+ * The flight bar in the top bar: pages visited out of the pages known so far (it can step back
+ * when the site turns out bigger), with the time left from the measured pace. Until the first
+ * report it is starting, with no fill.
+ */
+export function flightBar(p: { visited: number; pending: number; etaMs: number } | null): { percent: number | null; label: string; short: string; valueText: string } {
+  const known = p ? p.visited + p.pending : 0;
+  if (!p || known === 0) return { percent: null, label: 'AP · STARTING', short: 'AP', valueText: 'starting' };
+  const eta = etaShort(p.etaMs);
+  return {
+    percent: Math.round((p.visited / known) * 100),
+    label: `AP ${p.visited}/${known}${eta ? ` · ${eta}` : ''}`,
+    // When the top bar is narrow (1280 wide): the count alone; the rest is in the tooltip.
+    short: `${p.visited}/${known}`,
+    valueText: `${p.visited} of ${known} pages known so far, ${etaText(p.etaMs)}`
+  };
+}
+
 /** D: the next speed, told to the owned browser when there is one. */
 export function stepAutopilot(shell: { autopilot(speed: number): void } | null = shellBridge()): Speed {
   const prev = getState().autopilot;
