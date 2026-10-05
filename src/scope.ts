@@ -9,3 +9,6 @@ export const inScope = (host: string, scopeHost: string): boolean => {
   const h = host.toLowerCase();
   return h === scopeHost || h.endsWith(`.${scopeHost}`);
 };
+
+/** How a page is told apart: its address without query or fragment (the cosmos and the autopilot agree). */
+export const pageKeyOf = (u: URL): string => `${u.origin}${u.pathname}`;
