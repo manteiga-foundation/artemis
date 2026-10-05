@@ -19,12 +19,14 @@ export const speedLabel = (s: Speed): string => (s === 0 ? 'off' : SPEEDS[s].lab
 /** What the autopilot reports from the owned browser (shell/main.ts relays it). */
 export interface AutopilotStatus {
   speed: Speed;
-  event: 'progress' | 'done' | 'disengaged' | 'stuck';
+  event: 'progress' | 'done' | 'disengaged' | 'stuck' | 'note';
   visited?: number;
   pending?: number;
   etaMs?: number;
   url?: string;
   reason?: string;
+  /** What it did for the site (a dialog answered, a popup closed): a note on the console. */
+  text?: string;
 }
 
 const say = (status: string, statusTone: UIState['statusTone'] = 'info') => setState((s) => ({ status, statusTone, statusId: s.statusId + 1 }));
@@ -57,6 +59,10 @@ export function autopilotFromShell(r: AutopilotStatus): void {
   if (r.event === 'disengaged') {
     setState({ autopilot: 0 });
     say(r.reason ? `Autopilot disengaged: ${r.reason}` : 'Autopilot disengaged: you took the controls.', 'warn');
+    return;
+  }
+  if (r.event === 'note') {
+    if (getState().autopilot !== 0 && r.text) say(`Autopilot: ${r.text}`);
     return;
   }
   const progress = { visited: r.visited ?? 0, pending: r.pending ?? 0, etaMs: r.etaMs ?? 0 };

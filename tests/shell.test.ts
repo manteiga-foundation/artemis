@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { Page } from 'playwright';
 import { launchShell, type Shell } from '../server/shell';
 import { startVite, type ViteServer } from './vite';
+import { nativeDialogBoxes } from './native-dialogs';
 
 // The owned browser is an Electron shell: the website runs as a genuine, unmodified top-level
 // Chromium page (a native view), and the unchanged console sits over it in a transparent window.
@@ -256,6 +257,28 @@ describe('the owned browser is an Electron shell', () => {
       await c.waitForFunction('window.__phases.length > 1 && window.__phases[window.__phases.length - 1] === "done"', null, { timeout: 10000 });
       expect((await phases()).slice(1)).toEqual(['start', 'commit', 'dom', 'done']);
       expect(await c.evaluate('window.__sawBar')).toBe(true);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
+  test('the site\'s dialogs are the operator\'s: Artemis never answers them, a confirm waits for a person in the native box', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    const pid = shell.app.process().pid!;
+    try {
+      await engage(shell.console, `${siteUrl}/tabs/next`);
+      const page = await sitePage(shell, `${siteUrl}/tabs/next`);
+      await page.getByRole('heading', { name: 'Next' }).waitFor({ timeout: 10000 });
+      expect(nativeDialogBoxes(pid)).toBe(0);
+      await page.evaluate(`setTimeout(() => { window.__answer = String(confirm('Delete this record?')); }, 50)`);
+      await Bun.sleep(1000);
+      // Still waiting for a person: Playwright used to answer it at once (Cancel), invisibly, and
+      // leave Electron's native box on screen blocking every click and key.
+      const answer = await Promise.race([page.evaluate('window.__answer'), Bun.sleep(1500).then(() => 'still waiting')]);
+      expect(answer).toBe('still waiting');
+      expect(nativeDialogBoxes(pid)).toBe(1);
+      // The console is still Artemis's (the main process and the console answer).
+      expect(await shell.console.evaluate('window.__artemis().view')).toBe('browser');
     } finally {
       await shell.close();
     }

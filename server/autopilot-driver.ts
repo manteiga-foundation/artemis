@@ -37,6 +37,10 @@ const SCROLL_STEP = `(() => {
 })()`;
 
 export interface Autopilot {
+  /** Whether it is flying now (a speed is set): the site's dialogs are then its to answer. */
+  flying(): boolean;
+  /** It answered a dialog of the site's (the note says how): it moves on from that page at once. */
+  answered(note: string): void;
   stop(): Promise<void>;
 }
 
@@ -54,11 +58,15 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
     ) as Promise<T>;
   const report = (status: Record<string, unknown>) => shell('report', status).catch(() => {});
   const stopped = () => stopping || speed === 0;
+  // The page it is on talked back (it answered a dialog there): it does not stay. Electron's native
+  // box for that dialog closes only when the page navigates.
+  let talkedBack = false;
 
   const driver: FlightDriver = {
     url: async () => site.url(),
     links: async () => (await site.evaluate(LINKS)) as Link[],
     async follow(link) {
+      talkedBack = false;
       const before = keyOf(site.url());
       const i = (await site.evaluate(visibleLinkIndex(link.href)).catch(() => -1)) as number;
       let clicked = false;
@@ -79,18 +87,21 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
       return keyOf(site.url()) !== before;
     },
     async back() {
+      talkedBack = false;
       await site.goBack({ waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
     },
     async goTo(url) {
+      talkedBack = false;
       await site.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT });
     },
     async dwell() {
       const started = Date.now();
+      if (talkedBack) return;
       if (speed === 3) {
         await site.waitForLoadState('load', { timeout: 5000 }).catch(() => {});
         return;
       }
-      while (!stopped()) {
+      while (!stopped() && !talkedBack) {
         const stay = speed === 1 ? DWELL_MS[1] : speed === 2 ? DWELL_MS[2] : 0;
         if (Date.now() - started >= stay) break;
         if (speed === 1) await site.evaluate(SCROLL_STEP).catch(() => {});
@@ -112,6 +123,16 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
     speed = 0;
     await shell('land').catch(() => {});
     await report({ speed: 0, ...status });
+    await settle();
+  };
+  /**
+   * Landed on a page that talked back with no navigation since: its native box is still up. A
+   * reload closes it, and whatever the site says then is asked of the operator, in a live box.
+   */
+  const settle = async () => {
+    if (!talkedBack) return;
+    talkedBack = false;
+    await site.reload({ waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
   };
 
   const takeOff = async () => {
@@ -140,12 +161,24 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
         onProgress: (p) => void report({ speed, event: 'progress', ...p })
       });
       if (stopping) return;
+      if (result.ended === 'stopped') await settle();
       if (result.ended === 'done') await land({ event: 'done', visited: result.visited.length, pending: 0, etaMs: 0 });
       else if (result.ended === 'stuck') await land({ event: 'stuck', reason: 'too many links in a row went nowhere', visited: result.visited.length });
     } catch (e) {
       if (!stopping) await land({ event: 'stuck', reason: `the site stopped answering (${String((e as Error).message ?? e).split('\n')[0]})` });
     }
   };
+
+  // Popups the site opens while it flies are its doing: they would cover the console and take the
+  // focus, and it cannot use them, so it closes them and says so. The operator's popups (a sign-in
+  // window) are never touched.
+  const onPopup = (popup: Page) => {
+    if (stopped()) return;
+    const url = popup.url();
+    void popup.close().catch(() => {});
+    void report({ speed, event: 'note', text: `closed a popup the site opened${url && url !== 'about:blank' ? ` (${url})` : ''}` });
+  };
+  site.on('popup', onPopup);
 
   const timer = setInterval(() => {
     if (stopping) return;
@@ -158,9 +191,15 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
   }, o.pollMs ?? 200);
 
   return {
+    flying: () => !stopped(),
+    answered(text) {
+      talkedBack = true;
+      void report({ speed, event: 'note', text });
+    },
     async stop() {
       stopping = true;
       clearInterval(timer);
+      site.off('popup', onPopup);
       if (flight) await Promise.race([flight.catch(() => {}), Bun.sleep(2000)]);
     }
   };

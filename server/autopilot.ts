@@ -100,6 +100,13 @@ export function templateKey(href: string): string {
     .join('/')}`;
 }
 
+/**
+ * How the autopilot answers a dialog the site opens while it flies: OK to an alert, Leave to a
+ * leave-this-page question, Cancel to anything that asks to confirm or to type (it never deletes,
+ * never signs out, never submits). The operator's own dialogs are never answered for them.
+ */
+export const dialogAnswer = (type: string): 'accept' | 'dismiss' => (type === 'alert' || type === 'beforeunload' ? 'accept' : 'dismiss');
+
 export function linkVerdict(link: Link, pageUrl: string, scopeHost: string): Verdict {
   const u = parse(link.href);
   if (!u || !/^https?:$/.test(u.protocol)) return 'not a page';

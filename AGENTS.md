@@ -107,6 +107,7 @@ src/settings.ts         settings: categories, defaults, search  src/settings-ses
 src/autopilot.ts        the D control, reports from the shell  server/autopilot.ts  flight plan (pure)
 src/page-load.ts        the address field's loading bar (phases, progress)
 server/autopilot-driver.ts  flies the site (Playwright)     shell/autopilot-state.ts  speed, actor, disengage
+server/site-dialogs.ts  the site's dialogs: operator's, or answered while flying
 src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/           /debug page, synth presets
 shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
 server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
@@ -161,7 +162,9 @@ stay; only the sound default is live, the rest interface with emulated options);
 (D in the Browser view, a yoke with three speed squares; Highlight removed, DOM on O): in the owned
 browser it flies the site branch by branch at slow, regular or max, never repeating what the cosmos
 has, two or three pages of each kind, never signing out, its clicks recorded as the autopilot's,
-disengaged by the operator's hand on the site.
+disengaged by the operator's hand on the site; the site's dialogs are the operator's (Electron's
+native box; Playwright no longer answers them), while flying it answers them (OK, Leave, Cancel),
+moves on and closes the popups it caused.
 
 Next (user's order): wire the configuration view's options as each feature arrives (recording
 defaults read by `bun run artemis`, Scope subdomains, export formats); DOM session replay (spike first), a policy-aware HAR export from the database,

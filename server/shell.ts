@@ -9,6 +9,7 @@ import { startMachineFeed } from './machine';
 import { startRecorder, type Recorder } from './recorder';
 import { startSiteFeed } from './site-feed';
 import { startAutopilot } from './autopilot-driver';
+import { watchSiteDialogs } from './site-dialogs';
 import { addArtifacts } from './session-store';
 import { recoverRecordings, writeManifest } from './recordings';
 
@@ -141,6 +142,9 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   // The autopilot flies the site when the console sets a speed (D in the Browser view).
   const autopilot = sitePage ? startAutopilot({ app, site: sitePage, recorder }) : null;
   app.on('close', () => void autopilot?.stop());
+  // The site's dialogs: the operator's are theirs (the native box); the autopilot answers its own.
+  const stopDialogs = watchSiteDialogs({ app, flying: () => autopilot?.flying() ?? false, onAnswered: (text) => autopilot?.answered(text) });
+  app.on('close', stopDialogs);
   // The console's cosmos grows from the recording as it is written.
   const stopSiteFeed = recorder ? startSiteFeed(consolePage, recorder) : () => {};
   app.on('close', stopSiteFeed);

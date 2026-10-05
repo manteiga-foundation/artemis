@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { fly, linkVerdict, templateKey, type FlightDriver, type FlightProgress, type Link } from '../server/autopilot';
+import { dialogAnswer, fly, linkVerdict, templateKey, type FlightDriver, type FlightProgress, type Link } from '../server/autopilot';
 import { applySiteEvents, emptySiteModel } from '../src/site-model';
 import type { SiteEvent } from '../src/site-events';
 
@@ -254,5 +254,9 @@ describe('the rules the plan follows', () => {
     expect(v(at('/x'), 'Unsubscribe')).toBe('unsafe');
     expect(v(at('/manual.zip'))).toBe('not a page');
     expect(v('https://elsewhere.example/')).toBe('outside the scope');
+  });
+
+  test('the site\'s dialogs while it flies: OK to an alert, Leave to leave-this-page, Cancel to a confirm or a prompt (it never deletes)', () => {
+    expect(['alert', 'beforeunload', 'confirm', 'prompt', 'something-new'].map(dialogAnswer)).toEqual(['accept', 'accept', 'dismiss', 'dismiss', 'dismiss']);
   });
 });

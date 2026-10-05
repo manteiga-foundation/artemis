@@ -60,6 +60,15 @@ describe('the autopilot control', () => {
     expect([getState().autopilot, getState().status]).toEqual([0, 'Autopilot disengaged: you took the controls.']);
   });
 
+  test('what the autopilot did for the site (a dialog answered, a popup closed) shows on the console; after the flight was turned off it does not', () => {
+    setState({ engaged: true, view: 'browser', autopilot: 3 });
+    autopilotFromShell({ speed: 3, event: 'note', text: 'the site\'s confirm "Delete this record?" answered Cancel' });
+    expect([getState().autopilot, getState().status]).toEqual([3, 'Autopilot: the site\'s confirm "Delete this record?" answered Cancel']);
+    setState({ autopilot: 0, status: 'Autopilot disengaged: you took the controls.' });
+    autopilotFromShell({ speed: 3, event: 'note', text: 'closed a popup the site opened' });
+    expect([getState().autopilot, getState().status]).toEqual([0, 'Autopilot disengaged: you took the controls.']);
+  });
+
   test('time left reads plainly', () => {
     expect(etaText(0)).toBe('nothing left');
     expect(etaText(30_000)).toBe('under a minute left');

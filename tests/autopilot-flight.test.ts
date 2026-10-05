@@ -7,6 +7,7 @@ import type { Page } from 'playwright';
 import { launchShell, type Shell } from '../server/shell';
 import { applySiteEvents, emptySiteModel } from '../src/site-model';
 import { startVite, type ViteServer } from './vite';
+import { nativeDialogBoxes } from './native-dialogs';
 
 // The autopilot flying for real in the owned browser (the user's notes): D steps the speed; at max
 // it covers the whole site branch by branch, each page once, two or three of each kind, never
@@ -27,15 +28,32 @@ const PAGES: Record<string, string> = {
   '/logout': '<h1>Signed out</h1>',
   // A tour with one long page, for the slow speed's scrolling.
   '/tour': '<h1>Tour</h1><a href="/tour/long">The long page</a>',
-  '/tour/long': '<h1>The long page</h1><div style="height:4000px">Read me slowly.</div>'
+  '/tour/long': '<h1>The long page</h1><div style="height:4000px">Read me slowly.</div>',
+  // A site that talks back: an alert, a confirm (its answer reported to the server) and a popup,
+  // each as soon as its page loads.
+  '/d/': '<h1>Talking site</h1><a href="/d/alert">Alert</a> <a href="/d/confirm">Confirm</a> <a href="/d/popup">Popup</a> <a href="/d/plain">Plain</a>',
+  '/d/alert': '<h1>Alert page</h1><script>alert("Welcome to the alert page")</script>',
+  '/d/confirm': '<h1>Confirm page</h1><script>fetch("/d/answer?confirm=" + confirm("Delete this record?"))</script>',
+  '/d/popup': '<h1>Popup page</h1><script>window.open("/d/promo", "promo", "width=320,height=240")</script>',
+  '/d/promo': '<h1>Promo</h1>',
+  '/d/plain': '<h1>Plain page</h1>',
+  '/d/answer': 'ok',
+  // Counts its showings in the tab (a Back may restore it from a cache without asking the server)
+  // and alerts on the second: the autopilot's return from its one link.
+  '/again/':
+    '<h1>Again</h1><a href="/again/leaf">Leaf</a><script>function shown() { const n = Number(sessionStorage.n || 0) + 1; sessionStorage.n = n; if (n === 2) alert("Back again"); } addEventListener("pageshow", (e) => e.persisted && shown()); shown();</script>',
+  '/again/leaf': '<h1>Leaf</h1>'
 };
+const answers: string[] = [];
 
 const site = Bun.serve({
   hostname: 'localhost',
   port: 0,
   fetch(req) {
-    const path = new URL(req.url).pathname;
+    const url = new URL(req.url);
+    const path = url.pathname;
     hits.set(path, (hits.get(path) ?? 0) + 1);
+    if (path === '/d/answer') answers.push(url.searchParams.get('confirm') ?? '');
     const body = PAGES[path] ?? (/^\/product\/\d+$/.test(path) ? `${nav}<h1>Product ${path.split('/').pop()}</h1>` : null);
     if (body === null) return new Response('not found', { status: 404 });
     return new Response(`<!doctype html><title>Site ${path}</title><body style="font:16px sans-serif;margin:40px">${body}</body>`, { headers: { 'content-type': 'text/html' } });
@@ -131,6 +149,69 @@ describe('the autopilot in the owned browser', () => {
       await shell.close();
     }
   }, 90000);
+
+  test('a site that opens an alert, a confirm and a popup: it answers them (OK, Cancel), closes the popup, says so, and flies on; nothing is left on screen', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    const pid = shell.app.process().pid!;
+    try {
+      const c = shell.console;
+      await engage(c, `${siteUrl}/d/`);
+      const page = await sitePage(shell, `${siteUrl}/d/`);
+      await page.getByRole('heading', { name: 'Talking site' }).waitFor({ timeout: 10000 });
+      await c.evaluate(`window.__said = []; setInterval(() => { const s = window.__artemis().status; if (window.__said[window.__said.length - 1] !== s) window.__said.push(s); }, 20)`);
+      for (let i = 0; i < 3; i++) await c.keyboard.press('d');
+      await c.waitForFunction('window.__artemis().status.includes("the site is covered")', null, { timeout: 45000 });
+      for (const p of ['/d/alert', '/d/confirm', '/d/popup', '/d/plain']) expect(hits.get(p) ?? 0).toBeGreaterThan(0);
+      expect(answers).toEqual(['false']);
+      // The popup is closed, Electron's native boxes are gone: Artemis takes clicks and keys.
+      for (let i = 0; i < 20 && shell.app.windows().length > 2; i++) await Bun.sleep(100);
+      expect(shell.app.windows().map((w) => new URL(w.url()).pathname)).not.toContain('/d/promo');
+      expect(nativeDialogBoxes(pid)).toBe(0);
+      const said = (await c.evaluate('window.__said')) as string[];
+      expect(said.some((s) => s.includes('alert "Welcome to the alert page" answered OK'))).toBe(true);
+      expect(said.some((s) => s.includes('confirm "Delete this record?" answered Cancel'))).toBe(true);
+      expect(said.some((s) => s.includes('closed a popup the site opened'))).toBe(true);
+    } finally {
+      await shell.close();
+    }
+  }, 90000);
+
+  test('a page that talks back is not lingered on: right after it answers, it moves on, and no native box is left to block the operator', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    const pid = shell.app.process().pid!;
+    try {
+      const c = shell.console;
+      await engage(c, `${siteUrl}/d/`);
+      const page = await sitePage(shell, `${siteUrl}/d/`);
+      await page.getByRole('heading', { name: 'Talking site' }).waitFor({ timeout: 10000 });
+      // Regular: about 3 s on each page; the first link is the alert page.
+      for (let i = 0; i < 2; i++) await c.keyboard.press('d');
+      await c.waitForFunction('window.__artemis().status.includes("answered OK")', null, { timeout: 15000 });
+      await page.waitForURL((u) => u.pathname !== '/d/alert', { timeout: 1500 });
+      expect(nativeDialogBoxes(pid)).toBe(0);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
+  test('landing right after a page talked back: that page is loaded again, which closes the box it left', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    const pid = shell.app.process().pid!;
+    try {
+      const c = shell.console;
+      await engage(c, `${siteUrl}/again/`);
+      const page = await sitePage(shell, `${siteUrl}/again/`);
+      await page.getByRole('heading', { name: 'Again' }).waitFor({ timeout: 10000 });
+      for (let i = 0; i < 3; i++) await c.keyboard.press('d');
+      await c.waitForFunction('window.__artemis().status.includes("the site is covered")', null, { timeout: 30000 });
+      expect((await c.evaluate('window.__artemis().status')) as string).toContain('1 page visited');
+      // Shown at Engage, on the return from its one link (the alert it answered), then loaded again.
+      await page.waitForFunction('sessionStorage.n === "3"', null, { timeout: 5000 });
+      expect(nativeDialogBoxes(pid)).toBe(0);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
 
   test('the slow speed scrolls down the page for a person to glance at', async () => {
     const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
