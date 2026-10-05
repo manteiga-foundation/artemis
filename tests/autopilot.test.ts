@@ -54,6 +54,12 @@ describe('the autopilot control', () => {
     expect(getState().status).toBe('Autopilot: the site is covered. 17 pages visited, nothing left to open.');
   });
 
+  test('a late progress report after the flight was turned off changes nothing', () => {
+    setState({ engaged: true, view: 'browser', autopilot: 0, status: 'Autopilot disengaged: you took the controls.' });
+    autopilotFromShell({ speed: 1, event: 'progress', visited: 1, pending: 3, etaMs: 30_000 });
+    expect([getState().autopilot, getState().status]).toEqual([0, 'Autopilot disengaged: you took the controls.']);
+  });
+
   test('time left reads plainly', () => {
     expect(etaText(0)).toBe('nothing left');
     expect(etaText(30_000)).toBe('under a minute left');

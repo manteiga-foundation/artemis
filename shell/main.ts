@@ -13,6 +13,7 @@
 // recorded: quitting goes through Artemis so the recording is saved whole).
 import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain } from 'electron';
 import path from 'node:path';
+import { actorAt, createAutopilot, onSiteInput, setActing, setSpeed } from './autopilot-state';
 
 const APP_URL = process.env.ARTEMIS_APP_URL ?? 'http://127.0.0.1:5173';
 // Where the bundled preloads are (the bundler bakes the source folder into __dirname, so the
@@ -39,7 +40,9 @@ const state = {
   layout: null as Layout | null,
   siteUrl: '',
   /** The operator closed the window or quit; Artemis saves the session, then lets the shell go. */
-  quitRequested: false
+  quitRequested: false,
+  /** The autopilot: the speed the console set and when it is acting (server/autopilot-driver.ts flies). */
+  autopilot: createAutopilot()
 };
 (globalThis as unknown as { __artemisShell: typeof state }).__artemisShell = state;
 
@@ -173,9 +176,27 @@ app.whenReady().then(() => {
   ipcMain.on('site-hotkey', (_e, key: string) => {
     if (typeof key === 'string' && (key.length === 1 || HOTKEY_NAMED.has(key))) toConsole('site-key', key);
   });
-  ipcMain.on('site-action', (e, action: unknown) => {
-    if (e.sender === site.webContents && actions.length < MAX_QUEUED_ACTIONS) actions.push(action);
+  ipcMain.on('site-action', (e, action: { t?: number } | null) => {
+    if (e.sender !== site.webContents || !action || actions.length >= MAX_QUEUED_ACTIONS) return;
+    // The autopilot's own clicks are its own; everything else is the operator's.
+    actions.push({ ...action, actor: actorAt(state.autopilot, Number(action.t) || Date.now()) });
   });
+
+  // The autopilot. The console sets the speed; the driver on the Bun side reads it, marks when it
+  // acts, and reports the flight, which goes on to the console.
+  ipcMain.on('autopilot', (_e, speed: number) => setSpeed(state.autopilot, Number(speed)));
+  // The operator touching the site while it flies takes the controls back.
+  ipcMain.on('site-input', (e, input: { t?: number } | null) => {
+    if (e.sender !== site.webContents) return;
+    if (onSiteInput(state.autopilot, Number(input?.t) || Date.now())) toConsole('autopilot-status', { speed: 0, event: 'disengaged' });
+  });
+  (globalThis as unknown as { __artemisAutopilot: unknown }).__artemisAutopilot = {
+    speed: () => state.autopilot.speed,
+    acting: (on: boolean) => setActing(state.autopilot, on, Date.now()),
+    /** The flight ended (the site covered, stuck): off. */
+    land: () => setSpeed(state.autopilot, 0),
+    report: (status: unknown) => toConsole('autopilot-status', status)
+  };
 
   // The right-click menu a browser has.
   site.webContents.on('context-menu', (_e, p) => {

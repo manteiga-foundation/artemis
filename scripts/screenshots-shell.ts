@@ -22,12 +22,14 @@ try {
   await shell.console.getByRole('button', { name: 'Engage', exact: true }).click();
   await shell.console.waitForFunction('window.__artemis().engaged === true && window.__artemis().pageUrl !== null', null, { timeout: 20000 });
 
-  for (const [w, h] of [[1440, 900], [1280, 800]] as const) {
-    await shell.app.evaluate(({ BaseWindow }, size) => {
+  const resize = (w: number, h: number) =>
+    shell.app.evaluate(({ BaseWindow }, size) => {
       const win = BaseWindow.getAllWindows().find((x) => x.contentView.children.length > 0)!;
       win.setContentSize(size.w, size.h);
     }, { w, h });
-    await Bun.sleep(2500); // layout, HUD animation, site repaint
+
+  /** The frame as the reviewer sees it: the site view under the console window. */
+  const capture = async (name: string) => {
     const caps = await shell.app.evaluate(async ({ BaseWindow, BrowserWindow }) => {
       const win = BaseWindow.getAllWindows().find((x) => !(x instanceof BrowserWindow))!;
       const view = win.contentView.children[0] as unknown as { webContents: Electron.WebContents };
@@ -42,11 +44,30 @@ try {
       `<body style="margin:0;background:#02061a"><img src="data:image/png;base64,${caps.site}" style="position:absolute;left:${l.x}px;top:${l.y}px;width:${l.w}px;height:${l.h}px"><img src="data:image/png;base64,${caps.ui}" style="position:absolute;inset:0;width:100%;height:100%"></body>`
     );
     await page.waitForTimeout(200);
-    const file = join(outDir, `shell-browser-${w}.png`);
+    const file = join(outDir, `${name}.png`);
     await page.screenshot({ path: file });
     await page.close();
     console.log(file);
+  };
+
+  for (const [w, h] of [[1440, 900], [1280, 800]] as const) {
+    await resize(w, h);
+    await Bun.sleep(2500); // layout, HUD animation, site repaint
+    await capture(`shell-browser-${w}`);
   }
+
+  // The autopilot in flight at the slow speed (D once), a few seconds into a page's scroll.
+  await resize(1440, 900);
+  await Bun.sleep(1500);
+  await shell.console.keyboard.press('d');
+  const flying = await shell.console
+    .waitForFunction("window.__artemis().status.startsWith('Autopilot: slow ·')", null, { timeout: 40000 })
+    .then(() => true)
+    .catch(() => false);
+  if (flying) {
+    await Bun.sleep(3500);
+    await capture('shell-autopilot-1440');
+  } else console.log('autopilot frame skipped: no page in scope to fly to on this site');
 } finally {
   await composer.close();
   await shell.close();

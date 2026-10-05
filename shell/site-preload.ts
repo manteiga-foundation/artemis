@@ -163,3 +163,16 @@ addEventListener(
   true
 );
 addEventListener('pagehide', settleAll, true);
+
+// ---------------------------------------------------------------- the operator's hands, for the autopilot
+
+// A click, the wheel, scrolling keys or typing in the site while the autopilot flies means the
+// operator took the controls (shell/autopilot-state.ts decides; the autopilot's own input is not
+// the operator's). Scripted scrolling fires no wheel event, so the autopilot's scrolling does not count.
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+const touched = (e: Event) => {
+  if (e.isTrusted) ipcRenderer.send('site-input', { t: Date.now(), kind: e.type });
+};
+addEventListener('pointerdown', touched, true);
+addEventListener('wheel', touched, { capture: true, passive: true });
+addEventListener('keydown', (e) => (editable(e.target) || SCROLL_KEYS.has(e.key)) && touched(e), true);

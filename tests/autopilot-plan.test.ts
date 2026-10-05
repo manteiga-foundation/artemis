@@ -209,6 +209,20 @@ describe('the flight plan', () => {
     expect(result.visited).toHaveLength(2);
   });
 
+  test('stopped while it dwells (the operator took the controls): the site stays where it is, no Back', async () => {
+    const site = new FakeSite(SHOP, '/');
+    let stop = false;
+    const dwell = site.dwell.bind(site);
+    site.dwell = async () => {
+      await dwell();
+      stop = true; // the operator clicks during the first page's dwell
+    };
+    const result = await fly(site, options(site, { stopped: () => stop }));
+    expect(result.ended).toBe('stopped');
+    expect(site.log).toEqual(['follow /a']);
+    expect(new URL(await site.url()).pathname).toBe('/a');
+  });
+
   test('progress: pages visited, pages known and not yet visited, and time left from the measured steps', async () => {
     const site = new FakeSite(SHOP, '/');
     const seen: FlightProgress[] = [];

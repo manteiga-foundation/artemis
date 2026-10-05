@@ -70,6 +70,9 @@ export function autopilotFromShell(r: AutopilotStatus): void {
     say(`Autopilot stopped: ${r.reason ?? 'it could not go on'}.`, 'warn');
     return;
   }
+  // A report still on its way when the flight was turned off (D, or the operator's hand) is stale.
+  if (getState().autopilot === 0) return;
   setState({ autopilot: r.speed, autopilotProgress: progress });
-  say(`Autopilot: ${speedLabel(r.speed)} · ${progress.visited} pages visited, ${progress.pending} to go, ${etaText(progress.etaMs)}${r.url ? ` · ${r.url}` : ''}`);
+  const pages = `${progress.visited} page${progress.visited === 1 ? '' : 's'}`;
+  say(`Autopilot: ${speedLabel(r.speed)} · ${pages} visited, ${progress.pending} to go, ${etaText(progress.etaMs)}${r.url ? ` · ${r.url}` : ''}`);
 }

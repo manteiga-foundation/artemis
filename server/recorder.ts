@@ -30,7 +30,8 @@ const isWeb = (url: string) => /^https?:\/\//i.test(url);
 export const sessionFileName = (target: string, t: number): string =>
   `${new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '')}-${new URL(target).hostname.replace(/[^a-z0-9.-]/gi, '_')}.sqlite`;
 
-type ReportedAction = Omit<ActionInput, 'actor'>;
+/** As the shell queues them: the actor is set there (the autopilot's own clicks are its own). */
+type ReportedAction = Omit<ActionInput, 'actor'> & { actor?: ActionInput['actor'] };
 
 export function startRecorder(o: { app: ElectronApplication; site: Page; sessionsDir: string; pollMs?: number }): Recorder {
   const { app, site } = o;
@@ -183,7 +184,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     (draining ??= app
       .evaluate(() => (globalThis as unknown as { __artemisActions?: unknown[] }).__artemisActions?.splice(0) ?? [])
       .then((reported) => {
-        for (const a of reported as ReportedAction[]) write((s) => s.recordAction({ ...a, actor: 'user' }));
+        for (const a of reported as ReportedAction[]) write((s) => s.recordAction({ ...a, actor: a.actor === 'autopilot' ? 'autopilot' : 'user' }));
       })
       .catch(() => {})
       .finally(() => (draining = null)));

@@ -8,6 +8,7 @@ import { basename, join } from 'node:path';
 import { startMachineFeed } from './machine';
 import { startRecorder, type Recorder } from './recorder';
 import { startSiteFeed } from './site-feed';
+import { startAutopilot } from './autopilot-driver';
 import { addArtifacts } from './session-store';
 import { recoverRecordings, writeManifest } from './recordings';
 
@@ -35,6 +36,7 @@ export interface ShellState {
   editable: boolean;
   layout: { visible: boolean; x: number; y: number; w: number; h: number } | null;
   siteUrl: string;
+  autopilot: { speed: number };
 }
 
 export interface Shell {
@@ -129,14 +131,16 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   const stopFeed = startMachineFeed(consolePage, o.userDataDir);
   app.on('close', stopFeed);
   const site = () => app.windows().find((p) => !isConsole(p));
-  let sitePage: Page | undefined;
+  let sitePage: Page | undefined = site();
+  for (let i = 0; i < 200 && !sitePage; i++) sitePage = (await Bun.sleep(50), site());
   let recorder: Recorder | null = null;
   if (o.sessionsDir) {
     await mkdir(o.sessionsDir, { recursive: true });
-    sitePage = site();
-    for (let i = 0; i < 200 && !sitePage; i++) sitePage = (await Bun.sleep(50), site());
     if (sitePage) recorder = startRecorder({ app, site: sitePage, sessionsDir: o.sessionsDir });
   }
+  // The autopilot flies the site when the console sets a speed (D in the Browser view).
+  const autopilot = sitePage ? startAutopilot({ app, site: sitePage, recorder }) : null;
+  app.on('close', () => void autopilot?.stop());
   // The console's cosmos grows from the recording as it is written.
   const stopSiteFeed = recorder ? startSiteFeed(consolePage, recorder) : () => {};
   app.on('close', stopSiteFeed);
@@ -201,6 +205,7 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
       clearInterval(quitWatch);
       stopFeed();
       stopSiteFeed();
+      await autopilot?.stop();
       await recorder?.stop();
       await app.evaluate(() => (globalThis as unknown as { __artemisApproveQuit?: () => void }).__artemisApproveQuit?.()).catch(() => {});
       await app.close();

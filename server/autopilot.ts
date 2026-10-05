@@ -234,6 +234,8 @@ export async function fly(driver: FlightDriver, o: FlightOptions): Promise<Fligh
       failures = 0;
       result.visited.push(landed);
       await driver.dwell().catch(() => {});
+      // Stopped while it looked (the operator took the controls): the site stays where it is.
+      if (o.stopped()) return { ...result, ended: 'stopped' };
       const found = await driver.links().catch(() => [] as Link[]);
       for (const l of candidates(found, landed, false)) if (!sampledAway(l.href)) frontier.add(keyOf(l.href));
       queue.push({ url: landed, key: landedKey, links: found });
