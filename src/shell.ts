@@ -17,12 +17,18 @@ export interface SlotLayout {
 export interface SiteNav {
   url: string;
   title?: string;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
 }
 
 /** Exposed on `window.artemisShell` by shell/console-preload.ts. */
 export interface ShellBridge {
   layout(l: SlotLayout): void;
   navigate(url: string): void;
+  /** The site's own history, as a browser's buttons. */
+  back(): void;
+  forward(): void;
+  reload(): void;
   passThrough(through: boolean): void;
   /** Returns an unsubscribe function. The shell replays the current address when the console loads. */
   onSiteNav(fn: (nav: SiteNav) => void): () => void;

@@ -366,9 +366,59 @@ test('the entry screen asks for the website and nothing starts until a valid one
 
     await visible(page, 'View (V)');
     expect(await stateOf(page)).toMatchObject({ view: 'browser' });
-    expect(await page.locator('.browser-url').textContent()).toBe('https://shop.example.co.uk/checkout');
+    expect(await page.getByRole('textbox', { name: 'Address' }).inputValue()).toBe('https://shop.example.co.uk/checkout');
     expect(errors).toEqual([]);
   } finally {
     await context.close();
+  }
+}, 40000);
+
+test('the address strip: small Back, Forward and Reload beside LIVE PAGE; the address (its query too) is editable and Enter goes there', async () => {
+  const { page, errors } = await engaged();
+  try {
+    const bar = page.locator('.browser-bar');
+    const button = (name: string) => bar.getByRole('button', { name, exact: true });
+    for (const name of ['Back', 'Forward', 'Reload']) {
+      await button(name).waitFor({ state: 'visible' });
+      const box = (await button(name).boundingBox())!;
+      expect([box.width <= 20, box.height <= 20]).toEqual([true, true]);
+    }
+    // Right after LIVE PAGE, in browser order, then the address.
+    const xs = (await page.evaluate(() =>
+      ['.browser-scheme', '[aria-label="Back"]', '[aria-label="Forward"]', '[aria-label="Reload"]', '.browser-url'].map((s) => document.querySelector(s)!.getBoundingClientRect().x)
+    )) as number[];
+    expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+    // An ordinary browser cannot reach a cross-origin frame's history: Back and Forward stay off.
+    expect([await button('Back').isDisabled(), await button('Forward').isDisabled(), await button('Reload').isDisabled()]).toEqual([true, true, false]);
+
+    const address = page.getByRole('textbox', { name: 'Address' });
+    expect(await address.inputValue()).toBe('https://example.com/');
+    const frameSrc = () => page.locator('.browser-frame').getAttribute('src');
+    // Rewrite the GET parameters; keys typed there are text, not console hotkeys.
+    await address.fill('https://example.com/search?q=artemis&page=2');
+    await address.press('v');
+    expect(await stateOf(page)).toMatchObject({ view: 'browser' });
+    await address.press('Backspace');
+    await address.press('Enter');
+    await page.waitForFunction(() => document.querySelector('.browser-frame')?.getAttribute('src') === 'https://example.com/search?q=artemis&page=2');
+    expect(await address.inputValue()).toBe('https://example.com/search?q=artemis&page=2');
+
+    // Escape puts back the address of the page shown; something that is not a web address goes nowhere.
+    await address.fill('half typed');
+    await address.press('Escape');
+    expect(await address.inputValue()).toBe('https://example.com/search?q=artemis&page=2');
+    await address.fill('not an address');
+    await address.press('Enter');
+    expect(await frameSrc()).toBe('https://example.com/search?q=artemis&page=2');
+    expect(((await stateOf(page)) as { status: string }).status).toMatch(/not a web address/i);
+
+    // Reload: a fresh load of the same address.
+    await page.evaluate(() => ((document.querySelector('.browser-frame') as HTMLIFrameElement & { dataset: DOMStringMap }).dataset.before = '1'));
+    await button('Reload').click();
+    await page.waitForFunction(() => document.querySelector('.browser-frame') && !(document.querySelector('.browser-frame') as HTMLElement).dataset.before);
+    expect(await frameSrc()).toBe('https://example.com/search?q=artemis&page=2');
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
   }
 }, 40000);

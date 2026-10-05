@@ -114,10 +114,16 @@ app.whenReady().then(() => {
   const toConsole = (channel: string, ...args: unknown[]) => {
     if (!consoleWin.isDestroyed()) consoleWin.webContents.send(channel, ...args);
   };
+  // The site view starts on about:blank before Engage: that entry is not somewhere to go back to.
+  const canGoBack = () => {
+    const h = site.webContents.navigationHistory;
+    return h.canGoBack() && h.getEntryAtIndex(h.getActiveIndex() - 1)?.url !== 'about:blank';
+  };
   const reportNav = () => {
     const url = site.webContents.getURL();
     state.siteUrl = url;
-    if (url && url !== 'about:blank') toConsole('site-nav', { url, title: site.webContents.getTitle() });
+    if (url && url !== 'about:blank')
+      toConsole('site-nav', { url, title: site.webContents.getTitle(), canGoBack: canGoBack(), canGoForward: site.webContents.navigationHistory.canGoForward() });
   };
   // A reloaded console learns where the site already is.
   consoleWin.webContents.on('did-finish-load', reportNav);
@@ -150,6 +156,13 @@ app.whenReady().then(() => {
   ipcMain.on('navigate', (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void site.webContents.loadURL(url);
   });
+  // The console's Back, Forward and Reload buttons (the right-click menu does the same).
+  ipcMain.on('site-go', (_e, where: string) => {
+    const wc = site.webContents;
+    if (where === 'back' && canGoBack()) wc.navigationHistory.goBack();
+    else if (where === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
+    else if (where === 'reload') wc.reload();
+  });
   ipcMain.on('pass-through', (_e, through: boolean) => {
     state.passThrough = !!through && state.siteVisible;
     consoleWin.setIgnoreMouseEvents(state.passThrough, { forward: true });
@@ -168,7 +181,7 @@ app.whenReady().then(() => {
   site.webContents.on('context-menu', (_e, p) => {
     const wc = site.webContents;
     Menu.buildFromTemplate([
-      { label: 'Back', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
+      { label: 'Back', enabled: canGoBack(), click: () => canGoBack() && wc.navigationHistory.goBack() },
       { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
       { label: 'Reload', click: () => wc.reload() },
       { type: 'separator' },

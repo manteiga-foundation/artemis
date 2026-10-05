@@ -138,7 +138,8 @@ dive; pulling back from the Browser opens the Cosmos on the current page, select
 on, and an operator camera move cancels the first layout's pending auto-fit; entry screen with the
 website field; Browser view
 showing the real site; the owned browser is the Electron shell (`bun run artemis`): genuine site,
-click pass-through, hotkeys from the site, live address strip, right-click Back/Forward/Reload,
+click pass-through, hotkeys from the site, live address strip with Back/Forward/Reload buttons and an
+editable address (GET parameters rewritable), right-click Back/Forward/Reload,
 console reload resumes on the same page; `C` panels fold with header switch; real resource
 readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
 SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,
@@ -168,6 +169,5 @@ built with emulated data first. From the user's notes: a simple autopilot browsi
 page now follows the browser in the owned browser; outside it, it is still the first relay),
 and true categorisations for every page (authentication? part of a flow, which step?). Also
 pending: apply the user's final sound picks as defaults;
-Back / Forward / Reload as command-card commands (the right-click menu has them) and page
-title/forms readouts from the site's Playwright page;
+page title/forms readouts from the site's Playwright page;
 Page view ego layout (when it returns); annotation overlays anchored to element rects; adaptive graph quality.

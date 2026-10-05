@@ -31,9 +31,12 @@ const site = Bun.serve({
       return plain(`<h1>Tabs</h1><a href="/tabs/next" target="_blank">open in a new tab</a> <button onclick="window.open('/tabs/popup', 'signin', 'width=480,height=600')">Sign in</button>`);
     if (url.pathname === '/tabs/next') return plain('<h1>Next</h1>');
     if (url.pathname === '/tabs/popup') return plain('<h1>Popup</h1>');
+    // Echoes its query and counts its loads (Reload must really reload).
+    if (url.pathname === '/q/') return plain(`<h1>Query a=${url.searchParams.get('a')}</h1><p id="hits">${++queryHits}</p>`);
     return new Response('not found', { status: 404 });
   }
 });
+let queryHits = 0;
 const siteUrl = `http://localhost:${site.port}`;
 
 let vite: ViteServer;
@@ -67,7 +70,7 @@ async function sitePage(shell: Shell, prefix: string): Promise<Page> {
 }
 
 const stripShows = (page: Page, text: string) =>
-  page.waitForFunction((t) => document.querySelector('.browser-url')?.textContent?.includes(t), text, { timeout: 8000 });
+  page.waitForFunction((t) => (document.querySelector('.browser-url') as HTMLInputElement | null)?.value?.includes(t), text, { timeout: 8000 });
 
 describe('the owned browser is an Electron shell', () => {
   test('launching with nothing answering on the console address fails fast and says so', async () => {
@@ -103,6 +106,51 @@ describe('the owned browser is an Electron shell', () => {
       await page.getByRole('link', { name: 'next page' }).click();
       await page.waitForURL(`${siteUrl}/guarded/final`);
       await stripShows(shell.console, '/guarded/final');
+      expect(errors).toEqual([]);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
+  test('the address strip drives the site like a browser: an edited address (new GET parameters), Back, Forward, Reload', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    const errors: string[] = [];
+    shell.console.on('pageerror', (e) => errors.push(e.message));
+    try {
+      const c = shell.console;
+      await engage(c, `${siteUrl}/q/?a=1`);
+      const page = await sitePage(shell, `${siteUrl}/q/`);
+      await page.getByRole('heading', { name: 'Query a=1' }).waitFor({ timeout: 10000 });
+      const button = (name: string) => c.locator('.browser-bar').getByRole('button', { name, exact: true });
+      await stripShows(c, '/q/?a=1');
+      expect([await button('Back').isDisabled(), await button('Forward').isDisabled()]).toEqual([true, true]);
+
+      // Rewrite the query in the address and press Enter: the site goes there.
+      const address = c.getByRole('textbox', { name: 'Address' });
+      await address.fill(`${siteUrl}/q/?a=2&b=x`);
+      await address.press('Enter');
+      await page.getByRole('heading', { name: 'Query a=2' }).waitFor({ timeout: 10000 });
+      expect(page.url()).toBe(`${siteUrl}/q/?a=2&b=x`);
+      await stripShows(c, '/q/?a=2&b=x');
+
+      // Back and Forward walk the site's own history.
+      await c.waitForFunction(() => !(document.querySelector('.browser-bar [aria-label="Back"]') as HTMLButtonElement).disabled);
+      await button('Back').click();
+      await page.getByRole('heading', { name: 'Query a=1' }).waitFor({ timeout: 10000 });
+      await stripShows(c, '/q/?a=1');
+      await c.waitForFunction(() => !(document.querySelector('.browser-bar [aria-label="Forward"]') as HTMLButtonElement).disabled);
+      await button('Forward').click();
+      await page.getByRole('heading', { name: 'Query a=2' }).waitFor({ timeout: 10000 });
+
+      // Reload loads the page again from the site.
+      const hits = Number(await page.locator('#hits').textContent());
+      await button('Reload').click();
+      await page.waitForFunction((n) => Number(document.querySelector('#hits')?.textContent) > n, hits, { timeout: 10000 });
+
+      // Keys typed in the address are text, not console hotkeys.
+      await address.click();
+      await address.press('v');
+      expect(((await c.evaluate('window.__artemis()')) as { view: string }).view).toBe('browser');
       expect(errors).toEqual([]);
     } finally {
       await shell.close();

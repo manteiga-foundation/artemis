@@ -139,6 +139,58 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--white);
+  /* An editable address that reads like the label it was: no box until it is being edited. */
+  height: 20px;
+  padding: 0 6px;
+  font: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  outline: none;
+}
+
+.browser-url:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--azure) 35%, transparent);
+}
+
+.browser-url:focus {
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border-color: color-mix(in srgb, var(--azure) 75%, transparent);
+  text-overflow: clip;
+}
+
+.browser-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: -6px;
+}
+
+.browser-nav button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--sky);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.browser-nav button svg {
+  width: 10px;
+  height: 10px;
+}
+
+.browser-nav button:hover:not(:disabled) {
+  color: var(--white);
+  border-color: color-mix(in srgb, var(--azure) 55%, transparent);
+  background: color-mix(in srgb, var(--azure) 16%, transparent);
+}
+
+.browser-nav button:disabled {
+  color: color-mix(in srgb, var(--sky) 35%, transparent);
+  cursor: default;
 }
 
 .browser-hint {

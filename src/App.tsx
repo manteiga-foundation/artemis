@@ -105,7 +105,7 @@ function Hotkeys() {
 
 /** The owned browser reports where the website is as it navigates (and again after a reload). */
 function SiteAddress() {
-  useEffect(() => shellBridge()?.onSiteNav((nav) => setState({ pageUrl: nav.url })), []);
+  useEffect(() => shellBridge()?.onSiteNav((nav) => setState({ pageUrl: nav.url, canGoBack: !!nav.canGoBack, canGoForward: !!nav.canGoForward })), []);
   return null;
 }
 

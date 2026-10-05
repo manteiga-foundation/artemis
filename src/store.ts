@@ -29,6 +29,9 @@ export interface UIState {
   targetUrl: string | null;
   /** Address the browser is on now (the shell reports it as the site navigates); null until known. */
   pageUrl: string | null;
+  /** Whether the site's own history has somewhere to go (owned browser only). */
+  canGoBack: boolean;
+  canGoForward: boolean;
   muted: boolean;
   view: ViewId;
   viewTransition: ViewTransition | null;
@@ -71,6 +74,8 @@ let state: UIState = {
   engaged: false,
   targetUrl: null,
   pageUrl: null,
+  canGoBack: false,
+  canGoForward: false,
   muted: false,
   view: 'cosmos',
   viewTransition: null,

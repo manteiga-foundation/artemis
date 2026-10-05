@@ -12,7 +12,7 @@ const listen = <T>(channel: string, fn: Listener<T>) => {
 
 // The shell reports the site's address as soon as the console has loaded, which can be before the
 // app subscribes: keep the latest and hand it to each new subscriber.
-type Nav = { url: string; title?: string };
+type Nav = { url: string; title?: string; canGoBack?: boolean; canGoForward?: boolean };
 let lastNav: Nav | null = null;
 ipcRenderer.on('site-nav', (_e, nav: Nav) => {
   lastNav = nav;
@@ -21,6 +21,9 @@ ipcRenderer.on('site-nav', (_e, nav: Nav) => {
 contextBridge.exposeInMainWorld('artemisShell', {
   layout: (l: unknown) => ipcRenderer.send('layout', l),
   navigate: (url: string) => ipcRenderer.send('navigate', url),
+  back: () => ipcRenderer.send('site-go', 'back'),
+  forward: () => ipcRenderer.send('site-go', 'forward'),
+  reload: () => ipcRenderer.send('site-go', 'reload'),
   passThrough: (through: boolean) => ipcRenderer.send('pass-through', through),
   onSiteNav: (fn: Listener<Nav>) => {
     if (lastNav) fn(lastNav);
