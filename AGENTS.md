@@ -185,3 +185,18 @@ built with emulated data first. From the user's notes: true categorisations for 
 pending: apply the user's final sound picks as defaults;
 page title/forms readouts from the site's Playwright page;
 Page view ego layout (when it returns); annotation overlays anchored to element rects; adaptive graph quality.
+
+Open from the last session (the user left a site flying on the autopilot to test it overnight; ask
+what they saw first):
+- Electron prints its own "Electron Security Warning" into the site's developer console, which a
+  reviewer could take for the site's (`ELECTRON_DISABLE_SECURITY_WARNINGS`, one line, test first).
+- The cosmos geometry for a walk (the radial tree draws a straight line): wait for the user's
+  report on more sites before changing it.
+- Record dialogs (type, message, who answered) and the autopilot's closed popups as observations
+  in the session database; popups are not recorded yet.
+- The autopilot's settings category is interface only (forms, kinds, start after Engage).
+- The glow's colour is the accent; render the palette's line colour and white in place if the user
+  wants to choose. A real requests-per-second readout could be its own header element (the user
+  took the frame-rate graph for one).
+- The site's dialogs are Electron's native box, modal for the whole app while one waits; showing
+  them in the console instead needs a measurement first (no Electron hook for JS dialogs).
