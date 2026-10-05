@@ -36,7 +36,9 @@ const capture = async (name: string) => {
 };
 
 try {
-  await shell.app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find((x) => x.contentView.children.length > 0)!.setContentSize(1440, 900));
+  // The console at 1440x900: the window is its top band taller.
+  const band = (await shell.state()).band;
+  await shell.app.evaluate(({ BaseWindow }, h) => BaseWindow.getAllWindows().find((x) => x.contentView.children.length > 0)!.setContentSize(1440, h), 900 + band);
   await c.waitForFunction('typeof window.__artemis === "function"', null, { timeout: 20000 });
   await c.getByRole('textbox', { name: 'Web App' }).fill(target);
   await c.getByRole('button', { name: 'Engage', exact: true }).click();

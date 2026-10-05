@@ -38,6 +38,8 @@ export interface ShellState {
   siteVisible: boolean;
   editable: boolean;
   layout: { visible: boolean; x: number; y: number; w: number; h: number } | null;
+  siteBounds: { x: number; y: number; width: number; height: number } | null;
+  band: number;
   siteUrl: string;
   icon: { width: number; height: number } | null;
   autopilot: { speed: number };

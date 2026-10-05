@@ -22,13 +22,15 @@ try {
   await shell.console.getByRole('button', { name: 'Engage', exact: true }).click();
   await shell.console.waitForFunction('window.__artemis().engaged === true && window.__artemis().pageUrl !== null', null, { timeout: 20000 });
 
+  // The console keeps its size: the window is its top band (traffic lights, no title bar) taller.
+  const band = (await shell.state()).band;
   const resize = (w: number, h: number) =>
     shell.app.evaluate(({ BaseWindow }, size) => {
       const win = BaseWindow.getAllWindows().find((x) => x.contentView.children.length > 0)!;
       win.setContentSize(size.w, size.h);
-    }, { w, h });
+    }, { w, h: h + band });
 
-  /** The frame as the reviewer sees it: the site view under the console window. */
+  /** The frame as the reviewer sees it: the band, then the site view under the console window. */
   const capture = async (name: string) => {
     const caps = await shell.app.evaluate(async ({ BaseWindow, BrowserWindow }) => {
       const win = BaseWindow.getAllWindows().find((x) => !(x instanceof BrowserWindow))!;
@@ -38,10 +40,11 @@ try {
       const g = globalThis as unknown as { __artemisShell: { layout: { x: number; y: number; w: number; h: number } } };
       return { site: site.toPNG().toString('base64'), ui: ui.toPNG().toString('base64'), layout: g.__artemisShell.layout, size: consoleWin.getContentBounds() };
     });
-    const page = await composer.newPage({ viewport: { width: caps.size.width, height: caps.size.height }, deviceScaleFactor: 1 });
+    const page = await composer.newPage({ viewport: { width: caps.size.width, height: caps.size.height + band }, deviceScaleFactor: 1 });
     const l = caps.layout;
+    const light = (x: number, c: string) => `<i style="position:absolute;left:${x}px;top:${(band - 12) / 2}px;width:12px;height:12px;border-radius:50%;background:${c}"></i>`;
     await page.setContent(
-      `<body style="margin:0;background:#02061a"><img src="data:image/png;base64,${caps.site}" style="position:absolute;left:${l.x}px;top:${l.y}px;width:${l.w}px;height:${l.h}px"><img src="data:image/png;base64,${caps.ui}" style="position:absolute;inset:0;width:100%;height:100%"></body>`
+      `<body style="margin:0;background:#02061a">${light(14, '#ff5f57')}${light(34, '#febc2e')}${light(54, '#28c840')}<img src="data:image/png;base64,${caps.site}" style="position:absolute;left:${l.x}px;top:${l.y + band}px;width:${l.w}px;height:${l.h}px"><img src="data:image/png;base64,${caps.ui}" style="position:absolute;left:0;top:${band}px;width:${caps.size.width}px;height:${caps.size.height}px"></body>`
     );
     await page.waitForTimeout(200);
     const file = join(outDir, `${name}.png`);
