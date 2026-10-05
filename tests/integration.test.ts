@@ -439,6 +439,65 @@ test('the configuration view (the sketch): opens from the header or with ",", se
   }
 }, 40000);
 
+test('while the autopilot is on, a glow runs around the edges of the screen, breathing faster with the speed; it never takes a click, stays in the Cosmos and goes when the flight stops', async () => {
+  const glow = (page: Page) =>
+    page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('.autopilot-glow');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const ring = el.querySelector<HTMLElement>('.autopilot-glow-ring');
+      const cs = ring ? getComputedStyle(ring) : null;
+      return {
+        on: el.classList.contains('is-on'),
+        box: [r.x, r.y, r.width, r.height],
+        pointer: getComputedStyle(el).pointerEvents,
+        shadow: cs?.boxShadow ?? '',
+        animation: cs?.animationName ?? '',
+        seconds: cs ? parseFloat(cs.animationDuration) : 0,
+        // What a click at the screen's edge would reach: never the glow.
+        edge: (document.elementFromPoint(3, 450) as HTMLElement | null)?.closest('.autopilot-glow') !== null
+      };
+    });
+  const { page, errors } = await engaged();
+  try {
+    expect((await glow(page))?.on ?? false).toBe(false);
+    const paces: number[] = [];
+    for (let speed = 1; speed <= 3; speed++) {
+      await page.keyboard.press('d');
+      await page.waitForFunction(`window.__artemis().autopilot === ${speed}`);
+      const g = (await glow(page))!;
+      expect([g.on, g.box, g.pointer, g.edge]).toEqual([true, [0, 0, 1440, 900], 'none', false]);
+      expect(g.shadow).toContain('inset');
+      expect(g.animation).toBe('autopilot-breathe');
+      paces.push(g.seconds);
+    }
+    expect([paces[0] > paces[1], paces[1] > paces[2]]).toEqual([true, true]);
+    // Pulled back to the Cosmos, the flight goes on and so does the glow.
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', null, { timeout: 4000 });
+    expect((await glow(page))!.on).toBe(true);
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "browser" && window.__artemis().viewTransition === null', null, { timeout: 4000 });
+    // Off: the glow goes.
+    await page.keyboard.press('d');
+    await page.waitForFunction('window.__artemis().autopilot === 0');
+    expect((await glow(page))!.on).toBe(false);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+  // With reduced motion it holds steady instead of breathing.
+  const calm = await engaged(true);
+  try {
+    await calm.page.keyboard.press('d');
+    await calm.page.waitForFunction('window.__artemis().autopilot === 1');
+    const g = (await glow(calm.page))!;
+    expect([g.on, g.animation]).toEqual([true, 'none']);
+  } finally {
+    await calm.page.context().close();
+  }
+}, 40000);
+
 test('autopilot (the sketch): D in the old bulb slot with a yoke and three squares; each press steps the speed; outside the owned browser it says where it flies', async () => {
   const { page, errors } = await engaged();
   try {

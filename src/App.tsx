@@ -7,6 +7,7 @@ import { MiniMap } from './components/MiniMap';
 import { Console, stepLens } from './components/Console';
 import { CommandCard, runCommand } from './components/CommandCard';
 import { BootOverlay, TARGET_FIELD_ID } from './components/BootOverlay';
+import { AutopilotGlow } from './components/AutopilotGlow';
 import { pageLoadSignal } from './page-load';
 import { commandByKey } from './commands';
 import { controller } from './graph/controller';
@@ -185,6 +186,7 @@ export function App() {
             </div>
           </Animator>
           <BootOverlay />
+          <AutopilotGlow />
         </div>
       </BleepsProvider>
     </AnimatorGeneralProvider>
