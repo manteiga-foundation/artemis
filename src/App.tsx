@@ -17,6 +17,7 @@ import { shellBridge } from './shell';
 import { SITE_EVENT, SITE_FEED_READY, type SiteEvent } from './site-events';
 import { usePerfSampler } from './metrics';
 import { closeSettings, toggleSettings } from './settings-session';
+import { autopilotFromShell } from './autopilot';
 
 function Hotkeys() {
   const play = useSfx();
@@ -125,6 +126,12 @@ function SiteAddress() {
   return null;
 }
 
+/** The autopilot's flight, reported by the owned browser (progress, the end, disengaging). */
+function AutopilotFeed() {
+  useEffect(() => shellBridge()?.onAutopilot(autopilotFromShell), []);
+  return null;
+}
+
 /** The owned browser's recording, delivered live by the recorder's feed (server/site-feed.ts). */
 function SiteFeed() {
   useEffect(() => {
@@ -158,6 +165,7 @@ export function App() {
         <Hotkeys />
         <SiteFeed />
         <SiteAddress />
+        <AutopilotFeed />
         <div className="app" data-view={view} data-shown={stageView} style={paletteStyle(stageView) as CSSProperties}>
           <Background />
           <Stage />

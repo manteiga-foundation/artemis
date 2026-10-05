@@ -4,6 +4,7 @@
 // tells the console where the site is and forwards hotkeys typed in it. In an ordinary browser
 // there is no bridge and the Browser view falls back to an iframe.
 import type { ViewId } from './views';
+import type { AutopilotStatus } from './autopilot';
 
 /** Where the native site view sits, in the console's CSS pixels; hidden when `visible` is false. */
 export interface SlotLayout {
@@ -33,6 +34,10 @@ export interface ShellBridge {
   /** Returns an unsubscribe function. The shell replays the current address when the console loads. */
   onSiteNav(fn: (nav: SiteNav) => void): () => void;
   onKey(fn: (key: string) => void): () => void;
+  /** The autopilot's speed (0 off, 1 slow, 2 regular, 3 max), set from the console. */
+  autopilot(speed: number): void;
+  /** Reports from the flight (src/autopilot.ts AutopilotStatus). */
+  onAutopilot(fn: (status: AutopilotStatus) => void): () => void;
 }
 
 export const shellBridge = (): ShellBridge | null =>

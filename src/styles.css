@@ -1617,3 +1617,33 @@ html:has(.debug) #root {
   border-left: 2px solid var(--azure);
   white-space: pre-wrap;
 }
+
+/* ---------------------------------------------------------------- command levels (autopilot) */
+
+/* Three squares under the icon, as the sketch draws the autopilot's speed. */
+.cmd-btn:has(.cmd-pips) .cmd-icon {
+  transform: translateY(-4px);
+}
+
+.cmd-pips {
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  display: flex;
+  gap: 3px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.cmd-pip {
+  width: 6px;
+  height: 6px;
+  border: 1px solid color-mix(in srgb, var(--sky) 70%, transparent);
+  background: transparent;
+}
+
+.cmd-pip.is-on {
+  background: var(--white);
+  border-color: var(--white);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--azure) 80%, transparent);
+}

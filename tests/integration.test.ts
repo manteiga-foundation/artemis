@@ -438,6 +438,48 @@ test('the configuration view (the sketch): opens from the header or with ",", se
   }
 }, 40000);
 
+test('autopilot (the sketch): D in the old bulb slot with a yoke and three squares; each press steps the speed; outside the owned browser it says where it flies', async () => {
+  const { page, errors } = await engaged();
+  try {
+    const d = page.getByRole('button', { name: 'Autopilot (D)' });
+    await d.waitFor({ state: 'visible' });
+    // Top-right slot of the card; Highlight is gone and DOM moved to O.
+    expect(await page.locator('.cmd-grid .cmd-btn').nth(2).getAttribute('aria-label')).toBe('Autopilot (D)');
+    expect(await page.getByRole('button', { name: 'Highlight (H)' }).count()).toBe(0);
+    await page.getByRole('button', { name: 'DOM (O)' }).waitFor({ state: 'visible' });
+    const lit = () => d.locator('.cmd-pip.is-on').count();
+    expect([await d.locator('.cmd-pip').count(), await lit()]).toEqual([3, 0]);
+    // The squares sit under the yoke, inside the button.
+    const [btn, pips, icon] = await Promise.all([d.boundingBox(), d.locator('.cmd-pips').boundingBox(), d.locator('.cmd-icon').boundingBox()]);
+    expect(pips!.y).toBeGreaterThan(icon!.y + icon!.height - 2);
+    expect(pips!.y + pips!.height).toBeLessThanOrEqual(btn!.y + btn!.height);
+
+    const mode = page.locator('.console-mode');
+    const steps: [number, string, string][] = [
+      [1, 'true', 'MODE AUTOPILOT SLOW'],
+      [2, 'true', 'MODE AUTOPILOT REGULAR'],
+      [3, 'true', 'MODE AUTOPILOT MAX'],
+      [0, 'false', 'MODE REVIEW']
+    ];
+    for (const [n, pressed, readout] of steps) {
+      await page.keyboard.press('d');
+      expect(await lit()).toBe(n);
+      expect(await d.getAttribute('aria-pressed')).toBe(pressed);
+      expect((await mode.textContent())?.replace(/\s+/g, ' ').trim()).toBe(readout);
+      expect(await stateOf(page)).toMatchObject({ autopilot: n });
+      if (n === 1) expect(((await stateOf(page)) as { status: string }).status).toContain('flies in the owned browser');
+    }
+
+    // Only in the Browser view for now: in the Cosmos, D is still Disperse.
+    await page.keyboard.press('v');
+    await page.waitForFunction(() => (window as unknown as { __artemis: () => { viewTransition: unknown; view: string } }).__artemis().view === 'cosmos' && !(window as unknown as { __artemis: () => { viewTransition: unknown } }).__artemis().viewTransition);
+    await page.getByRole('button', { name: 'Disperse (D)' }).waitFor({ state: 'visible' });
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('the address strip: small Back, Forward and Reload beside LIVE PAGE; the address (its query too) is editable and Enter goes there', async () => {
   const { page, errors } = await engaged();
   try {

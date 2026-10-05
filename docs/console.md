@@ -100,11 +100,12 @@ A and S hold the top row and V the middle row in every view, as drawn in the ske
 | --- | --- | --- | --- |
 | A | Target: arm, click a node to lock on | Target | Annotate: pin a note to an element |
 | S | Stop: halt / resume the simulation | Stop | Snapshot: capture the page |
-| H | Hold: pin the selected node | Hold | Highlight: outline interactive elements |
+| H | Hold: pin the selected node | Hold | (Highlight was here; Autopilot took the slot, see D) |
 | V | View: return to Browser | View: pull back to Cosmos | View: pull back to Cosmos, onto the current page |
 | F | Focus: zoom to selection; else tour sectors, then fit all | Focus | Flow: mark this page as a step in a flow |
 | L | Links on / off | Links | Links: list outbound links |
-| D | Disperse: repulsion pulse | Depth: 1 or 2 hops | DOM: inspect the element tree |
+| D | Disperse: repulsion pulse | Depth: 1 or 2 hops | **Autopilot** (top-right slot, a yoke with three squares for the speed): each press steps off, slow, regular, max, off |
+| O | | | DOM: inspect the element tree (moved from D) |
 | R | Regenerate topology (emulated); in the owned browser the slot holds **E Scope**: show or hide hosts outside the review scope | Route: path to the core (toggle) | Reload |
 | X | Clear selection, holds, targeting | Clear | Clear annotations |
 
@@ -116,6 +117,27 @@ Hotkeys reach the console from inside the website too: in the owned browser an i
 preload in every frame of the site forwards plain keys (not while typing in a field) to the
 console, so `V` works after clicking into the page; the page still receives the key. An external browser cannot hear keys inside a cross-origin frame; the
 command card then says "Keyboard is in the page. Click the console to use hotkeys."
+
+## Autopilot (D, Browser view)
+
+From the user's sketch, a pilot's control: a yoke with three squares under it for the speed, hotkey
+D, in the Browser view's top-right slot (Highlight, the bulb, was removed; DOM moved from D to O).
+Only in the Browser view for now; in the Cosmos D is still Disperse. Each press steps the speed:
+off, slow (about 10 s a page, scrolling down it, for a person to glance at), regular (about 3 s, no
+scrolling), max (the next page as soon as one has loaded, to cover the whole site), off. The
+squares fill up to the speed, the button lights in flight, the console's readout says `MODE
+AUTOPILOT SLOW` (or REGULAR, MAX) instead of REVIEW, and each step says what it does. Game-icons
+has no yoke (a car's steering wheel, a ship's wheel), so it is drawn in `src/icons.tsx` on the
+same 512 grid; the first drawing (tall arms) read as a slingshot, the wide shallow one with grips
+reads as a yoke.
+
+It flies in the owned browser: the console sends the speed over the bridge (`autopilot`) and the
+shell reports the flight back (`autopilot-status`: progress with pages visited, pages to go and
+time left; the site covered; the operator taking the controls, which disengages it like a real
+autopilot). In an ordinary browser only the controls answer, and it says so. The user's rules for
+the flight: respect routes so the cosmos is not a single long line (branch by branch: open each
+link of a page and come back to it before the next), never repeat what is already in the cosmos,
+never get stuck.
 
 ## Configuration view (`,`)
 
@@ -369,8 +391,9 @@ actions yet), a pulse when a node is added, page titles and full-URL lists in a 
 - `tests/views.test.ts` — view order and depth, the Page view kept but hidden (V cycles Browser <-> Cosmos), palettes carry the approved values and the same tokens.
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, landing on the current page when pulling back from the Browser (selected, focused, zoomed in on, labelled, announced; an earlier selection gives way), the first layout's auto-fit and its cancellation by any operator camera move (landing, Focus, wheel/drag), Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, V hints for the two shown views, Depth and Route, Page subgraph (BFS) and framing, minimap context (the Page view's behaviour stays tested while hidden).
+- `tests/autopilot.test.ts` — the autopilot's control: D steps off, slow, regular, max, off, each step said and sent to the shell; outside the owned browser it says where it flies; the shell's reports (progress with time left, the site covered, the operator taking the controls); time left in plain words; the command flies the yoke, shows the speed as three squares and lights in flight; D stays Disperse in the Cosmos.
 - `tests/settings.test.ts` — the configuration view's settings: the sketch's seven categories in order, one LLM connection per role, only Sound live; defaults (sound on, subdomains in scope, video and HAR kept); saved settings come back, missing options take their default, unknown ones are dropped, a broken store gives the defaults; search by option words or category name; change counting; the sound default decides muting at start. The session: ticking changes only the draft, Apply saves it and the sound default applies at once; closing discards and says so; Reset, Defaults and Discard; Next walks only the categories a search found. The settings card keeps A and S on top and V in the middle with the right hints; the native site steps aside while the settings are open.
-- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in both views, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V pulls back to the Cosmos and returns, palette variables change, command card and tab strip swap, no Page view on the way; the Cosmos opens on the current page (selected, label at the stage centre, zoom readout x4, named in the readout) and stays there while the first layout settles; the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working; fed recorder events, the cosmos becomes the recording and grows live with labelled pages, V lands on the current recorded page, the camera stays put as it grows, the core stays exactly at the centre of the space, the first page reached from it sits straight up with the next one further out on the same line, and on screen (by where the labels land) the first section is above the core, Scope (where Regenerate was) hides the outside host and brings it back, with no page errors. The address strip: small Back, Forward and Reload right after LIVE PAGE, in order; Back and Forward off in an ordinary browser; the address editable (new GET parameters load in the frame, a typed key is not a hotkey, Escape restores, a non-address goes nowhere and says so); Reload gives a fresh load of the same address.
+- `tests/integration.test.ts` — real Chromium against an isolated Vite server: the header shows a live FPS readout and `--` for machine figures outside the owned browser; C folds the panels away and back in both views, the header switch does the same, and a view change leaves them as they were; the entry screen refuses to start without a website and carries the address into the console; Engage lands in the Browser view; V pulls back to the Cosmos and returns, palette variables change, command card and tab strip swap, no Page view on the way; the Cosmos opens on the current page (selected, label at the stage centre, zoom readout x4, named in the readout) and stays there while the first layout settles; the stage shows the old view until the midpoint, reduced motion still completes, lenses keep working; fed recorder events, the cosmos becomes the recording and grows live with labelled pages, V lands on the current recorded page, the camera stays put as it grows, the core stays exactly at the centre of the space, the first page reached from it sits straight up with the next one further out on the same line, and on screen (by where the labels land) the first section is above the core, Scope (where Regenerate was) hides the outside host and brings it back, with no page errors. The address strip: small Back, Forward and Reload right after LIVE PAGE, in order; Back and Forward off in an ordinary browser; the address editable (new GET parameters load in the frame, a typed key is not a hotkey, Escape restores, a non-address goes nowhere and says so); Reload gives a fresh load of the same address. Autopilot: D in the top-right slot with three squares under the yoke and inside the button, Highlight gone, DOM on O; each press fills one more square, lights the button and changes the MODE readout (SLOW, REGULAR, MAX, then REVIEW), saying where it flies outside the owned browser; in the Cosmos D is still Disperse.
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
 - `tests/session-store.test.ts` — the session database: target and scope; actions belong to the page view open at the time and credit the next page view (also when reported late, never long after); requests credited to the latest earlier action in their page view, re-credited when an action arrives late; the actor column; typed values kept with password fields marked; responses with status, headers (credentials marked sensitive), body and timing; request bodies; bodies stored once by hash; missing bodies noted (too large, unavailable); the file opens in another process; body, sensitive-header and scope policies.

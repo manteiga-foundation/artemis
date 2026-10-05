@@ -77,6 +77,10 @@ export interface UIState {
   settingsDraft: Settings | null;
   settingsCategory: string;
   settingsQuery: string;
+  /** Autopilot speed (D in the Browser view): 0 off, 1 slow, 2 regular, 3 max. */
+  autopilot: 0 | 1 | 2 | 3;
+  /** The flight's progress as the owned browser reports it; null before the first report. */
+  autopilotProgress: { visited: number; pending: number; etaMs: number } | null;
 }
 
 const savedSettings = loadSettings(browserStorage());
@@ -117,7 +121,9 @@ let state: UIState = {
   settingsOpen: false,
   settingsDraft: null,
   settingsCategory: 'scope',
-  settingsQuery: ''
+  settingsQuery: '',
+  autopilot: 0,
+  autopilotProgress: null
 };
 
 const listeners = new Set<() => void>();

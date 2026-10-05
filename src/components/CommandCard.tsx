@@ -16,6 +16,7 @@ export function runCommand(cmd: CommandDef, play: ReturnType<typeof useSfx>) {
 function CommandButton({ cmd, onHover }: { cmd: CommandDef; onHover: (c: CommandDef | null) => void }) {
   const play = useSfx();
   const active = useStore((s) => (cmd.isActive ? cmd.isActive(s) : false));
+  const pips = useStore((s) => (cmd.pips ? cmd.pips(s) : null));
   const flash = useCommandFlash(cmd.key);
   const { Icon } = cmd;
 
@@ -47,6 +48,14 @@ function CommandButton({ cmd, onHover }: { cmd: CommandDef; onHover: (c: Command
             />
           </Animator>
           <Icon className="cmd-icon" aria-hidden />
+          {pips !== null && (
+            // The level as the sketch draws it: three squares under the icon, filled up to it.
+            <span className="cmd-pips" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <span key={i} className={`cmd-pip${i < pips ? ' is-on' : ''}`} />
+              ))}
+            </span>
+          )}
           <span className="cmd-key">{cmd.key}</span>
         </button>
       </Animated>

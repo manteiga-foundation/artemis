@@ -11,7 +11,6 @@ import {
   GiStairs,
   GiNotebook,
   GiPhotoCamera,
-  GiLightBulb,
   GiPathDistance,
   GiFamilyTree,
   GiRadarSweep,
@@ -39,6 +38,8 @@ import {
   resetCategory,
   restoreDefaults
 } from './settings-session';
+import { stepAutopilot } from './autopilot';
+import { YokeIcon } from './icons';
 
 export interface CommandDef {
   key: string; // hotkey (single uppercase letter)
@@ -48,6 +49,8 @@ export interface CommandDef {
   run: () => CommandResult;
   /** Returns true when the command is a toggle currently in its "on" state. */
   isActive?: (s: UIState) => boolean;
+  /** A level shown as three squares under the icon (the autopilot's speed), 0 to 3. */
+  pips?: (s: UIState) => number;
 }
 
 // 3x3 command card, RTS-style, row-major. In every view A and S hold the top row and V the
@@ -177,14 +180,29 @@ const stub = (key: string, name: string, hint: string, Icon: IconType): CommandD
   run: () => controller.placeholder(name)
 });
 
+// The autopilot (the user's sketch: a yoke, three squares for the speed, hotkey D) took the bulb's
+// slot; Highlight went, and DOM moved from D to O. Only in the Browser view for now.
+const autopilot: CommandDef = {
+  key: 'D',
+  name: 'Autopilot',
+  hint: 'Fly the site on its own, branch by branch. Each press steps the speed: slow, regular, max, off.',
+  Icon: YokeIcon,
+  run: () => {
+    stepAutopilot();
+    return { ok: true, message: getState().status };
+  },
+  isActive: (s) => s.autopilot > 0,
+  pips: (s) => s.autopilot
+};
+
 const BROWSER_COMMANDS: CommandDef[] = [
   stub('A', 'Annotate', 'Pin a note to an element on the page.', GiNotebook),
   stub('S', 'Snapshot', 'Capture the page as it is now.', GiPhotoCamera),
-  stub('H', 'Highlight', 'Outline the interactive elements on the page.', GiLightBulb),
+  autopilot,
   viewCommand('browser'),
   stub('F', 'Flow', 'Mark this page as a step in a flow.', GiPathDistance),
   stub('L', 'Links', 'List the outbound links on this page.', GiLinkedRings),
-  stub('D', 'DOM', 'Inspect the element tree.', GiFamilyTree),
+  stub('O', 'DOM', 'Inspect the element tree.', GiFamilyTree),
   stub('R', 'Reload', 'Reload the page.', GiCycle),
   stub('X', 'Clear', 'Remove annotations and highlights.', GiBroom)
 ];

@@ -72,11 +72,12 @@ describe('the command card adapts to the view', () => {
     expect(getState().pageHops).toBe(1);
   });
 
-  test('browser view commands are interface placeholders that still answer on the console', () => {
+  test('browser view commands: Autopilot (D) in the old bulb slot, DOM on O; the rest are placeholders that still answer', () => {
     attach();
     setState({ view: 'browser' });
-    const names = commandsFor('browser').map((c) => c.name);
-    expect(names).toEqual(['Annotate', 'Snapshot', 'Highlight', 'View', 'Flow', 'Links', 'DOM', 'Reload', 'Clear']);
+    const cmds = commandsFor('browser');
+    expect(cmds.map((c) => c.name)).toEqual(['Annotate', 'Snapshot', 'Autopilot', 'View', 'Flow', 'Links', 'DOM', 'Reload', 'Clear']);
+    expect(cmds.map((c) => c.key)).toEqual(['A', 'S', 'D', 'V', 'F', 'L', 'O', 'R', 'X']);
     const r = commandByKey('browser', 'A')!.run();
     expect(r.ok).toBe(true);
     expect(getState().status).toContain('Annotate');

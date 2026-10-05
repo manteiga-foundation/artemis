@@ -2,6 +2,7 @@ import { Animated, Animator, FrameOctagon, Text } from '@arwes/react';
 import { controller } from '../graph/controller';
 import { LENSES, getState, useStore, type LensId } from '../store';
 import { useSfx } from '../sfx';
+import { speedLabel } from '../autopilot';
 
 export function stepLens(dir: 1 | -1): LensId {
   const i = LENSES.findIndex((v) => v.id === getState().lens);
@@ -75,6 +76,7 @@ export function Console() {
   const pinnedCount = useStore((s) => s.pinned.length);
   const view = useStore((s) => s.stageView);
   const address = useStore((s) => s.pageUrl ?? s.targetUrl);
+  const autopilot = useStore((s) => s.autopilot);
   const meta = (selected !== null ? controller.data.meta[selected] : null) ?? null;
   const pageMeta = controller.data.meta[selected ?? currentPage] ?? null;
   const seq = useStore((s) => s.statusId);
@@ -108,8 +110,8 @@ export function Console() {
             <span>
               <em>NOTES</em> 0
             </span>
-            <span>
-              <em>MODE</em> REVIEW
+            <span className="console-mode">
+              <em>MODE</em> {autopilot ? `AUTOPILOT ${speedLabel(autopilot).toUpperCase()}` : 'REVIEW'}
             </span>
           </div>
         ) : (
