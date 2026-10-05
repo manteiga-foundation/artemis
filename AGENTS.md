@@ -189,8 +189,17 @@ Page view ego layout (when it returns); annotation overlays anchored to element 
 
 Open from the last session (the user left a site flying on the autopilot to test it overnight; ask
 what they saw first):
-- Electron prints its own "Electron Security Warning" into the site's developer console, which a
-  reviewer could take for the site's (`ELECTRON_DISABLE_SECURITY_WARNINGS`, one line, test first).
+- The overnight report (user): the site worked, the radial tree is right, dialogs were handled,
+  the glow is approved; the autopilot's occasional stops were the operator's own keys; the session
+  HAR came out over 3 GB and other tools fail to import it (the policy-aware export from the
+  database, already next in line, is the answer; a size cap or splitting is a candidate). Forms
+  stay parked until other features show how they connect.
+- Done since: `ELECTRON_DISABLE_SECURITY_WARNINGS` set by the launcher (tested); Artemis's icon
+  (`public/icon.svg` -> `shell/icon.png` via `scripts/icon.ts`) on the Dock, the window and the
+  page, title `Artemis`; the native title bar dark (`nativeTheme`, one line). A band of Artemis's
+  own above the console was built and reverted the same evening (557bfdd, 8095306): the user does
+  not want window-chrome work that can touch the working shell. In development the Dock tooltip and
+  app menu still say Electron (the binary's bundle name).
 - The cosmos geometry for a walk (the radial tree draws a straight line): wait for the user's
   report on more sites before changing it.
 - Record dialogs (type, message, who answered) and the autopilot's closed popups as observations
