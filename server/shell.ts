@@ -16,6 +16,8 @@ import { recoverRecordings, writeManifest } from './recordings';
 const require = createRequire(import.meta.url);
 const SHELL_SRC = new URL('../shell/', import.meta.url).pathname;
 export const SHELL_OUT = new URL('../dist-shell/', import.meta.url).pathname;
+/** The app icon (rendered from public/icon.svg by scripts/icon.ts). */
+export const SHELL_ICON = SHELL_SRC + 'icon.png';
 
 /** Bundle the shell's main process and preloads into CommonJS for Electron. Returns main's path. */
 export async function buildShell(): Promise<string> {
@@ -37,6 +39,7 @@ export interface ShellState {
   editable: boolean;
   layout: { visible: boolean; x: number; y: number; w: number; h: number } | null;
   siteUrl: string;
+  icon: { width: number; height: number } | null;
   autopilot: { speed: number };
 }
 
@@ -110,6 +113,10 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
       ARTEMIS_APP_URL: o.appUrl,
       ARTEMIS_USER_DATA: o.userDataDir,
       ARTEMIS_SHELL_DIR: SHELL_OUT,
+      ARTEMIS_ICON: SHELL_ICON,
+      // Electron's development build prints "Electron Security Warning" into every page's
+      // developer console, the site's included: a reviewer would take it for the site's own.
+      ELECTRON_DISABLE_SECURITY_WARNINGS: '1',
       ...(o.hidden ? { ARTEMIS_SHELL_HIDDEN: '1' } : {}),
       // A recorded session is only whole after close(): the shell hands quitting to Artemis.
       ...(o.sessionsDir ? { ARTEMIS_GRACEFUL_QUIT: '1' } : {})

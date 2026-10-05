@@ -77,6 +77,7 @@ bun run scripts/screenshots-recorded.ts <port> [outDir] [site]  # the live cosmo
 bun run scripts/screenshots-entry.ts <port> [outDir]
 bun run scripts/screenshots-debug.ts <port> [outDir]
 bun run scripts/measure-dive.ts <port>                          # frame rate idle and through the view dive
+bun run scripts/icon.ts                                         # public/icon.svg -> shell/icon.png (the app icon)
 ```
 
 Default output directory is `docs/screenshots/`.

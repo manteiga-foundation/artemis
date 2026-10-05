@@ -413,6 +413,38 @@ describe('the owned browser is an Electron shell', () => {
     }
   }, 60000);
 
+  test("the shell carries Artemis's icon: the header's mark on the Dock (macOS) and on the window elsewhere", async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      const state = await shell.state();
+      expect(state.icon).toEqual({ width: 1024, height: 1024 });
+    } finally {
+      await shell.close();
+    }
+  }, 30000);
+
+  test("the site's developer console shows only the site's own messages: Electron's security warning never appears in it", async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      // Electron prints "Electron Security Warning (Insecure Content-Security-Policy)" into any page
+      // without a CSP in a development build: a reviewer would take it for the site's.
+      const siteMessages: string[] = [];
+      const consoleMessages: string[] = [];
+      shell.site()!.on('console', (m) => siteMessages.push(m.text()));
+      shell.console.on('console', (m) => consoleMessages.push(m.text()));
+      await engage(shell.console, `${siteUrl}/tabs/`);
+      const page = await sitePage(shell, `${siteUrl}/tabs/`);
+      await page.getByRole('heading', { name: 'Tabs' }).waitFor({ timeout: 10000 });
+      await page.evaluate(() => console.log('the site speaks'));
+      await Bun.sleep(1500);
+      expect(siteMessages).toContain('the site speaks');
+      expect(siteMessages.filter((t) => /Electron Security Warning/i.test(t))).toEqual([]);
+      expect(consoleMessages.filter((t) => /Electron Security Warning/i.test(t))).toEqual([]);
+    } finally {
+      await shell.close();
+    }
+  }, 60000);
+
   test('reloading the console keeps it engaged on the same site page, and machine readouts arrive', async () => {
     const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
     try {

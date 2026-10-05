@@ -11,7 +11,7 @@
 // Environment: ARTEMIS_APP_URL (the console), ARTEMIS_USER_DATA (profile: cookies, logins),
 // ARTEMIS_SHELL_HIDDEN=1 (tests: windows never shown), ARTEMIS_GRACEFUL_QUIT=1 (a session is
 // recorded: quitting goes through Artemis so the recording is saved whole).
-import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain, type WebContents } from 'electron';
+import { app, BaseWindow, BrowserWindow, Menu, WebContentsView, ipcMain, nativeImage, type WebContents } from 'electron';
 import path from 'node:path';
 import { actorAt, createAutopilot, onSiteInput, setActing, setSpeed } from './autopilot-state';
 
@@ -20,6 +20,11 @@ const APP_URL = process.env.ARTEMIS_APP_URL ?? 'http://127.0.0.1:5173';
 // launcher says where the bundle is; Electron's app path is the folder of main.cjs otherwise).
 const SHELL_DIR = process.env.ARTEMIS_SHELL_DIR ?? app.getAppPath();
 const HIDDEN = process.env.ARTEMIS_SHELL_HIDDEN === '1';
+// Artemis's icon (shell/icon.png, rendered from public/icon.svg by scripts/icon.ts). Electron's own
+// binary runs the shell, so its icon would be Electron's: the mark goes on the Dock (macOS) or on
+// the window (elsewhere) at launch.
+const ICON = process.env.ARTEMIS_ICON ? nativeImage.createFromPath(process.env.ARTEMIS_ICON) : nativeImage.createEmpty();
+app.name = 'Artemis';
 // As in Chrome, a page may close only a window a script opened (a sign-in popup closing itself),
 // never the tab it was opened in. Electron lets any page close itself: a link handler that opens
 // its app in a popup and calls window.close() destroyed the site view, the autopilot lost its page
@@ -44,6 +49,8 @@ const state = {
   editable: false,
   layout: null as Layout | null,
   siteUrl: '',
+  /** The app icon in place (its pixel size), or null when none was given or it could not be read. */
+  icon: null as { width: number; height: number } | null,
   /** The operator closed the window or quit; Artemis saves the session, then lets the shell go. */
   quitRequested: false,
   /** The autopilot: the speed the console set and when it is acting (server/autopilot-driver.ts flies). */
@@ -83,7 +90,11 @@ const MAX_QUEUED_ACTIONS = 10_000;
 const HOTKEY_NAMED = new Set(['Escape', 'ArrowLeft', 'ArrowRight']);
 
 app.whenReady().then(() => {
-  const win = new BaseWindow({ width: 1440, height: 900, title: 'Artemis', backgroundColor: '#02061a', show: !HIDDEN });
+  if (!ICON.isEmpty()) {
+    if (process.platform === 'darwin') app.dock?.setIcon(ICON);
+    state.icon = ICON.getSize();
+  }
+  const win = new BaseWindow({ width: 1440, height: 900, title: 'Artemis', backgroundColor: '#02061a', show: !HIDDEN, ...(ICON.isEmpty() ? {} : { icon: ICON }) });
   const site = new WebContentsView({
     webPreferences: { preload: path.join(SHELL_DIR, 'site-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegrationInSubFrames: true }
   });

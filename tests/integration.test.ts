@@ -337,6 +337,26 @@ test('lenses keep working from the keyboard inside the cosmos, and step aside in
   }
 }, 30000);
 
+test('the console page carries Artemis\'s name and icon: the title and a favicon drawn from the header\'s mark', async () => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  try {
+    await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
+    expect(await page.title()).toBe('Artemis');
+    const href = await page.evaluate(() => document.querySelector<HTMLLinkElement>('link[rel="icon"]')?.href ?? null);
+    expect(href).toMatch(/\/icon\.svg$/);
+    const res = await page.request.get(href!);
+    expect(res.status()).toBe(200);
+    expect(res.headers()['content-type']).toContain('image/svg+xml');
+    // The same mark as the header: the hexagon, its spokes and the core.
+    const svg = await res.text();
+    expect(svg).toContain('M16 2 L28 9 V23 L16 30 L4 23 V9 Z');
+    expect(svg).toContain('<circle cx="16" cy="16" r="3"');
+  } finally {
+    await context.close();
+  }
+}, 20000);
+
 test('the entry screen asks for the website and nothing starts until a valid one is given', async () => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
