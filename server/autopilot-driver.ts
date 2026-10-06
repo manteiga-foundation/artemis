@@ -44,11 +44,34 @@ export interface Autopilot {
   stop(): Promise<void>;
 }
 
-export function startAutopilot(o: { app: ElectronApplication; site: Page; recorder: Recorder | null; pollMs?: number }): Autopilot {
+/**
+ * What the flight tells the Bun side (the launcher's terminal): the reports it sends the console,
+ * and `speed` when the speed it reads changes (the console's D, or a hand on the site: off).
+ */
+export interface AutopilotEvent {
+  event: 'speed' | 'progress' | 'done' | 'disengaged' | 'stuck' | 'note';
+  speed: Speed;
+  previous?: Speed;
+  visited?: number;
+  pending?: number;
+  etaMs?: number;
+  url?: string;
+  reason?: string;
+  text?: string;
+}
+
+export function startAutopilot(o: { app: ElectronApplication; site: Page; recorder: Recorder | null; pollMs?: number; onEvent?: (e: AutopilotEvent) => void }): Autopilot {
   const { app, site } = o;
   let speed: Speed = 0;
   let stopping = false;
   let flight: Promise<void> | null = null;
+  const tell = (e: AutopilotEvent) => {
+    try {
+      o.onEvent?.(e);
+    } catch {
+      // a listener's trouble never stops the flight
+    }
+  };
 
   const shell = <T>(name: 'speed' | 'acting' | 'land' | 'report', arg?: unknown) =>
     app.evaluate(
@@ -56,7 +79,10 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
       (_electron, { name, arg }) => (globalThis as unknown as { __artemisAutopilot?: Record<string, (a?: unknown) => unknown> }).__artemisAutopilot?.[name]?.(arg),
       { name, arg }
     ) as Promise<T>;
-  const report = (status: Record<string, unknown>) => shell('report', status).catch(() => {});
+  const report = (status: Record<string, unknown>) => {
+    tell(status as unknown as AutopilotEvent);
+    return shell('report', status).catch(() => {});
+  };
   const stopped = () => stopping || speed === 0;
   // The page it is on talked back (it answered a dialog there): it does not stay. Electron's native
   // box for that dialog closes only when the page navigates.
@@ -184,7 +210,9 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
     if (stopping) return;
     shell<number>('speed')
       .then((s) => {
-        speed = (s === 1 || s === 2 || s === 3 ? s : 0) as Speed;
+        const next = (s === 1 || s === 2 || s === 3 ? s : 0) as Speed;
+        if (next !== speed && !stopping) tell({ event: 'speed', speed: next, previous: speed });
+        speed = next;
         if (speed > 0 && !flight) flight = takeOff().finally(() => (flight = null));
       })
       .catch(() => {});

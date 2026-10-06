@@ -37,6 +37,18 @@ const walker = Bun.serve({
 
 let vite: ViteServer;
 let dir: string;
+
+// A small site to fly: four pages, each linking to all the others.
+const flyer = Bun.serve({
+  hostname: 'localhost',
+  port: 0,
+  fetch(req) {
+    const path = new URL(req.url).pathname;
+    if (!['/', '/a', '/b', '/c'].includes(path)) return new Response('not found', { status: 404 });
+    const nav = ['/', '/a', '/b', '/c'].map((p) => `<a href="${p}">${p === '/' ? 'Home' : p.slice(1).toUpperCase()}</a>`).join(' ');
+    return new Response(`<!doctype html><title>Fly ${path}</title><nav>${nav}</nav><h1>${path}</h1>`, { headers: { 'content-type': 'text/html' } });
+  }
+});
 beforeAll(async () => {
   vite = await startVite();
   dir = await mkdtemp(join(tmpdir(), 'artemis-cli-'));
@@ -45,6 +57,7 @@ afterAll(async () => {
   vite?.stop();
   site.stop(true);
   walker.stop(true);
+  flyer.stop(true);
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -72,6 +85,8 @@ test('one Ctrl+C in the terminal saves the session whole: database, both videos 
     } catch {
       // already gone
     }
+    // Playwright starts Electron in its own process group: a failed run must not leave it behind.
+    if (signal === 'SIGKILL') Bun.spawnSync(['pkill', '-9', '-f', join(dir, 'profile')]);
   };
   try {
     // The website was opened from the command line and its session started.
@@ -80,6 +95,14 @@ test('one Ctrl+C in the terminal saves the session whole: database, both videos 
     while (!(await database()) && Date.now() - started < 30000) await Bun.sleep(200);
     expect(await database()).toBeDefined();
     await Bun.sleep(1500);
+
+    // Before anything closes, the terminal already shows the welcome and both files' full paths,
+    // printed the moment they were created.
+    expect(out).toContain('WEB APPLICATION INTELLIGENT CONSOLE');
+    expect(out).toContain('███████╗███╗   ███╗');
+    const db = join(sessions, (await database())!);
+    expect(out).toMatch(new RegExp(`SESSION\\s+Database\\s+${db.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    expect(out).toMatch(new RegExp(`HAR\\s+Live HAR\\s+${db.replace(/\.sqlite$/, '.har').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
 
     group('SIGINT'); // one Ctrl+C
     const code = await Promise.race([exited, Bun.sleep(30000).then(() => 'still running')]);
@@ -155,6 +178,49 @@ test('killed outright mid-session (kill -9), nothing browsed is lost: the sessio
     const configs = har!.log.entries.filter((e) => e.request.url.includes('/api/config'));
     expect(configs.map((e) => new URL(e.request.url).searchParams.get('page')).sort()).toEqual(['/', '/next']);
     expect(configs.find((e) => e.request.url.endsWith('page=/next'))!.request.cookies).toContainEqual({ name: 'sid', value: 'walk' });
+  } finally {
+    killAll();
+  }
+}, 90000);
+
+test('`--autopilot max` flies the site once it has loaded, and the terminal says so: engaged, covered; its clicks recorded as its own', async () => {
+  const root = join(dir, 'fly');
+  const sessions = join(root, 'sessions');
+  const profile = join(root, 'profile');
+  const proc = spawn('bun', ['run', 'artemis', `http://localhost:${flyer.port}/`, '--autopilot', 'max'], {
+    cwd: new URL('..', import.meta.url).pathname,
+    detached: true,
+    env: { ...process.env, ARTEMIS_PORT: new URL(vite.url).port, ARTEMIS_SHELL_HIDDEN: '1', ARTEMIS_PROFILE_DIR: profile, ARTEMIS_SESSIONS_DIR: sessions },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  let out = '';
+  proc.stdout!.on('data', (b) => (out += String(b)));
+  const exited = new Promise<number | null>((resolve) => proc.on('exit', (code) => resolve(code)));
+  const killAll = () => {
+    try {
+      process.kill(-proc.pid!, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+    Bun.spawnSync(['pkill', '-9', '-f', profile]);
+  };
+  try {
+    const started = Date.now();
+    while (!/the site is covered/i.test(out) && Date.now() - started < 45000) await Bun.sleep(200);
+    expect(out).toMatch(/Autopilot\s+max · the next page as soon as one has loaded/);
+    expect(out).toMatch(/AUTOPILOT\s+Engaged at max/);
+    expect(out).not.toMatch(/Engaged at (slow|regular)|Speed: /);
+    // Home was open already; it went to the three others.
+    expect(out).toMatch(/AUTOPILOT\s+The site is covered: 3 pages visited/);
+
+    // Read live from the session database: the clicks that took it there are the autopilot's.
+    const database = (await readdir(sessions)).find((n) => n.endsWith('.sqlite'))!;
+    const actors = Bun.spawnSync(['sqlite3', '-readonly', join(sessions, database), "SELECT DISTINCT actor FROM actions WHERE kind = 'click'"]).stdout.toString().trim();
+    expect(actors).toBe('autopilot');
+
+    process.kill(-proc.pid!, 'SIGINT');
+    expect(await Promise.race([exited, Bun.sleep(30000).then(() => 'still running')])).toBe(0);
+    expect(out).toContain('session saved');
   } finally {
     killAll();
   }

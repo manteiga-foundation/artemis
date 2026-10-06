@@ -8,7 +8,7 @@ import { basename, join } from 'node:path';
 import { startMachineFeed } from './machine';
 import { startRecorder, type Recorder } from './recorder';
 import { startSiteFeed } from './site-feed';
-import { startAutopilot } from './autopilot-driver';
+import { startAutopilot, type AutopilotEvent } from './autopilot-driver';
 import { watchSiteDialogs } from './site-dialogs';
 import { addArtifacts } from './session-store';
 import { recoverRecordings, writeManifest } from './recordings';
@@ -55,6 +55,8 @@ export interface Shell {
   recovered: string[];
   /** Resolves once the app has closed and the session's files are in place (null: no session). */
   finished(): Promise<SessionFiles | null>;
+  /** The autopilot's flight as the Bun side sees it (speed changes, progress, the end). */
+  onAutopilot(listener: (e: AutopilotEvent) => void): () => void;
   state(): Promise<ShellState>;
   close(): Promise<void>;
 }
@@ -144,7 +146,8 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     if (sitePage) recorder = startRecorder({ app, site: sitePage, sessionsDir: o.sessionsDir, har: o.record?.har !== false });
   }
   // The autopilot flies the site when the console sets a speed (D in the Browser view).
-  const autopilot = sitePage ? startAutopilot({ app, site: sitePage, recorder }) : null;
+  const autopilotListeners = new Set<(e: AutopilotEvent) => void>();
+  const autopilot = sitePage ? startAutopilot({ app, site: sitePage, recorder, onEvent: (e) => autopilotListeners.forEach((l) => l(e)) }) : null;
   app.on('close', () => void autopilot?.stop());
   // The site's dialogs: the operator's are theirs (the native box); the autopilot answers its own.
   const stopDialogs = watchSiteDialogs({ app, flying: () => autopilot?.flying() ?? false, onAnswered: (text) => autopilot?.answered(text) });
@@ -236,6 +239,10 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     recorder,
     recovered,
     finished: () => finish(),
+    onAutopilot: (listener) => {
+      autopilotListeners.add(listener);
+      return () => autopilotListeners.delete(listener);
+    },
     state: () => app.evaluate(() => (globalThis as unknown as { __artemisShell: ShellState }).__artemisShell),
     close
   };
