@@ -3,9 +3,10 @@ import { Database } from 'bun:sqlite';
 import { copyFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import { launchShell, type Shell } from '../server/shell';
 import { inScope } from '../server/session-store';
+import { harProblems } from './har-spec';
 import { startVite, type ViteServer } from './vite';
 
 // The recorder: while the operator browses in the owned browser, every page view, action, request
@@ -18,10 +19,12 @@ const third = Bun.serve({
   fetch: () => new Response(new Uint8Array([71, 73, 70]), { headers: { 'content-type': 'image/gif' } })
 });
 
+let siteHits = 0;
 const site = Bun.serve({
   hostname: 'localhost',
   port: 0,
   async fetch(req) {
+    siteHits++;
     const url = new URL(req.url);
     const html = (body: string, headers: Record<string, string> = {}) =>
       new Response(`<!doctype html><title>Shop ${url.pathname}</title><link rel="stylesheet" href="/style.css">${body}<script src="/app.js"></script>`, {
@@ -44,7 +47,8 @@ const site = Bun.serve({
         headers: { 'content-type': 'text/javascript' }
       });
     if (url.pathname === '/api/config') return Response.json({ page: url.searchParams.get('page') });
-    if (url.pathname === '/api/map') return Response.json({ tiles: 12 });
+    // The signed-in part of the site: only with the session cookie Home set.
+    if (url.pathname === '/api/map') return req.headers.get('cookie')?.includes('sid=abc') ? Response.json({ tiles: 12 }) : new Response('sign in first', { status: 401 });
     if (url.pathname === '/style.css') return new Response('h1{color:teal}', { headers: { 'content-type': 'text/css' } });
     if (url.pathname === '/logo.png') return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { 'content-type': 'image/png' } });
     return new Response('not found', { status: 404 });
@@ -81,6 +85,11 @@ async function sitePage(shell: Shell, prefix: string): Promise<Page> {
 
 interface Row {
   [k: string]: string | number | null;
+}
+
+interface HarEntryShape {
+  request: { method: string; url: string; headers: { name: string; value: string }[]; cookies: { name: string; value: string }[]; postData?: { text?: string } };
+  response: { status: number; content: { size: number; mimeType: string; text?: string } };
 }
 
 describe('the recorder', () => {
@@ -134,6 +143,31 @@ describe('the recorder', () => {
       for (const f of [copy, `${copy}-wal`, `${copy}-shm`]) await rm(f, { force: true });
       expect(alone).toEqual({ visits: 3, map: 1 });
 
+      // The HAR is written live too, next to the database: within a second it is a valid HAR
+      // holding the session whole (the map call carries the session cookie, the typed post is
+      // there as sent), API bodies as text, the logo listed without its bytes.
+      type LiveEntry = HarEntryShape;
+      const harFile = path!.replace(/\.sqlite$/, '.har');
+      let harDoc: { log: { entries: LiveEntry[] } } | null = null;
+      const ready = (doc: typeof harDoc) => !!doc?.log.entries.some((e) => e.request.url.endsWith('/api/map')) && !!doc?.log.entries.some((e) => e.request.method === 'POST');
+      for (const until = Date.now() + 2500; Date.now() < until && !ready(harDoc); await Bun.sleep(250))
+        harDoc = (await Bun.file(harFile).json().catch(() => null)) as typeof harDoc;
+      expect(ready(harDoc)).toBe(true);
+      expect(harProblems(harDoc)).toEqual([]);
+      const liveMap = harDoc!.log.entries.find((e) => e.request.url.endsWith('/api/map'))!;
+      expect(liveMap.request.cookies).toContainEqual({ name: 'sid', value: 'abc' });
+      expect(liveMap.response.content.text).toBe('{"tiles":12}');
+      expect(harDoc!.log.entries.find((e) => e.request.method === 'POST')!.request.postData?.text).toBe('email=ana%40example.com&pw=hunter2');
+      expect(harDoc!.log.entries.find((e) => e.request.url.endsWith('/logo.png'))!.response.content).toMatchObject({ mimeType: 'image/png', size: 4 });
+
+      // Another tool needs no sign-in: the recorded request, sent again with nothing but what the
+      // HAR holds, gets in; the same request without its cookie is turned away.
+      const replay = (headers: { name: string; value: string }[]) =>
+        fetch(liveMap.request.url, { method: liveMap.request.method, headers: headers.filter((h) => !h.name.startsWith(':')).map((h) => [h.name, h.value] as [string, string]) });
+      const signedIn = await replay(liveMap.request.headers);
+      expect([signedIn.status, await signedIn.text()]).toEqual([200, '{"tiles":12}']);
+      expect((await replay(liveMap.request.headers.filter((h) => h.name.toLowerCase() !== 'cookie'))).status).toBe(401);
+
       // Meanwhile the console's cosmos became the recording, live: the two pages, each wearing its
       // own requests as dots (both read their config; Contact's button loaded the map; Home showed
       // the outside pixel), whatever else the browser fetched or took from its cache.
@@ -171,11 +205,27 @@ describe('the recorder', () => {
       // compresses to ~15 KB over these few seconds).
       expect(bytes.length).toBeGreaterThan(4_000);
     }
-    const har = (await Bun.file(`${base}.har`).json()) as { log: { entries: { request: { url: string }; response: { content: { text?: string } } }[] } };
+    // After closing, the same file, still valid, and read by other software: Playwright's own HAR
+    // player serves the Contact page from it in a fresh browser with no profile, without one
+    // request reaching the site.
+    const har = (await Bun.file(`${base}.har`).json()) as { log: { entries: HarEntryShape[] } };
+    expect(harProblems(har)).toEqual([]);
     const urls = har.log.entries.map((e) => e.request.url);
     expect(urls).toContain(`${siteUrl}/api/map`);
     expect(urls.some((u) => u.startsWith(vite.url))).toBe(false);
     expect(har.log.entries.find((e) => e.request.url === `${siteUrl}/api/map`)!.response.content.text).toContain('tiles');
+    const reader = await chromium.launch();
+    try {
+      const context = await reader.newContext();
+      await context.routeFromHAR(`${base}.har`, { url: `${siteUrl}/**`, notFound: 'abort' });
+      const replayPage = await context.newPage();
+      const hitsBefore = siteHits;
+      await replayPage.goto(`${siteUrl}/contact`);
+      await replayPage.getByRole('heading', { name: 'Contact' }).waitFor({ timeout: 5000 });
+      expect(siteHits).toBe(hitsBefore);
+    } finally {
+      await reader.close();
+    }
     const db = new Database(path!, { readonly: true });
     try {
       const q = (sql: string) => db.query(sql).all() as Row[];

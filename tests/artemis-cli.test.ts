@@ -5,6 +5,7 @@ import { copyFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startVite, type ViteServer } from './vite';
+import { harProblems } from './har-spec';
 
 // `bun run artemis` as the operator runs it, stopped as the operator stops it: one Ctrl+C in the
 // terminal. The terminal signals the whole foreground process group, so the package script's
@@ -29,7 +30,7 @@ const walker = Bun.serve({
     const next = url.pathname === '/' ? "setTimeout(() => (location.href = '/next'), 600)" : '';
     return new Response(
       `<!doctype html><title>Walk</title><h1>${url.pathname}</h1><script>fetch('/api/config?page=' + location.pathname).then((r) => r.json()).then(() => { ${next} })</script>`,
-      { headers: { 'content-type': 'text/html' } }
+      { headers: { 'content-type': 'text/html', ...(url.pathname === '/' ? { 'set-cookie': 'sid=walk; Path=/' } : {}) } }
     );
   }
 });
@@ -144,6 +145,16 @@ test('killed outright mid-session (kill -9), nothing browsed is lost: the sessio
     } finally {
       db.close();
     }
+
+    // The HAR beside it survived too, whole and valid (Playwright's was only written at close):
+    // both pages' config calls, the second carrying the session cookie Home set.
+    const har = (await Bun.file(join(sessions, database!.replace(/\.sqlite$/, '.har'))).json().catch(() => null)) as {
+      log: { entries: { request: { url: string; cookies: { name: string; value: string }[] } }[] };
+    } | null;
+    expect(harProblems(har)).toEqual([]);
+    const configs = har!.log.entries.filter((e) => e.request.url.includes('/api/config'));
+    expect(configs.map((e) => new URL(e.request.url).searchParams.get('page')).sort()).toEqual(['/', '/next']);
+    expect(configs.find((e) => e.request.url.endsWith('page=/next'))!.request.cookies).toContainEqual({ name: 'sid', value: 'walk' });
   } finally {
     killAll();
   }

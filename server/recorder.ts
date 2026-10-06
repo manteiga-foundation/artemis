@@ -8,14 +8,17 @@
 //
 // A session starts with the website's first page (the address the console engaged) and is one
 // file in `sessionsDir`. Popups are not recorded yet.
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type { ElectronApplication, Page, Request, Response } from 'playwright';
-import { keepsBody, openSessionStore, type ActionInput, type SessionStore } from './session-store';
+import { addArtifacts, keepsBody, openSessionStore, type ActionInput, type SessionStore } from './session-store';
+import { openLiveHar, type LiveHar } from './har';
 import type { SiteEvent } from '../src/site-events';
 
 export interface Recorder {
   /** The current session's file, or null before the first page. */
   path(): string | null;
+  /** The session's live HAR next to it, when one is written. */
+  harPath(): string | null;
   /** Drains the last actions, marks the session ended and closes the file. */
   stop(): Promise<void>;
   /** Live events for the console's cosmos, emitted as they are written. Returns an unsubscribe. */
@@ -33,9 +36,18 @@ export const sessionFileName = (target: string, t: number): string =>
 /** As the shell queues them: the actor is set there (the autopilot's own clicks are its own). */
 type ReportedAction = Omit<ActionInput, 'actor'> & { actor?: ActionInput['actor'] };
 
-export function startRecorder(o: { app: ElectronApplication; site: Page; sessionsDir: string; pollMs?: number; checkpointMs?: number }): Recorder {
+export function startRecorder(o: {
+  app: ElectronApplication;
+  site: Page;
+  sessionsDir: string;
+  pollMs?: number;
+  checkpointMs?: number;
+  /** Also write the session's HAR, live, next to its database (server/har.ts). */
+  har?: boolean;
+}): Recorder {
   const { app, site } = o;
   let store: SessionStore | null = null;
+  let liveHar: LiveHar | null = null;
   let closed = false;
   let visitId: number | null = null;
   /** A document navigation is in flight: the next main-frame commit belongs to it. */
@@ -44,6 +56,8 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   const requestVisit = new WeakMap<Request, number | null>();
   /** Bodies are asked for as soon as the response arrives: a navigation discards them. */
   const responseBodies = new WeakMap<Request, Promise<Buffer | null>>();
+  /** The full request headers (cookies included) are in the row before its response is. */
+  const headersKnown = new WeakMap<Request, Promise<void>>();
   const listeners = new Set<(e: SiteEvent) => void>();
   const emit = (e: SiteEvent) => {
     for (const l of listeners) l(e);
@@ -78,13 +92,19 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     if (isMainDocument(req)) {
       if (!store) {
         store = openSessionStore(join(o.sessionsDir, sessionFileName(url, t)), { target: url, startedAt: t });
+        if (o.har) {
+          const harPath = store.path.replace(/\.sqlite$/, '.har');
+          liveHar = openLiveHar(harPath, store.db);
+          addArtifacts(store.path, [{ kind: 'har', file: basename(harPath), startedAt: t }]);
+        }
         emit({ type: 'session', target: url, scopeHost: store.scopeHost });
       }
       // A redirect hop is the same page view arriving somewhere else.
-      if (redirectedFrom && requestIds.has(redirectedFrom) && visitId !== null) write((s) => s.updateVisit(visitId!, { url }));
+      if (redirectedFrom && requestIds.has(redirectedFrom) && visitId !== null) write((s) => (s.updateVisit(visitId!, { url }), liveHar?.pages()));
       else
         write((s) => {
           visitId = s.startVisit({ t, url, kind: 'document' });
+          liveHar?.pages();
           emit({ type: 'visit', id: visitId, t, url, kind: 'document', committed: false });
         });
       documentPending = true;
@@ -108,10 +128,13 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
       requestVisit.set(req, visitId);
       emit({ type: 'request', id, visitId, method: req.method(), url, resourceType: req.resourceType(), mainDocument });
       // The full set (cookies included) is only known once the network stack has sent it.
-      req
-        .allHeaders()
-        .then((h) => write((s2) => s2.updateRequest(id, { headers: Object.entries(h) })))
-        .catch(() => {});
+      headersKnown.set(
+        req,
+        req
+          .allHeaders()
+          .then((h) => write((s2) => s2.updateRequest(id, { headers: Object.entries(h) })))
+          .catch(() => {})
+      );
     });
   };
 
@@ -125,7 +148,13 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     if (id === undefined) return;
     const res = await req.response().catch(() => null);
     if (!res) return;
-    const [headers, body] = await Promise.all([res.allHeaders().catch(() => res.headers()), responseBodies.get(req) ?? Promise.resolve(null)]);
+    const [headers, body, httpVersion, sizes] = await Promise.all([
+      res.allHeaders().catch(() => res.headers()),
+      responseBodies.get(req) ?? Promise.resolve(null),
+      res.httpVersion().catch(() => null),
+      req.sizes().catch(() => null),
+      headersKnown.get(req)
+    ]);
     const timing = req.timing();
     const tEnd = timing.responseEnd >= 0 ? Math.round(timing.startTime + timing.responseEnd) : Date.now();
     write((s) => {
@@ -133,14 +162,18 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
       s.completeRequest(id, {
         tEnd,
         status: res.status(),
+        statusText: res.statusText(),
+        httpVersion,
+        sizes,
         mimeType: headers['content-type'] ?? null,
         headers: Object.entries(headers),
         body: body ? new Uint8Array(body) : null,
         bodyUnavailable: wanted && !body,
         timing
       });
+      liveHar?.add(id);
       const visit = requestVisit.get(req);
-      if (isMainDocument(req) && visit != null) s.updateVisit(visit, { status: res.status() });
+      if (isMainDocument(req) && visit != null) (s.updateVisit(visit, { status: res.status() }), liveHar?.pages());
       emit({ type: 'response', id, status: res.status() });
     });
   };
@@ -151,6 +184,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     if (isMainDocument(req)) documentPending = false;
     write((s) => {
       s.failRequest(id, Date.now(), req.failure()?.errorText ?? 'failed');
+      liveHar?.add(id);
       emit({ type: 'response', id, status: null, failed: true });
     });
   };
@@ -163,6 +197,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
       if (visitId !== null)
         write((s) => {
           s.updateVisit(visitId!, { url });
+          liveHar?.pages();
           emit({ type: 'commit', id: visitId!, url });
         });
     } else {
@@ -170,6 +205,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
       const t = Date.now();
       write((s) => {
         visitId = s.startVisit({ t, url, kind: 'same-document' });
+        liveHar?.pages();
         emit({ type: 'visit', id: visitId, t, url, kind: 'same-document', committed: true });
       });
     }
@@ -178,7 +214,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   const onLoad = async () => {
     const visit = visitId;
     const title = await site.title().catch(() => null);
-    if (visit !== null) write((s) => s.updateVisit(visit, { title }));
+    if (visit !== null) write((s) => (s.updateVisit(visit, { title }), liveHar?.pages()));
   };
 
   let draining: Promise<void> | null = null;
@@ -199,11 +235,13 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   site.on('load', onLoad);
   const timer = setInterval(drain, o.pollMs ?? 100);
   // Every write is committed at once, into the `-wal` side file; each second what was written
-  // moves into the `.sqlite` itself, so the file alone is current for tools that take only it.
+  // moves into the `.sqlite` itself, so the file alone is current for tools that take only it,
+  // and the HAR gets the responses completed meanwhile.
   const saver = setInterval(() => {
     if (!unsaved || !store || closed) return;
     unsaved = false;
     try {
+      liveHar?.flush();
       store.checkpoint();
     } catch {
       unsaved = true; // tried again next second
@@ -213,6 +251,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   let stopping: Promise<void> | null = null;
   return {
     path: () => store?.path ?? null,
+    harPath: () => liveHar?.path ?? null,
     onEvent: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -229,7 +268,12 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
         ctx.off('requestfailed', onFailed);
         site.off('framenavigated', onNavigated);
         site.off('load', onLoad);
-        write((s) => s.end(Date.now()));
+        write((s) => {
+          // Requests still waiting for an answer go into the HAR saying so.
+          for (const r of s.db.query('SELECT id FROM requests WHERE status IS NULL AND failure IS NULL ORDER BY id').all() as { id: number }[]) liveHar?.add(r.id);
+          liveHar?.close();
+          s.end(Date.now());
+        });
         closed = true;
         store?.close();
       })())

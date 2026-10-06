@@ -362,10 +362,54 @@ a copy taken mid-checkpoint can be torn, so copy with SQLite's backup (`sqlite3 
 <copy>"`) rather than `cp` when it matters. `ended_at` stays empty while recording, and after a
 crash.
 
-Not yet: popups, Back/Forward/Reload as actions, DOM session replay (spike first), a policy-aware
-HAR export from the database (masking what is marked sensitive), the cosmos built from the recording.
+Not yet: popups, Back/Forward/Reload as actions, DOM session replay (spike first), a masked HAR
+export (the live HAR keeps everything, by the user's choice), the cosmos built from the recording.
 
-### Video and HAR alongside the session
+### The live HAR
+
+`<session>.har` sits next to the database from the first page on and is a whole, valid HAR 1.2
+after every flush (each second, with the checkpoint): other tools can open it while the operator
+browses, and a crash or `kill -9` leaves it valid up to the last second. Artemis writes it itself
+from the session database (`server/har.ts`); Playwright's HAR is no longer used (it held every
+entry, bodies included, in memory until close, and was lost whenever the app did not close
+properly).
+
+The session is kept whole, nothing masked (the user's decision, so a testing tool can replay
+requests already signed in): every request with all its headers as sent (`Cookie`,
+`Authorization`, anti-forgery tokens), `cookies` parsed from them, `Set-Cookie` lines one per
+header and parsed with path, domain, expiry (`Max-Age` counted from the response), HttpOnly and
+Secure; typed form posts as sent (`text`, plus `params` for URL-encoded forms, as browsers' own
+HARs do); query strings; status line and HTTP version as Playwright reports them
+(`response.httpVersion()`, e.g. `HTTP/2.0`); header and body sizes on the wire
+(`request.sizes()`); timing phases (blocked, DNS, connect, TLS, wait, receive). HTTP/2 requests
+carry their pseudo-headers (`:authority`, `:path`...), as Chrome's export does; replay tools drop
+them.
+
+Bodies follow the recording policy (the user's choice among three offered): pages and API
+calls as text (binary as base64); images, scripts, styles and fonts are listed with their size,
+type and a comment, without their bytes. Measured on an overnight session on a large public site: Playwright's HAR was
+465 MB, 99% of it asset bytes (images 238 MB, scripts 115, styles 89; pages 3.0 MB, API calls
+0.1 MB); the same session written from its database is 14.4 MB with 5,718 entries, valid for
+`har-validator` (run in scratch, not a dependency) and for the spec checker in the tests. A
+missing body says why (`too large`, `unavailable`), a failed request carries `_error`, a request
+never answered says so in `comment`, and each entry has Chrome's `_resourceType`.
+
+How it stays valid while growing: the file is `{"log":{...,"entries":[...],"pages":[...]}}`;
+each flush writes the new entries where the entries end and a fresh tail (the pages, whose titles
+arrive late) after them. Entries follow the order responses completed (the specification prefers
+start order and requires readers to sort). The recorder waits for the request's full headers
+(cookies included, `allHeaders()`) before writing its response, so no entry goes out without
+them. Requests still open at the end are written at close, saying so.
+
+`bun run scripts/har.ts <session.sqlite> [out.har]` writes the HAR of any session from its
+database (`<session>.export.har` by default): for sessions recorded before the live HAR (schema
+1 has no status text, HTTP version or sizes: those read empty, `HTTP/1.1` and unknown), or again
+at any time. 5,718 entries took 0.12 s.
+
+Not recorded, so not in the HAR: popups' own traffic (an OAuth window, for one) and service
+workers; the cookies a popup sign-in sets still travel on the site's next requests.
+
+### Videos alongside the session
 
 On by default for now (a configuration view will decide later; `launchShell({ record: { video,
 har } })` turns them off). Next to `<session>.sqlite`:
@@ -374,40 +418,35 @@ har } })` turns them off). Next to `<session>.sqlite`:
 - `<session>.console.webm` — the console window. The website is drawn under the transparent
   console, not in it, so the site area is black here; the two files together are what the
   operator saw.
-- `<session>.har` — Playwright's HAR of the site's traffic, with response content embedded, for
-  tools that import HAR. The console runs in the same Electron app, so Playwright would also
-  record Artemis's own interface loading from the local dev server (its scripts, fonts, sounds);
-  those requests are filtered out, so the HAR holds only the website and the third parties it
-  calls.
 
 They are written while the app runs and completed when it closes, so they start in a hidden
 `.recording-<time>` folder, move next to the database once the app has closed, and are listed in
 the session's `artifacts` table with the time recording started (videos start with the window,
-before the session; use it to line the video up with recorded events).
+before the session; use it to line the video up with recorded events). The HAR is listed there
+when the session starts.
 Measured: Artemis's share of the machine 5% without video, 6% with both videos (median over 13 s
 of scrolling Wikipedia); about 1 to 1.5 MB per window per 16 s.
 
-**Closing saves the session whole, however it ends.** Playwright writes the HAR only when Artemis
-closes the app itself (`context.close()` exports it); an Electron that quits on its own, or a
-process killed by Ctrl+C, leaves no HAR and the videos stranded in the hidden folder (found in
-real use: no session had a HAR, and the interrupted ones had no videos beside them). So, while a
-session is recorded (`ARTEMIS_GRACEFUL_QUIT=1`):
+**Closing saves the session whole, however it ends.** Playwright finishes the videos only when
+Artemis closes the app itself; an Electron that quits on its own, or a process killed by Ctrl+C,
+left the videos stranded in the hidden folder (found in real use, back when the HAR was
+Playwright's and was lost the same way). So, while a session is recorded
+(`ARTEMIS_GRACEFUL_QUIT=1`):
 
 - Closing the window (or the console with Cmd+W) and Cmd+Q hide the windows at once and ask
-  Artemis to close (`quitRequested`, watched every 200 ms); Artemis drains the recorder, approves
-  the quit, closes through Playwright (HAR, videos), then moves the files. If nobody answers in
-  15 s the shell quits on its own.
+  Artemis to close (`quitRequested`, watched every 200 ms); Artemis drains the recorder (the HAR
+  gets its last entries), approves the quit, closes through Playwright (videos), then moves the
+  files. If nobody answers in 15 s the shell quits on its own.
 - Ctrl+C, closing the terminal and `kill` (SIGINT, SIGHUP, SIGTERM) go through the same close;
   `scripts/artemis.ts` replaces Playwright's handlers, which would close the browser at once and
   exit 130. A second Ctrl+C quits without waiting. One press can arrive twice (the terminal
   signals the whole job and `bun run artemis`'s wrapper passes it on): repeats within a second are
   the same press (found in real use: one Ctrl+C printed both messages and lost the session).
-- A crash, `kill -9` or a power cut cannot be saved at the time. Each recording folder keeps a
+- A crash, `kill -9` or a power cut cannot be saved at the time. The database and the HAR need
+  nothing: both are current on disk within a second. Each recording folder keeps a
   `manifest.json` (which video is the site's, which the console's, and the session's database once
-  a website is opened); the next launch moves what survived next to its database, lists it, and
-  says so (`server/recordings.ts`). The HAR cannot be recovered that way (Playwright holds it in
-  memory until close); the database, written as the session happens and current in the `.sqlite`
-  itself within a second, is the complete record (a HAR export from it is planned).
+  a website is opened); the next launch moves the videos that survived next to their database,
+  lists them, and says so (`server/recordings.ts`).
 
 `bun run artemis <website>` engages the website at once (`ARTEMIS_PROFILE_DIR` and
 `ARTEMIS_SESSIONS_DIR` override `data/shell-profile` and `data/sessions`; the test uses both).
@@ -507,9 +546,10 @@ actions yet), a pulse when a node is added, page titles and full-URL lists in a 
 - `tests/metrics.test.ts`, `tests/quality.test.ts` — frame statistics, machine CPU/memory/process-tree parsing, graph pixel-ratio budget.
 - `tests/sounds.test.ts`, `tests/debug.test.ts`, `tests/debug-page.test.ts` — action routing and override persistence; catalogue integrity; the soft family's rules; `/debug` in real Chromium: every synthesized preset plays without errors, a pick applied on `/debug` is what the real console's hover plays, Reset restores the defaults.
 - `tests/session-store.test.ts` — the session database: target and scope; actions belong to the page view open at the time and credit the next page view (also when reported late, never long after); requests credited to the latest earlier action in their page view, re-credited when an action arrives late; the actor column; typed values kept with password fields marked; responses with status, headers (credentials marked sensitive), body and timing; request bodies; bodies stored once by hash; missing bodies noted (too large, unavailable); the file opens in another process; a checkpoint puts everything written into the file itself, so a copy of the `.sqlite` alone holds the page view, the request and its body (fails without it: the copy has no tables); body, sensitive-header and scope policies.
-- `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic. Written as it happens: while the session is still open, `sqlite3 -readonly` in another process sees the three page views and the map call with its body, and within a second a copy of the `.sqlite` alone holds them too (failed before: all of it sat in the `-wal` side file, the copy had no tables). Next to the database: a WebM video of the website and of the console and a HAR holding the site's API call with its body and none of the console's requests, all listed in the `artifacts` table, with no temporary folder left behind. Meanwhile the console's cosmos became the recording, live (the two pages, the shared config endpoint, the map endpoint, the outside host); V lands on `/contact`; a console reload rebuilds the same cosmos from the database. The fixture page reads its config before the test moves on (clicking away mid-call cuts it off, and Electron then reports it neither finished nor failed: recorded as open, which made the assertion flaky). Closing the way a person does keeps the recording whole: closing the window, and Cmd+Q, each still produce the HAR, both videos, an ended session and no hidden folder (both failed before: no HAR).
+- `tests/recorder.test.ts` — the recorder in the Electron shell against a fixture site with a third party: Home, Contact, Load map, a form with email and password, Send. The session file holds the three page views with the actions that led to them, the six actions in order with role, name, value and sensitivity, the page-load API call and the button's API call with their JSON bodies, documents with bodies, styles and images without, the third-party pixel outside the scope, the form post with its body, and the cookie headers marked sensitive; nothing of the console's own traffic. Written as it happens: while the session is still open, `sqlite3 -readonly` in another process sees the three page views and the map call with its body, and within a second a copy of the `.sqlite` alone holds them too (failed before: all of it sat in the `-wal` side file, the copy had no tables). The HAR beside it is live as well: within a second it is a valid HAR (spec checker) whose map call carries the session cookie and its JSON body, with the typed form post as sent and the logo listed with size and type (fails without the live HAR: no file until close); the map call sent again with only the HAR's headers gets in (200, the tiles) where the same request without its cookie is refused (401): another tool needs no sign-in. Next to the database: a WebM video of the website and of the console and a HAR holding the site's API call with its body and none of the console's requests, all listed in the `artifacts` table, with no temporary folder left behind; after close the HAR is still valid and Playwright's own HAR player serves the Contact page from it in a fresh browser without one request reaching the site. Meanwhile the console's cosmos became the recording, live (the two pages, the shared config endpoint, the map endpoint, the outside host); V lands on `/contact`; a console reload rebuilds the same cosmos from the database. The fixture page reads its config before the test moves on (clicking away mid-call cuts it off, and Electron then reports it neither finished nor failed: recorded as open, which made the assertion flaky). Closing the way a person does keeps the recording whole: closing the window, and Cmd+Q, each still produce the HAR, both videos, an ended session and no hidden folder (both failed before: no HAR).
 - `tests/recordings.test.ts` — recovering an interrupted session from its folder's manifest: the videos move next to the database and are listed in it; a launch that never opened a website is removed; the recording in progress and folders without a manifest are left alone.
-- `tests/artemis-cli.test.ts` — `bun run artemis <site>` (the package script, its `bun run` wrapper included) in its own process group, given one SIGINT to the whole group as a terminal Ctrl+C does (the wrapper passes it on, so the launcher receives it twice): read as one press, exit 0, "session saved", the database, both videos and the HAR, no hidden folder (without the signal handling it exits 130, the reported symptom). Killed outright instead (`kill -9` to the launcher and its Electron) while a fixture site browses itself (Home reads its config, moves on to Next, which reads its own): another process read both page views and both config bodies live, and after the kill a copy of the `.sqlite` alone still holds them, with the session marked never ended (fails without the recorder's checkpoint: the file alone has no tables).
+- `tests/artemis-cli.test.ts` — `bun run artemis <site>` (the package script, its `bun run` wrapper included) in its own process group, given one SIGINT to the whole group as a terminal Ctrl+C does (the wrapper passes it on, so the launcher receives it twice): read as one press, exit 0, "session saved", the database, both videos and the HAR, no hidden folder (without the signal handling it exits 130, the reported symptom). Killed outright instead (`kill -9` to the launcher and its Electron) while a fixture site browses itself (Home reads its config, moves on to Next, which reads its own): another process read both page views and both config bodies live, and after the kill a copy of the `.sqlite` alone still holds them, with the session marked never ended (fails without the recorder's checkpoint: the file alone has no tables); the HAR beside it is valid and holds both config calls, the second with the session cookie Home set (fails with Playwright's HAR: none survives a kill).
+- `tests/har.test.ts` — the live HAR from the session database, checked against the HAR 1.2 specification's required fields (`tests/har-spec.ts`: types, ISO dates, page references, timings summing to `time`, underscore custom fields): valid from the first page on and after every flush, entries in completion order, titles arriving late; the session whole and unmasked (Cookie and Authorization headers as sent, request cookies parsed, Set-Cookie split per line and parsed with path, domain, Expires and Max-Age, HttpOnly, Secure; the URL-encoded post as text and params; query string; status text, HTTP version, wire sizes); text bodies as text, binary as base64, assets with size, type and a comment and no bytes, missing bodies saying why; timing phases (blocked, DNS, connect, TLS, wait, receive; mutation-checked); failed requests with `_error` and unanswered ones with a comment; `exportHar` in start order, also on a schema 1 session without the new columns; `bun run scripts/har.ts` writes `<session>.export.har` and says where.
 - `tests/site-model.test.ts` — events to drawing: pages keyed without the query, linked in commit order, each under the page it was first reached from, the last one current; a page appears at its final address once its navigation commits, with the requests made meanwhile; every request a dot of its page, one per method and address (two pages calling the same endpoint get a dot each): API calls, the page's own files (subdomains in scope), outside requests marked external; errors and failures on the node that answered; replays change nothing, reset starts over; outside sign-in pages are external pages. The network: the core, sections, relays and dots, one line each; navigation outside the tree as cross links (routes); Scope drops external nodes and lines; anomalies; an empty recording. The geometry: the core at the centre and its pages evenly around it, the first straight up, then clockwise, even when one section holds far more than the others; no drawn line crosses another on a site with sections, sub-pages, a chain through a sign-in provider and back-and-forth navigation (checked segment by segment, with and without Scope; fails when sub-pages may spread around the full circle); every node on exactly one line, to its parent; each page's dots nearer their page than any other, none on top of another; sub-pages farther out than their parent, within 113 degrees of straight on; a walk is a straight line out from the core; Scope and recomputation move nothing; a site too big for the space (a 60-page flow) is drawn smaller, inside it, the core still at the centre; every node fixed.
 - `tests/recorded-cosmos.test.ts` — the controller with the recording: the first events replace the emulated network; growth keeps every node; V lands on the current recorded page, selected and centred with every node in the frame (no fixed close-up), a lone page at a sensible width, or says nothing is recorded yet; Scope hides and restores outside hosts with the selection kept on its node; Scope replaces Regenerate, which refuses; drawn, not simulated (every node pinned, no simulation start, the first nodes arrive in place, growth glides, Scope snaps, Hold and Clear never release a node); routes hidden in the overview and lit by the Routes lens; whole-site framing with room for labels; the core a hexagon in both cosmos; an empty graph is never measured; the camera frames where the growing site is going until the operator aims.
 - `tests/shell-logic.test.ts` — where the native site view goes (shown only engaged, in the Browser view, not diving), which clicks pass through to the site (everywhere but the panels), resuming the engaged website after a console reload (garbage, non-web addresses and refusing storage resume nothing).

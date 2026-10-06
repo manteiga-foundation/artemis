@@ -3,7 +3,7 @@
 // pages (automation, video, tracing, routing), and the machine feed pushes the header readouts.
 import { _electron, type ElectronApplication, type Page } from 'playwright';
 import { createRequire } from 'node:module';
-import { mkdir, rename, rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { startMachineFeed } from './machine';
 import { startRecorder, type Recorder } from './recorder';
@@ -71,15 +71,14 @@ export interface LaunchShellOptions {
   sessionsDir?: string;
   /**
    * With `sessionsDir`: also keep a video of the website and of the console, and a HAR of the
-   * site's traffic, next to the session file. Both on by default until the configuration view.
+   * site's traffic (written live by the recorder), next to the session file. Both on by default
+   * until the configuration view.
    */
   record?: { video?: boolean; har?: boolean };
 }
 
 /** Video frame size: the shell's window, so the website stays legible. */
 const VIDEO_SIZE = { width: 1440, height: 900 };
-
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Files a session left next to its database. */
 export interface SessionFiles {
@@ -98,11 +97,11 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   // What earlier launches could not save (killed, crashed) goes next to its session first.
   const recovered = o.sessionsDir ? await recoverRecordings(o.sessionsDir) : [];
   // Recordings are written while the app runs and only complete when it closes, before anyone
-  // knows the session's name: they start in a hidden folder and move next to the database.
+  // knows the session's name: they start in a hidden folder and move next to the database. The
+  // HAR is not among them: the recorder writes it live next to the database (server/har.ts).
   const launchedAt = Date.now();
   const scratch = o.sessionsDir ? join(o.sessionsDir, `.recording-${launchedAt}`) : null;
   const video = scratch && o.record?.video !== false ? { dir: join(scratch, 'video'), size: VIDEO_SIZE } : undefined;
-  const har = scratch && o.record?.har !== false ? join(scratch, 'session.har') : null;
   if (scratch) await mkdir(scratch, { recursive: true });
   const app = await _electron.launch({
     executablePath: require('electron') as string,
@@ -121,9 +120,7 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
       // A recorded session is only whole after close(): the shell hands quitting to Artemis.
       ...(o.sessionsDir ? { ARTEMIS_GRACEFUL_QUIT: '1' } : {})
     },
-    recordVideo: o.recordVideo ?? video,
-    // The site's traffic only: the console's own requests are left out.
-    ...(har ? { recordHar: { path: har, urlFilter: new RegExp(`^(?!${escapeRegExp(origin)})`) } } : {})
+    recordVideo: o.recordVideo ?? video
   });
   const isConsole = (p: Page) => p.url().startsWith(origin);
   let consolePage: Page | undefined;
@@ -144,7 +141,7 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   let recorder: Recorder | null = null;
   if (o.sessionsDir) {
     await mkdir(o.sessionsDir, { recursive: true });
-    if (sitePage) recorder = startRecorder({ app, site: sitePage, sessionsDir: o.sessionsDir });
+    if (sitePage) recorder = startRecorder({ app, site: sitePage, sessionsDir: o.sessionsDir, har: o.record?.har !== false });
   }
   // The autopilot flies the site when the console sets a speed (D in the Browser view).
   const autopilot = sitePage ? startAutopilot({ app, site: sitePage, recorder }) : null;
@@ -187,18 +184,19 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
         await v.delete().catch(() => {});
         return file && (await Bun.file(file).exists()) ? file : null;
       };
+      const har = recorder?.harPath() ?? null;
       const files: SessionFiles | null = base
         ? {
             database: database!,
             siteVideo: await keep(sitePage?.video(), `${base}.site.webm`),
             consoleVideo: await keep(consoleWindow.video(), `${base}.console.webm`),
-            har: har && (await Bun.file(har).exists()) ? (await rename(har, `${base}.har`), `${base}.har`) : null
+            har: har && (await Bun.file(har).exists()) ? har : null
           }
         : (await keep(sitePage?.video(), null), await keep(consoleWindow.video(), null), null);
       if (files) {
+        // The HAR was listed when the session started.
         const name = (f: string) => basename(f);
         addArtifacts(files.database, [
-          ...(files.har ? [{ kind: 'har', file: name(files.har), startedAt: launchedAt }] : []),
           ...(files.consoleVideo ? [{ kind: 'video-console', file: name(files.consoleVideo), startedAt: launchedAt }] : []),
           ...(files.siteVideo ? [{ kind: 'video-site', file: name(files.siteVideo), startedAt: launchedAt }] : [])
         ]);
@@ -208,8 +206,8 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     })());
   if (o.sessionsDir) app.on('close', () => void finish());
 
-  // The one proper close: drain the recorder, let the shell quit, close through Playwright (which
-  // writes the HAR and finishes the videos), then put the files in place.
+  // The one proper close: drain the recorder (which completes the HAR), let the shell quit, close
+  // through Playwright (which finishes the videos), then put the files in place.
   let closing: Promise<void> | null = null;
   const close = () =>
     (closing ??= (async () => {

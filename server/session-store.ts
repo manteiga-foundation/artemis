@@ -64,6 +64,18 @@ export interface ResponseInput {
   /** The body was wanted but the browser no longer held it (typically a response the page ignored). */
   bodyUnavailable?: boolean;
   timing?: unknown;
+  /** The status line and wire sizes, for the HAR (server/har.ts). */
+  statusText?: string | null;
+  httpVersion?: string | null;
+  sizes?: WireSizes | null;
+}
+
+/** Playwright's `request.sizes()`: bytes on the wire (bodies encoded). */
+export interface WireSizes {
+  requestBodySize: number;
+  requestHeadersSize: number;
+  responseBodySize: number;
+  responseHeadersSize: number;
 }
 
 /** A page view is credited to an action that happened at most this long before it. */
@@ -150,7 +162,10 @@ CREATE TABLE IF NOT EXISTS requests (
   res_body_size INTEGER,
   res_body_note TEXT,
   timing TEXT,
-  failure TEXT
+  failure TEXT,
+  status_text TEXT,
+  http_version TEXT,
+  sizes TEXT
 );
 CREATE TABLE IF NOT EXISTS bodies (
   hash TEXT PRIMARY KEY,
@@ -167,7 +182,8 @@ CREATE INDEX IF NOT EXISTS actions_visit_t ON actions (visit_id, t);
 CREATE INDEX IF NOT EXISTS requests_visit_t ON requests (visit_id, t_start);
 `;
 
-const SCHEMA_VERSION = 1;
+/** 2: requests keep the status text, HTTP version and wire sizes (the HAR needs them). */
+const SCHEMA_VERSION = 2;
 
 const marked = (headers: HeaderList): string => JSON.stringify(headers.map(([n, v]) => [n, v, isSensitiveHeader(n)]));
 
@@ -315,7 +331,9 @@ export function openSessionStore(path: string, o: { target: string; startedAt: n
       const tooLarge = !!r.body && r.body.length > MAX_BODY_BYTES;
       const body = r.body && !tooLarge ? r.body : null;
       const note = tooLarge ? 'too large' : r.bodyUnavailable ? 'unavailable' : null;
-      db.query('UPDATE requests SET t_end = ?, status = ?, mime = ?, res_headers = ?, res_body_hash = ?, res_body_size = ?, res_body_note = ?, timing = ? WHERE id = ?').run(
+      db.query(
+        'UPDATE requests SET t_end = ?, status = ?, mime = ?, res_headers = ?, res_body_hash = ?, res_body_size = ?, res_body_note = ?, timing = ?, status_text = ?, http_version = ?, sizes = ? WHERE id = ?'
+      ).run(
         r.tEnd,
         r.status,
         r.mimeType ?? null,
@@ -324,6 +342,9 @@ export function openSessionStore(path: string, o: { target: string; startedAt: n
         r.body ? r.body.length : null,
         note,
         r.timing === undefined ? null : JSON.stringify(r.timing),
+        r.statusText ?? null,
+        r.httpVersion ?? null,
+        r.sizes ? JSON.stringify(r.sizes) : null,
         request
       );
     },

@@ -1,5 +1,6 @@
-// The files a session writes beside its database while the app runs (videos now; the HAR is only
-// written when Artemis closes the app properly). Each launch records into a hidden
+// The files a session writes beside its database while the app runs and completes only when it
+// closes: the videos (the HAR and the database are written live by the recorder). Each launch
+// records into a hidden
 // `.recording-<time>` folder with a manifest saying which video is which and which session they
 // belong to; a proper close moves them (server/shell.ts). When the close never happened (killed,
 // crashed, power cut), the next launch recovers what survived with recoverRecordings().
