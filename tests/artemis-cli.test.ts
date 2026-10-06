@@ -138,20 +138,27 @@ test('killed outright mid-session (kill -9), nothing browsed is lost: the sessio
     }
     Bun.spawnSync(['pkill', '-9', '-f', profile]);
   };
+  // Both pages and both config calls completed; the body of the page still open. The first page's
+  // body is not asked for: Chromium drops a page's bodies once it navigates, and under heavy load
+  // Playwright's fetch can come after the walker moves on (600 ms later); the database then says
+  // "unavailable" instead of holding it (reproduced with ten `yes` processes on eight cores).
   const WALKED = `SELECT (SELECT count(*) FROM visits) AS visits,
-                         (SELECT count(*) FROM requests r JOIN bodies b ON b.hash = r.res_body_hash WHERE r.url LIKE '%/api/config%') AS config`;
-  const walked = [{ visits: 2, config: 2 }];
+                         (SELECT count(*) FROM requests WHERE url LIKE '%/api/config%' AND status = 200) AS config,
+                         (SELECT count(*) FROM requests r JOIN bodies b ON b.hash = r.res_body_hash WHERE r.url LIKE '%/api/config?page=/next') AS openBody`;
+  const walked = [{ visits: 2, config: 2, openBody: 1 }];
   try {
     const started = Date.now();
     let database: string | undefined;
     let live: unknown = null;
-    while (Date.now() - started < 30000) {
+    while (Date.now() - started < 60000) {
       database ??= (await readdir(sessions).catch(() => [] as string[])).find((n) => n.endsWith('.sqlite'));
       if (database) live = JSON.parse(Bun.spawnSync(['sqlite3', '-readonly', '-json', join(sessions, database), WALKED]).stdout.toString() || 'null');
       if (JSON.stringify(live) === JSON.stringify(walked)) break;
       await Bun.sleep(200);
     }
     // Read live by another process while Artemis runs.
+    if (JSON.stringify(live) !== JSON.stringify(walked) && database)
+      console.error('config rows:', Bun.spawnSync(['sqlite3', '-readonly', '-json', join(sessions, database), "SELECT url, status, t_end, res_body_hash, res_body_note FROM requests WHERE url LIKE '%/api/config%'"]).stdout.toString());
     expect(live).toEqual(walked);
     await Bun.sleep(1500); // one second for the file itself to catch up, and some
     killAll();

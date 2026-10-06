@@ -56,7 +56,9 @@ const state = {
   /** The operator closed the window or quit; Artemis saves the session, then lets the shell go. */
   quitRequested: false,
   /** The autopilot: the speed the console set and when it is acting (server/autopilot-driver.ts flies). */
-  autopilot: createAutopilot()
+  autopilot: createAutopilot(),
+  /** Certificates Chromium could not trust that the site's pages accepted, once per origin and error. */
+  certificateErrors: [] as { t: number; origin: string; url: string; error: string; issuer: string; subject: string; validExpiry: string }[]
 };
 (globalThis as unknown as { __artemisShell: typeof state }).__artemisShell = state;
 
@@ -131,6 +133,34 @@ app.whenReady().then(() => {
   });
   win.on('closed', () => app.quit());
   void consoleWin.loadURL(`${APP_URL}/?owned=1`);
+
+  // A certificate Chromium cannot trust (an old intranet host, an expired or self-signed one):
+  // Electron fails the navigation with no way through, where Chrome warns and lets the person go
+  // on. A reviewer must still reach the site, so the site's pages accept it; but a bad certificate
+  // is the site's own finding, never to be hidden: each origin and error is listed once in the
+  // state, which the Bun side reports (server/shell.ts onCertificateError). Headers, cookies and
+  // content stay untouched; the console (local http) never gets this pass.
+  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    if (webContents === consoleWin.webContents) return;
+    event.preventDefault();
+    callback(true);
+    let origin = url;
+    try {
+      origin = new URL(url).origin;
+    } catch {
+      // keep the address as given
+    }
+    if (state.certificateErrors.some((c) => c.origin === origin && c.error === error)) return;
+    state.certificateErrors.push({
+      t: Date.now(),
+      origin,
+      url,
+      error,
+      issuer: certificate.issuerName,
+      subject: certificate.subjectName,
+      validExpiry: new Date(certificate.validExpiry * 1000).toISOString()
+    });
+  });
 
   const toConsole = (channel: string, ...args: unknown[]) => {
     if (!consoleWin.isDestroyed()) consoleWin.webContents.send(channel, ...args);

@@ -41,6 +41,22 @@ export interface ShellState {
   siteUrl: string;
   icon: { width: number; height: number } | null;
   autopilot: { speed: number };
+  /** Certificates Chromium could not trust that the shell accepted for the site, once per origin and error. */
+  certificateErrors: CertificateError[];
+}
+
+/** A site's certificate error the shell accepted (shell/main.ts): the site's own finding, reported. */
+export interface CertificateError {
+  /** Epoch ms first seen. */
+  t: number;
+  origin: string;
+  url: string;
+  /** Chromium's reason, e.g. net::ERR_CERT_DATE_INVALID. */
+  error: string;
+  issuer: string;
+  subject: string;
+  /** When the certificate expires (ISO), as it claims. */
+  validExpiry: string;
 }
 
 export interface Shell {
@@ -57,6 +73,8 @@ export interface Shell {
   finished(): Promise<SessionFiles | null>;
   /** The autopilot's flight as the Bun side sees it (speed changes, progress, the end). */
   onAutopilot(listener: (e: AutopilotEvent) => void): () => void;
+  /** Each certificate error the shell accepted for the site, as it is found (within a fifth of a second). */
+  onCertificateError(listener: (c: CertificateError) => void): () => void;
   state(): Promise<ShellState>;
   close(): Promise<void>;
 }
@@ -223,12 +241,28 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
       await app.close();
       if (o.sessionsDir) await finish();
     })());
-  // The operator closed the window or quit: the shell waits for this close (shell/main.ts).
+  // The operator closed the window or quit: the shell waits for this close (shell/main.ts). The same
+  // look also collects the certificate errors the shell accepted since the last one.
+  const certificateListeners = new Set<(c: CertificateError) => void>();
+  let certificatesSeen = 0;
+  let watching = false;
   const quitWatch = setInterval(() => {
+    if (watching) return;
+    watching = true;
     app
-      .evaluate(() => (globalThis as unknown as { __artemisShell?: { quitRequested?: boolean } }).__artemisShell?.quitRequested === true)
-      .then((asked) => asked && void close())
-      .catch(() => {});
+      .evaluate((_electron, seen) => {
+        const s = (globalThis as unknown as { __artemisShell?: { quitRequested?: boolean; certificateErrors?: unknown[] } }).__artemisShell;
+        return { quit: s?.quitRequested === true, certificates: (s?.certificateErrors ?? []).slice(seen) };
+      }, certificatesSeen)
+      .then(({ quit, certificates }) => {
+        for (const c of certificates as CertificateError[]) {
+          certificatesSeen++;
+          certificateListeners.forEach((l) => l(c));
+        }
+        if (quit) void close();
+      })
+      .catch(() => {})
+      .finally(() => (watching = false));
   }, 200);
   app.on('close', () => clearInterval(quitWatch));
 
@@ -242,6 +276,10 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     onAutopilot: (listener) => {
       autopilotListeners.add(listener);
       return () => autopilotListeners.delete(listener);
+    },
+    onCertificateError: (listener) => {
+      certificateListeners.add(listener);
+      return () => certificateListeners.delete(listener);
     },
     state: () => app.evaluate(() => (globalThis as unknown as { __artemisShell: ShellState }).__artemisShell),
     close

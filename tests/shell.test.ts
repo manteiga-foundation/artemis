@@ -478,4 +478,37 @@ describe('the owned browser is an Electron shell', () => {
       await shell.close();
     }
   }, 60000);
+
+  test('a site whose certificate Chromium cannot trust still opens (an old intranet host), and never silently: the shell lists the origin, the error and the issuer, and tells the Bun side', async () => {
+    const certs = await mkdtemp(join(tmpdir(), 'artemis-cert-'));
+    const made = Bun.spawnSync(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(certs, 'key.pem'), '-out', join(certs, 'cert.pem'), '-days', '2', '-subj', '/CN=localhost']);
+    expect(made.exitCode).toBe(0);
+    const legacy = Bun.serve({
+      hostname: 'localhost',
+      port: 0,
+      tls: { key: Bun.file(join(certs, 'key.pem')), cert: Bun.file(join(certs, 'cert.pem')) },
+      fetch: () => new Response('<!doctype html><title>Legacy</title><h1>Legacy intranet</h1>', { headers: { 'content-type': 'text/html' } })
+    });
+    const origin = `https://localhost:${legacy.port}`;
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    const told: { origin: string }[] = [];
+    try {
+      shell.onCertificateError((c) => told.push(c));
+      await engage(shell.console, `${origin}/`);
+      const page = await sitePage(shell, origin);
+      await page.getByRole('heading', { name: 'Legacy intranet' }).waitFor({ timeout: 10000 });
+      const { certificateErrors } = await shell.state();
+      expect(certificateErrors).toEqual([expect.objectContaining({ origin, error: 'net::ERR_CERT_AUTHORITY_INVALID', issuer: 'localhost' })]);
+      for (let i = 0; i < 40 && told.length === 0; i++) await Bun.sleep(100);
+      expect(told).toEqual([expect.objectContaining({ origin, error: 'net::ERR_CERT_AUTHORITY_INVALID' })]);
+      // Once per origin and error, however many requests hit it.
+      await page.reload();
+      await page.getByRole('heading', { name: 'Legacy intranet' }).waitFor();
+      expect((await shell.state()).certificateErrors).toHaveLength(1);
+    } finally {
+      await shell.close();
+      legacy.stop(true);
+      await rm(certs, { recursive: true, force: true });
+    }
+  }, 60000);
 });

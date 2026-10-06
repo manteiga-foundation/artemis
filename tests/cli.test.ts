@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { autopilotNotices, parseArtemisArgs, settleSpeeds, USAGE } from '../server/cli';
+import { autopilotNotices, certificateNotice, parseArtemisArgs, settleSpeeds, USAGE } from '../server/cli';
 import { colorMode, notice, plain, welcome, type ColorMode } from '../server/terminal';
 
 // `bun run artemis [website] [--autopilot slow|regular|max]`: what the launcher accepts, and how
@@ -50,6 +50,11 @@ describe('the launcher’s arguments', () => {
 });
 
 describe('the autopilot’s notifications', () => {
+  test('a certificate the site’s pages accepted is a warning naming the origin, the reason, the issuer and the expiry: the site’s own finding', () => {
+    expect(
+      certificateNotice({ t: 0, origin: 'https://intranet.example', url: 'https://intranet.example/login', error: 'net::ERR_CERT_DATE_INVALID', issuer: 'Example CA', subject: 'intranet.example', validExpiry: '2024-03-01T00:00:00.000Z' })
+    ).toEqual({ kind: 'warn', text: 'Untrusted certificate accepted for https://intranet.example: net::ERR_CERT_DATE_INVALID (issuer Example CA, expires 2024-03-01); the site’s own finding' });
+  });
   test('engaged, a new speed, off; progress every ten pages; covered or stopped; what it did for the site', () => {
     const say = autopilotNotices();
     expect(say({ event: 'speed', speed: 3, previous: 0 })).toEqual({ kind: 'autopilot', text: 'Engaged at max · the next page as soon as one has loaded' });
@@ -87,6 +92,47 @@ describe('the autopilot’s notifications', () => {
     feed({ event: 'speed', speed: 0, previous: 1 });
     await Bun.sleep(60);
     expect(seen).toHaveLength(3);
+  });
+
+  test('the launcher’s own presses wait for the level it asked for, however slow the machine: the speeds on the way are never said', async () => {
+    const seen: unknown[] = [];
+    const feed = settleSpeeds((e) => seen.push(e), 30);
+    feed.expect(3);
+    feed({ event: 'speed', speed: 1, previous: 0 });
+    await Bun.sleep(60);
+    feed({ event: 'speed', speed: 2, previous: 1 });
+    await Bun.sleep(60);
+    // Whatever else the flight says meanwhile still goes out, without the speed on the way.
+    feed({ event: 'note', speed: 2, text: 'answered a dialog' });
+    expect(seen).toEqual([{ event: 'note', speed: 2, text: 'answered a dialog' }]);
+    feed({ event: 'speed', speed: 3, previous: 2 });
+    await Bun.sleep(60);
+    expect(seen.slice(1)).toEqual([{ event: 'speed', speed: 3, previous: 0 }]);
+    // Arrived: later changes are said as usual.
+    feed({ event: 'speed', speed: 0, previous: 3 });
+    await Bun.sleep(60);
+    expect(seen).toHaveLength(3);
+  });
+
+  test('if the level never comes, the speed it reached is said after a while, not held forever', async () => {
+    const seen: unknown[] = [];
+    const feed = settleSpeeds((e) => seen.push(e), 30);
+    feed.expect(3, 100);
+    feed({ event: 'speed', speed: 1, previous: 0 });
+    await Bun.sleep(60);
+    expect(seen).toEqual([]);
+    await Bun.sleep(100);
+    expect(seen).toEqual([{ event: 'speed', speed: 1, previous: 0 }]);
+  });
+
+  test('when the launcher gives up pressing, the speed it reached is said at once', async () => {
+    const seen: unknown[] = [];
+    const feed = settleSpeeds((e) => seen.push(e), 30);
+    feed.expect(3);
+    feed({ event: 'speed', speed: 2, previous: 0 });
+    feed.release();
+    await Bun.sleep(60);
+    expect(seen).toEqual([{ event: 'speed', speed: 2, previous: 0 }]);
   });
 });
 

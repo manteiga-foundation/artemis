@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { launchShell } from '../server/shell';
-import { autopilotNotices, LEVELS, parseArtemisArgs, settleSpeeds, USAGE, type Level } from '../server/cli';
+import { autopilotNotices, certificateNotice, LEVELS, parseArtemisArgs, settleSpeeds, USAGE, type Level } from '../server/cli';
 import { colorMode, notice, welcome, type NoticeKind } from '../server/terminal';
 
 const args = parseArtemisArgs(process.argv.slice(2));
@@ -77,14 +77,18 @@ shell.recorder?.onEvent((e) => {
 });
 
 // The autopilot's flight, whoever set it (this command line, or D in the console); quick presses
-// of D are one change.
+// of D are one change, and the launcher's own presses are said once, at the level it asked for.
 const flight = autopilotNotices();
-shell.onAutopilot(
-  settleSpeeds((e) => {
-    const n = flight(e);
-    if (n) say(n.kind, n.text);
-  })
-);
+const speeds = settleSpeeds((e) => {
+  const n = flight(e);
+  if (n) say(n.kind, n.text);
+});
+shell.onAutopilot(speeds);
+// A certificate Chromium could not trust, accepted so the site opens: never silently.
+shell.onCertificateError((c) => {
+  const n = certificateNotice(c);
+  say(n.kind, n.text);
+});
 
 let closing = false;
 const finish = async () => {
@@ -137,13 +141,17 @@ async function engageAutopilot(level: Exclude<Level, 0>) {
     ?.waitForLoadState('domcontentloaded', { timeout: 15_000 })
     .catch(() => {});
   const speed = async () => (await shell.state().catch(() => null))?.autopilot.speed ?? -1;
+  speeds.expect(level);
   for (let press = 0; press < 4; press++) {
     const now = await speed();
     if (now === level) return;
     await shell.console.keyboard.press('d');
     for (let i = 0; i < 20 && (await speed()) === now; i++) await Bun.sleep(50);
   }
-  if ((await speed()) !== level) say('warn', `The autopilot did not engage: press D in the console (${level} times for ${LEVELS[level].name})`);
+  if ((await speed()) !== level) {
+    speeds.release();
+    say('warn', `The autopilot did not engage: press D in the console (${level} times for ${LEVELS[level].name})`);
+  }
 }
 
 if (args.website) {

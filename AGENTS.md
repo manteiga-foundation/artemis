@@ -66,7 +66,8 @@ bun run dev                      # Vite on 5173 (tests spawn their own isolated 
 bun run check                    # tsc --noEmit for src, server and shell
 bun run test                     # bun test --timeout 60000 tests  (unit + Playwright)
 bun run build                    # check + production bundle
-bun run artemis [website]        # the owned browser, Electron shell (starts the dev server if needed)
+bun run artemis [website] [--autopilot slow|regular|max]  # the owned browser, Electron shell (starts the dev server if needed)
+bun run scripts/har.ts <session.sqlite> [out.har]         # a HAR rebuilt from any session's database
 bun run scripts/screenshots.ts <port> [outDir] [site]
 bun run scripts/screenshots-shell.ts <port> [outDir] [site]     # the owned browser (Electron shell)
 bun run scripts/screenshots-recorded.ts <port> [outDir] [site]  # the live cosmos after browsing a real site
@@ -113,6 +114,8 @@ src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/         
 shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
 server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
 server/recorder.ts      session recorder (Playwright traffic, preload actions)  server/session-store.ts  SQLite schema + policy
+server/har.ts           the live HAR and exportHar (a view of the database)
+server/cli.ts, server/terminal.ts  the launcher's arguments, welcome and notifications
 server/site-feed.ts     recorder events -> console, snapshot on reload    src/site-events.ts   the event contract
 src/site-model.ts       events -> live cosmos (pages, endpoints, services) src/scope.ts         review scope (shared)
 server/owned-browser.ts the earlier framed owned Chromium (no longer launched)
@@ -152,8 +155,12 @@ editable address (GET parameters rewritable) that doubles as the page's loading 
 console reload resumes on the same page; `C` panels fold with header switch; real resource
 readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
 SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,
-bodies; observations only, categorisation later and recomputable), with a video of the site and of
-the console and a HAR next to it (on by default), saved whole however
+bodies; observations only, categorisation later and recomputable), written as it happens (other
+tools read the live file; the `.sqlite` alone is current within a second, so a crash or `kill -9`
+loses nothing committed), with a live HAR Artemis writes itself from the database (unmasked:
+cookies, tokens and posts as sent, so testing tools need no login; asset bytes left out, every
+request still listed; `scripts/har.ts` rebuilds one for any session) and a video of the site and of
+the console next to it (on by default), saved whole however
 the app is closed (window, Cmd+Q, Ctrl+C; leftovers of a crash recovered at the next launch); in
 the owned browser the Cosmos is the live recording, drawn as a computed radial tree like the
 emulated sketch (core at the centre, sections evenly around it, sub-pages outward, every request a
@@ -166,10 +173,14 @@ browser it flies the site branch by branch at slow, regular or max, never repeat
 has, two or three pages of each kind, never signing out, its clicks recorded as the autopilot's,
 disengaged by the operator's hand on the site; the site's dialogs are the operator's (Electron's
 native box; Playwright no longer answers them), while flying it answers them (OK, Leave, Cancel),
-moves on and closes the popups it caused; a glow breathes around the window's edges while it flies, and its progress fills the top bar's graph box.
+moves on and closes the popups it caused; a glow breathes around the window's edges while it flies, and its progress fills the top bar's graph box. The launcher (`bun run artemis [website] [--autopilot slow|regular|max]`) opens
+with a large ARTEMIS welcome and one notification per event (the database's and the live HAR's
+full paths the moment they exist, the flight, closing, the files saved); a site certificate
+Chromium cannot trust is accepted for the site's pages, never silently (listed by the shell,
+warned in the terminal).
 
 Next (user's order): wire the configuration view's options as each feature arrives (recording
-defaults read by `bun run artemis`, Scope subdomains, export formats); DOM session replay (spike first), a policy-aware HAR export from the database,
+defaults read by `bun run artemis`, Scope subdomains, export formats); DOM session replay (spike first), export policies on the HAR (masking or scoping, as options; today it is whole and unmasked by the user's choice),
 then categorisation and autopilot. No LLMs or new dependencies for now;
 strong open-source tools are welcome; a small model for categorisation (and compliance mapping
 such as NIST CSF 2.0 or PCI) comes later, because hard-coded heuristics would put wrong labels in
@@ -191,9 +202,13 @@ Open from the last session (the user left a site flying on the autopilot to test
 what they saw first):
 - The overnight report (user): the site worked, the radial tree is right, dialogs were handled,
   the glow is approved; the autopilot's occasional stops were the operator's own keys; the session
-  HAR came out over 3 GB and other tools fail to import it (the policy-aware export from the
-  database, already next in line, is the answer; a size cap or splitting is a candidate). Forms
+  HAR came out over 3 GB and other tools failed to import it: answered by the live HAR (asset bytes
+  out, every request listed: 465 MB -> 14.4 MB, 5,718 entries, valid per har-validator;
+  not yet tried in Burp, ZAP or Charles, none installed here). Forms
   stay parked until other features show how they connect.
+- Next candidates from this release: accepted certificate errors as observations in the session
+  database (and the HAR), with the dialogs and popups below; desktop notifications for a long
+  flight's end.
 - Done since: `ELECTRON_DISABLE_SECURITY_WARNINGS` set by the launcher (tested); Artemis's icon
   (`public/icon.svg` -> `shell/icon.png` via `scripts/icon.ts`) on the Dock, the window and the
   page, title `Artemis`; the native title bar dark (`nativeTheme`, one line). A band of Artemis's

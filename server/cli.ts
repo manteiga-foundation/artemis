@@ -3,6 +3,7 @@
 // the console's speeds (src/autopilot.ts: 1 slow, 2 regular, 3 max), so the flag only presses D
 // for the operator, as many times as the level says.
 import { normalizeTarget } from '../src/target';
+import type { CertificateError } from './shell';
 
 export type Level = 0 | 1 | 2 | 3;
 
@@ -81,14 +82,33 @@ const level = (speed: number) => {
   return l ? `${l.name} · ${l.does}` : 'off';
 };
 
+/** A certificate the site's pages accepted (shell/main.ts): the site's own finding, said as one. */
+export function certificateNotice(c: CertificateError): { kind: 'warn'; text: string } {
+  return { kind: 'warn', text: `Untrusted certificate accepted for ${c.origin}: ${c.error} (issuer ${c.issuer}, expires ${c.validExpiry.slice(0, 10)}); the site’s own finding` };
+}
+
+/** The flight's events, with speed changes settled; `expect` holds them for a level asked for. */
+export type SpeedSettler = ((e: FlightEvent) => void) & {
+  /**
+   * The launcher is pressing D towards `speed`: the speeds on the way are not said, however long
+   * the presses take; the change is said once `speed` arrives, when the launcher gives up
+   * (`release`), or after `within` ms as a last resort (a press took over 15 s at load 60).
+   */
+  expect(speed: number, within?: number): void;
+  /** The launcher gave up: say the speed as it stands, now. */
+  release(): void;
+};
+
 /**
- * Quick presses of D (three for max, or the launcher's) are one change: a speed counts once it has
- * held for `ms`, said with the speed before the burst. Anything else the flight says goes out at
- * once, after a change still settling.
+ * Quick presses of D (three for max) are one change: a speed counts once it has held for `ms`,
+ * said with the speed before the burst. Anything else the flight says goes out at once, after a
+ * change still settling (unless a level asked for is still on its way).
  */
-export function settleSpeeds(emit: (e: FlightEvent) => void, ms = 500): (e: FlightEvent) => void {
+export function settleSpeeds(emit: (e: FlightEvent) => void, ms = 500): SpeedSettler {
   let pending: FlightEvent | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let expecting: number | null = null;
+  let expectTimer: ReturnType<typeof setTimeout> | null = null;
   const flush = () => {
     if (timer) clearTimeout(timer);
     timer = null;
@@ -96,16 +116,37 @@ export function settleSpeeds(emit: (e: FlightEvent) => void, ms = 500): (e: Flig
     pending = null;
     if (p && p.speed !== (p.previous ?? 0)) emit(p);
   };
-  return (e) => {
+  const arrived = () => {
+    expecting = null;
+    if (expectTimer) clearTimeout(expectTimer);
+    expectTimer = null;
+  };
+  const feed = ((e: FlightEvent) => {
     if (e.event !== 'speed') {
-      flush();
+      if (expecting === null) flush();
       emit(e);
       return;
     }
     pending = { ...e, previous: pending ? pending.previous : e.previous };
     if (timer) clearTimeout(timer);
+    timer = null;
+    if (expecting !== null) {
+      if (e.speed !== expecting) return;
+      arrived();
+    }
     timer = setTimeout(flush, ms);
+  }) as SpeedSettler;
+  feed.expect = (speed, within = 60_000) => {
+    arrived();
+    expecting = speed;
+    expectTimer = setTimeout(() => feed.release(), within);
   };
+  feed.release = () => {
+    if (expecting === null) return;
+    arrived();
+    flush();
+  };
+  return feed;
 }
 
 /**
