@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { copyFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startVite, type ViteServer } from './vite';
@@ -16,6 +17,23 @@ const site = Bun.serve({
   fetch: () => new Response('<!doctype html><title>Shop</title><h1>Home</h1>', { headers: { 'content-type': 'text/html' } })
 });
 
+// A site that browses itself (the launcher's test cannot click): Home reads its config, then
+// goes on to Next, which reads its own and stays. It moves on after a moment, as a person does:
+// leaving the instant a response is read discards its body before the recorder can ask for it.
+const walker = Bun.serve({
+  hostname: 'localhost',
+  port: 0,
+  fetch(req) {
+    const url = new URL(req.url);
+    if (url.pathname === '/api/config') return Response.json({ page: url.searchParams.get('page') });
+    const next = url.pathname === '/' ? "setTimeout(() => (location.href = '/next'), 600)" : '';
+    return new Response(
+      `<!doctype html><title>Walk</title><h1>${url.pathname}</h1><script>fetch('/api/config?page=' + location.pathname).then((r) => r.json()).then(() => { ${next} })</script>`,
+      { headers: { 'content-type': 'text/html' } }
+    );
+  }
+});
+
 let vite: ViteServer;
 let dir: string;
 beforeAll(async () => {
@@ -25,6 +43,7 @@ beforeAll(async () => {
 afterAll(async () => {
   vite?.stop();
   site.stop(true);
+  walker.stop(true);
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -73,5 +92,59 @@ test('one Ctrl+C in the terminal saves the session whole: database, both videos 
     expect(files.filter((n) => n.startsWith('.'))).toEqual([]);
   } finally {
     group('SIGKILL');
+  }
+}, 90000);
+
+test('killed outright mid-session (kill -9), nothing browsed is lost: the session file on its own holds it', async () => {
+  const root = join(dir, 'crash');
+  const sessions = join(root, 'sessions');
+  const profile = join(root, 'profile');
+  const proc = spawn('bun', ['run', 'artemis', `http://localhost:${walker.port}/`], {
+    cwd: new URL('..', import.meta.url).pathname,
+    detached: true,
+    env: { ...process.env, ARTEMIS_PORT: new URL(vite.url).port, ARTEMIS_SHELL_HIDDEN: '1', ARTEMIS_PROFILE_DIR: profile, ARTEMIS_SESSIONS_DIR: sessions },
+    stdio: ['ignore', 'ignore', 'ignore']
+  });
+  // Playwright starts Electron in its own process group: kill it by the test's own profile path.
+  const killAll = () => {
+    try {
+      process.kill(-proc.pid!, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+    Bun.spawnSync(['pkill', '-9', '-f', profile]);
+  };
+  const WALKED = `SELECT (SELECT count(*) FROM visits) AS visits,
+                         (SELECT count(*) FROM requests r JOIN bodies b ON b.hash = r.res_body_hash WHERE r.url LIKE '%/api/config%') AS config`;
+  const walked = [{ visits: 2, config: 2 }];
+  try {
+    const started = Date.now();
+    let database: string | undefined;
+    let live: unknown = null;
+    while (Date.now() - started < 30000) {
+      database ??= (await readdir(sessions).catch(() => [] as string[])).find((n) => n.endsWith('.sqlite'));
+      if (database) live = JSON.parse(Bun.spawnSync(['sqlite3', '-readonly', '-json', join(sessions, database), WALKED]).stdout.toString() || 'null');
+      if (JSON.stringify(live) === JSON.stringify(walked)) break;
+      await Bun.sleep(200);
+    }
+    // Read live by another process while Artemis runs.
+    expect(live).toEqual(walked);
+    await Bun.sleep(1500); // one second for the file itself to catch up, and some
+    killAll();
+    for (let i = 0; i < 50 && Bun.spawnSync(['pgrep', '-f', profile]).exitCode === 0; i++) await Bun.sleep(100);
+
+    // Only the `.sqlite`, as a backup, a sync folder or another machine would get it.
+    const copy = join(root, 'copy.sqlite');
+    await copyFile(join(sessions, database!), copy);
+    const db = new Database(copy);
+    try {
+      expect(db.query(WALKED).all()).toEqual(walked);
+      // Never closed: the session says so instead of pretending it ended.
+      expect(db.query('SELECT ended_at FROM sessions').get()).toEqual({ ended_at: null });
+    } finally {
+      db.close();
+    }
+  } finally {
+    killAll();
   }
 }, 90000);

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { copyFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
@@ -109,6 +109,30 @@ describe('the recorder', () => {
       await page.getByRole('heading', { name: 'Thanks' }).waitFor();
       await Bun.sleep(400);
       path = shell.recorder!.path();
+
+      // Written as it happens, for other tools: while the session is still open, another process
+      // reading the file sees the three page views and the map call with its body; within a
+      // second the `.sqlite` on its own holds them too (a tool that copies or uploads only the
+      // file, without its `-wal` and `-shm` companions).
+      const LIVE = `SELECT (SELECT count(*) FROM visits) AS visits,
+                           (SELECT count(*) FROM requests r JOIN bodies b ON b.hash = r.res_body_hash WHERE r.url LIKE '%/api/map') AS map`;
+      const outside = Bun.spawnSync(['sqlite3', '-readonly', '-json', path!, LIVE]);
+      expect(JSON.parse(outside.stdout.toString())).toEqual([{ visits: 3, map: 1 }]);
+      const copy = join(tmpdir(), `artemis-copy-${Date.now()}.sqlite`);
+      let alone: unknown = null;
+      for (const until = Date.now() + 2500; Date.now() < until; await Bun.sleep(250)) {
+        await copyFile(path!, copy);
+        try {
+          const db = new Database(copy);
+          alone = db.query(LIVE).get();
+          db.close();
+        } catch (e) {
+          alone = String(e); // no tables yet, or a copy taken mid-write
+        }
+        if (JSON.stringify(alone) === JSON.stringify({ visits: 3, map: 1 })) break;
+      }
+      for (const f of [copy, `${copy}-wal`, `${copy}-shm`]) await rm(f, { force: true });
+      expect(alone).toEqual({ visits: 3, map: 1 });
 
       // Meanwhile the console's cosmos became the recording, live: the two pages, each wearing its
       // own requests as dots (both read their config; Contact's button loaded the map; Home showed

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
+import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { openSessionStore, keepsBody, isSensitiveHeader, inScope, MAX_BODY_BYTES, type SessionStore } from '../server/session-store';
 
 // The session store: one SQLite database per session holding only observations (visits, actions,
@@ -153,6 +154,33 @@ describe('the session store', () => {
     const db = new Database(path, { readonly: true });
     expect((db.query('SELECT url FROM visits').get() as { url: string }).url).toBe('https://shop.example/');
     db.close();
+  });
+
+  test('a checkpoint puts everything written so far into the session file itself: a copy of the file alone holds it', async () => {
+    // Writes land in the `-wal` side file first; a tool that copies or uploads only the
+    // `.sqlite` would otherwise see an empty database until Artemis closes.
+    const dir = `${process.env.TMPDIR ?? '/tmp'}/artemis-ckpt-${Date.now()}`;
+    await mkdir(dir, { recursive: true });
+    const s = openSessionStore(`${dir}/live.sqlite`, { target: 'https://shop.example/', startedAt: T0 });
+    try {
+      const v = s.startVisit({ t: T0, url: 'https://shop.example/', kind: 'document' });
+      const r = s.recordRequest({ ...get(T0 + 5, 'https://shop.example/api/me'), visitId: v });
+      s.completeRequest(r, { tEnd: T0 + 9, status: 200, headers: [], body: new TextEncoder().encode('{"name":"Ana"}') });
+      s.checkpoint();
+      await copyFile(`${dir}/live.sqlite`, `${dir}/copy.sqlite`);
+      const copy = new Database(`${dir}/copy.sqlite`);
+      try {
+        expect(copy.query('SELECT url FROM visits').all()).toEqual([{ url: 'https://shop.example/' }]);
+        expect(copy.query('SELECT r.url, r.status, b.size FROM requests r JOIN bodies b ON b.hash = r.res_body_hash').all()).toEqual([
+          { url: 'https://shop.example/api/me', status: 200, size: 14 }
+        ]);
+      } finally {
+        copy.close();
+      }
+    } finally {
+      s.close();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

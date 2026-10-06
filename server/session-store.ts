@@ -214,6 +214,11 @@ export interface SessionStore {
   failRequest(id: number, tEnd: number, failure: string): void;
   end(t: number): void;
   /**
+   * Copies what the `-wal` side file holds into the session file itself, without waiting for
+   * readers or blocking them (a passive checkpoint), so the `.sqlite` alone is current.
+   */
+  checkpoint(): void;
+  /**
    * The session as the console's live events (src/site-events.ts), for a console that (re)loads.
    * `uncommittedVisit`: a navigation still in flight, sent as not yet committed.
    */
@@ -329,6 +334,10 @@ export function openSessionStore(path: string, o: { target: string; startedAt: n
 
     end(t) {
       db.query('UPDATE sessions SET ended_at = ?').run(t);
+    },
+
+    checkpoint() {
+      if (path !== ':memory:') db.exec('PRAGMA wal_checkpoint(PASSIVE);');
     },
 
     siteEvents(uncommittedVisit) {

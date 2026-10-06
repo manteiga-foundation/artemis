@@ -33,7 +33,7 @@ export const sessionFileName = (target: string, t: number): string =>
 /** As the shell queues them: the actor is set there (the autopilot's own clicks are its own). */
 type ReportedAction = Omit<ActionInput, 'actor'> & { actor?: ActionInput['actor'] };
 
-export function startRecorder(o: { app: ElectronApplication; site: Page; sessionsDir: string; pollMs?: number }): Recorder {
+export function startRecorder(o: { app: ElectronApplication; site: Page; sessionsDir: string; pollMs?: number; checkpointMs?: number }): Recorder {
   const { app, site } = o;
   let store: SessionStore | null = null;
   let closed = false;
@@ -50,10 +50,12 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   };
 
   /** Writes stop once the file is closed; late Playwright events are dropped. */
+  let unsaved = false;
   const write = (fn: (s: SessionStore) => void) => {
     if (!store || closed) return;
     try {
       fn(store);
+      unsaved = true;
     } catch {
       // A malformed event must never take the browser down; the next one is recorded.
     }
@@ -196,6 +198,17 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
   site.on('framenavigated', onNavigated);
   site.on('load', onLoad);
   const timer = setInterval(drain, o.pollMs ?? 100);
+  // Every write is committed at once, into the `-wal` side file; each second what was written
+  // moves into the `.sqlite` itself, so the file alone is current for tools that take only it.
+  const saver = setInterval(() => {
+    if (!unsaved || !store || closed) return;
+    unsaved = false;
+    try {
+      store.checkpoint();
+    } catch {
+      unsaved = true; // tried again next second
+    }
+  }, o.checkpointMs ?? 1000);
 
   let stopping: Promise<void> | null = null;
   return {
@@ -208,6 +221,7 @@ export function startRecorder(o: { app: ElectronApplication; site: Page; session
     stop: () =>
       (stopping ??= (async () => {
         clearInterval(timer);
+        clearInterval(saver);
         await drain();
         ctx.off('request', onRequest);
         ctx.off('response', onResponse);
