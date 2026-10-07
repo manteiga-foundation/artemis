@@ -37,7 +37,7 @@ Run by hand: `cd docs/spikes/003-electron-shell && bun install && bun run start`
 | Check | Result |
 | --- | --- |
 | Site view is a regular Playwright `Page` | yes: locators, `fill`, `click`, `goto`, `evaluate` |
-| staging site -> PingOne -> Microsoft, driven by Playwright | renders; `top === self`, body `display: block` |
+| a staging site -> PingOne -> Microsoft, driven by Playwright | renders; `top === self`, body `display: block` |
 | What sites see | `Chrome/152.0.7977.130`, no "Electron" |
 | Address strip | follows the site through every redirect |
 | Console reload | the site keeps its page (separate web contents) |
@@ -46,7 +46,7 @@ Run by hand: `cd docs/spikes/003-electron-shell && bun install && bun run start`
 | Click decision | over the site: pass through; over the header: keep |
 | Console frame rate with the site under it | 60 fps, worst frame 18-19 ms |
 | `context.route` | sees the site's requests |
-| Cookies | `cookies()` 20-29 across 5 domains (staging.example, PingOne, Microsoft); clear -> 0; `addCookies` -> all back |
+| Cookies | `cookies()` 20-29 across 5 domains (the site, PingOne, Microsoft); clear -> 0; `addCookies` -> all back |
 | Tracing from launch | 15.7-15.9 MB trace |
 | Video from launch (`recordVideo`) | one file per page; site video ~450 KB |
 | Attach later (`connectOverCDP`) | site page found; `page.screencast.start({ path })` records video; tracing works |

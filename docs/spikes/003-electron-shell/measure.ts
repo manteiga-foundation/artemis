@@ -1,5 +1,5 @@
 // Spike 003 driver: the Electron shell under Playwright, on the user's real flow plus automation checks.
-// bun measure.ts [appUrl]
+// bun measure.ts [appUrl] [site]
 import { _electron as electron, chromium, type Page } from 'playwright';
 import { mkdir, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -53,8 +53,9 @@ const errors: string[] = [];
 overlay.on('pageerror', (e) => errors.push(String(e)));
 log('windows:', app.windows().map((p) => p.url()));
 
-await engage(overlay, 'https://intranet.example/');
-const site = await until(() => app.windows().find((p) => /staging\.example|sso\.example/.test(p.url())));
+const siteUrl = process.argv[3] ?? 'https://example.com/';
+await engage(overlay, siteUrl);
+const site = await until(() => app.windows().find((p) => p.url().startsWith(new URL(siteUrl).origin)));
 R.siteIsPlaywrightPage = !!site;
 log('site view as a Playwright page:', !!site, ctx.pages().map((p) => p.url().slice(0, 50)));
 if (!site) throw new Error('site view not exposed');

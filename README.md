@@ -2,8 +2,24 @@
 
 Web Application Intelligent Console.
 
-![Status](https://img.shields.io/badge/status-draft%20UI-1034a6?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-228%20passing-005d2c?style=flat-square)
+## Alpha
+
+Artemis is alpha software. What is real today: the owned browser (an Electron window where the
+website runs as a genuine page behind the console), the session recording into one SQLite database
+per session, the live HAR written from it, videos of the site and the console, the autopilot that
+flies a site on its own, and the live Cosmos drawn from the recording.
+
+What is emulated, so the interface can be designed and tested before its functionality exists: in
+an ordinary browser (`bun run dev`) the Cosmos is a generated network of about 2,000 nodes; the
+Browser view's Annotate, Snapshot, Flow, Links, DOM and Clear commands answer as placeholders; the
+header's `T/S`, `N/S` and `R/S` are a simulated feed; and in the configuration view only the sound
+default is live. `docs/status.md` keeps the full list and the roadmap.
+
+Session files are recorded unmasked (cookies, tokens, typed values) and stay under `data/`, which
+git ignores; see `SECURITY.md`.
+
+![Status](https://img.shields.io/badge/status-alpha-e0b85c?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-231%20passing-005d2c?style=flat-square)
 ![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB)
@@ -12,7 +28,7 @@ Web Application Intelligent Console.
 ![cosmos.gl](https://img.shields.io/badge/cosmos.gl-3.4-071441?style=flat-square)
 ![Playwright](https://img.shields.io/badge/Playwright-1.63-2EAD33?style=flat-square&logo=playwright&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-333333?style=flat-square&logo=apple&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-macOS%20%28Linux%20partial%29-333333?style=flat-square&logo=apple&logoColor=white)
 
 ## Requirements
 
@@ -26,8 +42,9 @@ bunx playwright install chromium
 - Electron, for the browser Artemis owns, comes with `bun install`; its binary is fetched the first
   time it starts.
 
-macOS and Linux are exercised; the owned browser and the GPU flags used by the tests are tuned
-for macOS (Metal via ANGLE).
+Artemis is developed and fully tested on macOS; the owned browser and the GPU flags used by the
+tests are tuned for it (Metal via ANGLE). On Linux the CI job runs the type-check, the build and the
+unit tests; the owned browser and the browser tests have not been run there yet.
 
 ## Install
 
@@ -70,7 +87,8 @@ Experiments page (sounds, with a per-action picker): http://127.0.0.1:5173/debug
 
 ```sh
 bun run check              # type-check app, server and the Electron shell
-bun run test               # unit tests + Playwright tests in real Chromium and Electron (about 1 minute)
+bun run test               # unit tests + Playwright tests in real Chromium and Electron (several minutes)
+bun run test:unit          # only the tests that need no browser or GPU, as CI runs them on Linux
 bun run build              # check + production bundle in dist/
 bun run preview            # serve dist/ at http://127.0.0.1:4173
 ```
@@ -95,6 +113,9 @@ Default output directory is `docs/screenshots/`.
 ## More
 
 - `AGENTS.md` — how this repository is worked on: methodology, vocabulary, conventions, decisions.
+- `CONTRIBUTING.md` — how to contribute: the red-first loop, gates, platforms and CI.
+- `SECURITY.md` — how to report a security problem, and what the session files contain.
+- `docs/status.md` — what is built, what is emulated, what comes next.
 - `docs/console.md` — notes on the console as built: views, layout, commands, tests, browser approach.
 - `docs/spikes/` — validated experiments kept for reference.
 

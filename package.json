@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 5173",
     "check": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p shell/tsconfig.json",
     "test": "bun test --timeout 60000 tests",
+    "test:unit": "bun run scripts/test-unit.ts",
     "build": "bun run check && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "artemis": "bun run scripts/artemis.ts"

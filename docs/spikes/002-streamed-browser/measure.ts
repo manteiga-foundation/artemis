@@ -8,7 +8,7 @@ import { startSiteStream, VIEWER } from './stream';
 const appUrl = process.argv[2] ?? 'http://127.0.0.1:5179';
 const dpr = Number(process.argv[3] ?? 2);
 const quality = Number(process.argv[4] ?? 70);
-const target = 'https://intranet.example/';
+const target = process.argv[5] ?? 'https://example.com/'; // the site whose sign-in flow is measured
 const out = join(import.meta.dir, '../../../data/spike-002', `dpr${dpr}-q${quality}`);
 await mkdir(out, { recursive: true });
 const t0 = Date.now();

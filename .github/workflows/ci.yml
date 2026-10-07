@@ -1,0 +1,29 @@
+name: CI
+
+# Linux, no GPU, no Chromium, no Electron: type-check, build and the unit tests. The Playwright
+# tests in real Chromium and the Electron shell need a GPU and a desktop session and run locally
+# (`bun run test`), as CONTRIBUTING.md describes.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+      - run: bun run test:unit

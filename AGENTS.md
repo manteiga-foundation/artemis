@@ -11,7 +11,7 @@ each page of a web application does and why, how pages chain into flows (registr
 a job, a purchase), and where those flows live in the whole. It is not a security tool; that
 framing was dropped on purpose. Interfaces come first: surfaces, hotkeys, transitions and sounds
 are designed and tested against deterministic stubs, and functionality attaches later without
-reshaping them. In the user's words: emulate the functionality while driving the interface to a
+reshaping them. In the maintainer's words: emulate the functionality while driving the interface to a
 perfect state, then apply the functionality to the existing elements. So a new element (a
 selection card, an annotation pin) ships with emulated data and a real test of its behaviour; the
 backend later fills shapes that already exist, it never dictates them.
@@ -45,11 +45,14 @@ Every slice follows the same loop. Do not skip steps because a change looks smal
    right reason.
 2. **GREEN.** The smallest change that passes. Then refactor if needed with the tests still green.
 3. **Gates before "done":** `bun run check` (tsc for app, server and shell), `bun run test` (all), and
-   `bun run build`. A dev server answering is not verification.
+   `bun run build`. A dev server answering is not verification. CI (`.github/workflows/ci.yml`)
+   repeats check, build and `bun run test:unit` on Linux; the Playwright and Electron tests need a
+   GPU and a desktop session, so `bun run test` stays a local gate.
 4. **Look at it.** Take screenshots (`scripts/screenshots*.ts`, 1440x900 and 1280x800, mid-dive
    frames when motion is the point) and inspect them, by eye or with a vision model. Treat what
    you see as a lead and confirm with a DOM/CSS probe before changing code.
-5. **Document.** `docs/console.md` (vocabulary, views, command table, test list, decisions), screenshots into
+5. **Document.** `docs/console.md` (vocabulary, views, command table, test list, decisions), `docs/status.md`
+   (built, next, open questions), screenshots into
    `docs/screenshots/`, a commit per slice with a descriptive message. Never push or rewrite
    history unless asked.
 6. **Report honestly:** what changed, what is verified (counts and commands), one real finding
@@ -57,7 +60,7 @@ Every slice follows the same loop. Do not skip steps because a change looks smal
 
 When something is uncertain (is X feasible? which colour? which sound?), do not argue it:
 **spike it** in scratch with measured numbers, or **render every candidate in context** (icons in
-the real button chrome, sounds on `/debug`, palettes on a contrast sheet) and let the user pick.
+the real button chrome, sounds on `/debug`, palettes on a contrast sheet) and let the maintainer pick.
 
 ## Commands
 
@@ -65,6 +68,7 @@ the real button chrome, sounds on `/debug`, palettes on a contrast sheet) and le
 bun run dev                      # Vite on 5173 (tests spawn their own isolated server)
 bun run check                    # tsc --noEmit for src, server and shell
 bun run test                     # bun test --timeout 60000 tests  (unit + Playwright)
+bun run test:unit                # the tests CI runs on Linux: no browser, no GPU (scripts/test-unit.ts)
 bun run build                    # check + production bundle
 bun run artemis [website] [--autopilot slow|regular|max]  # the owned browser, Electron shell (starts the dev server if needed)
 bun run scripts/har.ts <session.sqlite> [out.har]         # a HAR rebuilt from any session's database
@@ -123,10 +127,10 @@ server/machine.ts       machine CPU/memory/process-tree feed
 tests/harness.ts        fake window + renderer for controller tests;  tests/vite.ts  isolated Vite
 ```
 
-## Standing decisions (do not re-litigate without the user)
+## Standing decisions (do not re-litigate without the maintainer)
 
 - The owned browser must be a genuine browser: a bug a reviewer finds must be the site's, never
-  Artemis's. It is the Electron shell (spike 003, confirmed by the user with a real MFA sign-in):
+  Artemis's. It is the Electron shell (spike 003, confirmed by the maintainer with a real MFA sign-in):
   the site is an unmodified native page; nothing rewrites its headers or cookies; only an
   isolated-world preload runs in it. Where Electron departs from Chrome, the shell restores
   Chrome's rule (a page cannot close the tab it was opened in: `--blink-settings`). The framed owned browser (blanks Microsoft sign-in) and the
@@ -143,85 +147,7 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
 - Icons: Game-icons via `react-icons/gi`; the View glyph is Font Awesome `FaLayerGroup`. Credits
   in the README.
 
-## Where things stand (update when it changes)
+## Where things stand
 
-Done: two shown views (Browser, Cosmos; the Page view hidden, not removed) with palettes and the
-dive; pulling back from the Browser opens the Cosmos on the current page, selected and zoomed in
-on, and an operator camera move cancels the first layout's pending auto-fit; entry screen with the
-website field; Browser view
-showing the real site; the owned browser is the Electron shell (`bun run artemis`): genuine site,
-click pass-through, hotkeys from the site, live address strip with Back/Forward/Reload buttons, an
-editable address (GET parameters rewritable) that doubles as the page's loading bar, right-click Back/Forward/Reload,
-console reload resumes on the same page; `C` panels fold with header switch; real resource
-readouts; `/debug` with sounds; `_blank` links stay in the site view; sessions recorded into one
-SQLite file each under `data/sessions/` (page views, actions with actor, requests, responses,
-bodies; observations only, categorisation later and recomputable), written as it happens (other
-tools read the live file; the `.sqlite` alone is current within a second, so a crash or `kill -9`
-loses nothing committed), with a live HAR Artemis writes itself from the database (unmasked:
-cookies, tokens and posts as sent, so testing tools need no login; asset bytes left out, every
-request still listed; `scripts/har.ts` rebuilds one for any session) and a video of the site and of
-the console next to it (on by default), saved whole however
-the app is closed (window, Cmd+Q, Ctrl+C; leftovers of a crash recovered at the next launch); in
-the owned browser the Cosmos is the live recording, drawn as a computed radial tree like the
-emulated sketch (core at the centre, sections evenly around it, sub-pages outward, every request a
-dot in its page's cloud, no line crossing another, routes in the Routes lens; Scope `E`; V lands on
-the current page; a console reload rebuilds it from the database); the configuration view from the
-user's sketch (`,`: search, seven categories, checkboxes, Apply; the command card and scope map
-stay; only the sound default is live, the rest interface with emulated options); the autopilot
-(D in the Browser view, a yoke with three speed squares; Highlight removed, DOM on O): in the owned
-browser it flies the site branch by branch at slow, regular or max, never repeating what the cosmos
-has, two or three pages of each kind, never signing out, its clicks recorded as the autopilot's,
-disengaged by the operator's hand on the site; the site's dialogs are the operator's (Electron's
-native box; Playwright no longer answers them), while flying it answers them (OK, Leave, Cancel),
-moves on and closes the popups it caused; a glow breathes around the window's edges while it flies, and its progress fills the top bar's graph box. The launcher (`bun run artemis [website] [--autopilot slow|regular|max]`) opens
-with a large ARTEMIS welcome and one notification per event (the database's and the live HAR's
-full paths the moment they exist, the flight, closing, the files saved); a site certificate
-Chromium cannot trust is accepted for the site's pages, never silently (listed by the shell,
-warned in the terminal).
-
-Next (user's order): wire the configuration view's options as each feature arrives (recording
-defaults read by `bun run artemis`, Scope subdomains, export formats); DOM session replay (spike first), export policies on the HAR (masking or scoping, as options; today it is whole and unmasked by the user's choice),
-then categorisation and autopilot. No LLMs or new dependencies for now;
-strong open-source tools are welcome; a small model for categorisation (and compliance mapping
-such as NIST CSF 2.0 or PCI) comes later, because hard-coded heuristics would put wrong labels in
-the database.
-
-Next for the shell (in order): session save/restore through cookies behind one API; a snapshot of
-the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs
-(today `_blank` links load in the site view and featured popups stay windows);
-remove the framed owned browser (`server/owned-browser.ts`, its tests) once the user agrees; the
-slot's navy veil over the site as a switchable Layer (kept on for now by the user's choice).
-
-Next: the user is designing more interface elements (node selection, annotations, ...), each
-built with emulated data first. From the user's notes: true categorisations for every page (authentication? part of a flow, which step?). Also
-pending: apply the user's final sound picks as defaults;
-page title/forms readouts from the site's Playwright page;
-Page view ego layout (when it returns); annotation overlays anchored to element rects; adaptive graph quality.
-
-Open from the last session (the user left a site flying on the autopilot to test it overnight; ask
-what they saw first):
-- The overnight report (user): the site worked, the radial tree is right, dialogs were handled,
-  the glow is approved; the autopilot's occasional stops were the operator's own keys; the session
-  HAR came out over 3 GB and other tools failed to import it: answered by the live HAR (asset bytes
-  out, every request listed: 465 MB -> 14.4 MB, 5,718 entries, valid per har-validator;
-  not yet tried in Burp, ZAP or Charles, none installed here). Forms
-  stay parked until other features show how they connect.
-- Next candidates from this release: accepted certificate errors as observations in the session
-  database (and the HAR), with the dialogs and popups below; desktop notifications for a long
-  flight's end.
-- Done since: `ELECTRON_DISABLE_SECURITY_WARNINGS` set by the launcher (tested); Artemis's icon
-  (`public/icon.svg` -> `shell/icon.png` via `scripts/icon.ts`) on the Dock, the window and the
-  page, title `Artemis`; the native title bar dark (`nativeTheme`, one line). A band of Artemis's
-  own above the console was built and reverted the same evening (557bfdd, 8095306): the user does
-  not want window-chrome work that can touch the working shell. In development the Dock tooltip and
-  app menu still say Electron (the binary's bundle name).
-- The cosmos geometry for a walk (the radial tree draws a straight line): wait for the user's
-  report on more sites before changing it.
-- Record dialogs (type, message, who answered) and the autopilot's closed popups as observations
-  in the session database; popups are not recorded yet.
-- The autopilot's settings category is interface only (forms, kinds, start after Engage).
-- The glow's colour is the accent; render the palette's line colour and white in place if the user
-  wants to choose. A real requests-per-second readout could be its own header element (the user
-  took the frame-rate graph for one).
-- The site's dialogs are Electron's native box, modal for the whole app while one waits; showing
-  them in the console instead needs a measurement first (no Electron hook for JS dialogs).
+`docs/status.md`: what is built, what is emulated, what comes next in the maintainer's order, and
+the open questions. Update it with every slice that changes it; this file stays the contract.

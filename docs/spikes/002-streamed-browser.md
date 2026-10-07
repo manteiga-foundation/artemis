@@ -1,6 +1,6 @@
 # 002: streamed-browser
 
-Question: the framed browser blanks the user's real flow (staging.example -> PingOne ->
+Question: the framed browser blanks a real enterprise flow (a staging site -> PingOne ->
 Microsoft sign-in). Can the Browser view instead show a real top-level tab, streamed into the same
 stage, with full authority to navigate, without changing the console's interface?
 
