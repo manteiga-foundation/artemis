@@ -1,6 +1,28 @@
+<p align="center">
+  <img src="docs/readme/hero.png" alt="Artemis, web intelligence console: understand the depths of a web application by using it." width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/readme/dive.gif" alt="The dive: pressing V pulls back from the live page to the cosmos of the whole application, tours it, and returns to the page." width="100%">
+  <br>
+  <sub>One key, <b>V</b>: from the live page to the whole application and back. Recorded in an ordinary browser on the emulated network; <a href="docs/readme/dive.mp4">full-quality video</a>. The page shown is Wikipedia's Main Page (CC BY-SA 4.0).</sub>
+</p>
+
+<p align="center">
+  <img src="docs/readme/features.png" alt="Genuine browser, Autopilot, Live cosmos, Open sessions." width="100%">
+</p>
+
 # Artemis
 
 Web intelligence console: understand the depths of a web application by using it.
+
+- **Genuine browser.** The site runs unmodified in a window Artemis owns; sign-in, MFA and dialogs
+  behave as in Chrome.
+- **Autopilot.** Flies the application branch by branch while you watch, never signing out.
+- **Live cosmos.** Every page, flow and request mapped as it happens; `V` dives between the page and
+  the whole.
+- **Open sessions.** One SQLite database per session, a live HAR other tools replay signed in, and
+  video of the site and the console.
 
 ## Alpha
 
@@ -21,7 +43,7 @@ git ignores; see `SECURITY.md`.
 ![Status](https://img.shields.io/badge/status-alpha-e0b85c?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-1034a6?style=flat-square)
 [![CI](https://github.com/manteiga-foundation/artemis/actions/workflows/ci.yml/badge.svg)](https://github.com/manteiga-foundation/artemis/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-231%20passing-005d2c?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-233%20passing-005d2c?style=flat-square)
 ![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB)
@@ -108,6 +130,7 @@ bun run scripts/screenshots-debug.ts <port> [outDir]
 bun run scripts/measure-dive.ts <port>                          # frame rate idle and through the view dive
 bun run scripts/icon.ts                                         # public/icon.svg -> shell/icon.png (the app icon)
 bun run scripts/har.ts <session.sqlite> [out.har]               # a session's HAR 1.2 from its database (any session)
+bun run docs/readme/make.tsx <port> [site]                      # the README's hero, features band and dive (GIF, MP4; needs ffmpeg)
 ```
 
 Default output directory is `docs/screenshots/`.
