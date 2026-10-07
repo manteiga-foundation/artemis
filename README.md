@@ -1,6 +1,6 @@
 # Artemis
 
-Web Application Intelligent Console.
+Web intelligence console: understand the depths of a web application by using it.
 
 ## Alpha
 
@@ -19,6 +19,7 @@ Session files are recorded unmasked (cookies, tokens, typed values) and stay und
 git ignores; see `SECURITY.md`.
 
 ![Status](https://img.shields.io/badge/status-alpha-e0b85c?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-1034a6?style=flat-square)
 ![Tests](https://img.shields.io/badge/tests-231%20passing-005d2c?style=flat-square)
 ![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -118,6 +119,10 @@ Default output directory is `docs/screenshots/`.
 - `docs/status.md` — what is built, what is emulated, what comes next.
 - `docs/console.md` — notes on the console as built: views, layout, commands, tests, browser approach.
 - `docs/spikes/` — validated experiments kept for reference.
+
+## Licence
+
+MIT, see `LICENSE`. Third-party assets keep their own licences, listed below.
 
 ## Credits
 
