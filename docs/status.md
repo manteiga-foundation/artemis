@@ -61,6 +61,10 @@ each slice that changes it.
 
 ## Next, in the maintainer's order
 
+Direction: use Artemis on real applications (two so far) and let what it lacks there decide the
+next features. Usefulness first: an interface element earns its place by answering a question a
+product manager, tester or UX reviewer actually has.
+
 1. Wire the configuration view's options as each feature arrives: recording defaults read by
    `bun run artemis`, Scope subdomains, export formats.
 2. DOM session replay (spike first).
