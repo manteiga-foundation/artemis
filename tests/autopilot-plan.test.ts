@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { dialogAnswer, fly, linkVerdict, templateKey, type FlightDriver, type FlightProgress, type Link } from '../server/autopilot';
+import { dialogAnswer, fly, linkVerdict, templateKey, type Control, type FlightDriver, type FlightProgress, type Link } from '../server/autopilot';
 import { applySiteEvents, emptySiteModel } from '../src/site-model';
 import type { SiteEvent } from '../src/site-events';
 
@@ -33,7 +33,7 @@ class FakeSite implements FlightDriver {
     this.history = [at(start)];
     this.commits = [at(start)];
   }
-  private show(url: string) {
+  protected show(url: string) {
     this.history = this.history.slice(0, this.index + 1);
     this.history.push(url);
     this.index = this.history.length - 1;
@@ -235,6 +235,178 @@ describe('the flight plan', () => {
   });
 });
 
+/**
+ * A menu built on demand, as one-address applications do: only the top level exists at first;
+ * opening a control (an in-page link, an expand button) shows its children and hides the others'
+ * (an accordion). Links can also sit in the page hidden until their control opens (a dropdown).
+ */
+interface MenuNode {
+  control: Control;
+  links?: Link[];
+  /** In the page all along, shown only while this control is open. */
+  hidden?: Link[];
+  children?: MenuNode[];
+  /** An in-page-looking control that the site's script turns into a navigation. */
+  navigatesTo?: string;
+}
+
+class FakeMenuSite extends FakeSite {
+  open: string[] = [];
+  reveals: string[][] = [];
+  constructor(pages: Record<string, FakePage>, public menus: Record<string, MenuNode[]>, start: string) {
+    super(pages, start);
+  }
+  protected show(url: string) {
+    super.show(url);
+    this.open = [];
+  }
+  private tree() {
+    return this.menus[new URL(this.history[this.index]).pathname] ?? [];
+  }
+  /** The open nodes, outermost first. */
+  private chain(): MenuNode[] {
+    const out: MenuNode[] = [];
+    let level = this.tree();
+    for (const key of this.open) {
+      const n = level.find((m) => m.control.key === key);
+      if (!n) break;
+      out.push(n);
+      level = n.children ?? [];
+    }
+    return out;
+  }
+  private all(nodes = this.tree()): MenuNode[] {
+    return nodes.flatMap((n) => [n, ...this.all(n.children ?? [])]);
+  }
+  async controls() {
+    return [...this.tree(), ...this.chain().flatMap((n) => n.children ?? [])].map((n) => n.control);
+  }
+  async links() {
+    const base = await super.links();
+    const shown = this.chain().flatMap((n) => [...(n.links ?? []), ...(n.hidden ?? [])]);
+    const hidden = this.all().flatMap((n) => n.hidden ?? []).filter((l) => !shown.includes(l)).map((l) => ({ ...l, visible: false }));
+    return [...base, ...shown, ...hidden];
+  }
+  /** Open the last control of the path; the ones before it are opened first when it is not showing. */
+  private async openPath(path: Control[]) {
+    for (let i = 0; i < path.length; i++) {
+      const visible = (await this.controls()).some((c) => c.key === path[i].key);
+      if (!visible) {
+        if (i === 0) return false;
+        this.open = path.slice(0, i).map((c) => c.key);
+        if (!(await this.controls()).some((c) => c.key === path[i].key)) return false;
+      }
+      const depth = this.open.length;
+      // Opening a sibling closes the others at that level.
+      const at = this.chain().findIndex((n) => (n.children ?? []).some((m) => m.control.key === path[i].key));
+      this.open = [...this.open.slice(0, at + 1), path[i].key];
+      void depth;
+      const node = this.all().find((n) => n.control.key === path[i].key);
+      if (node?.navigatesTo) {
+        this.show(at0(node.navigatesTo));
+        return true;
+      }
+    }
+    return true;
+  }
+  async reveal(path: Control[]) {
+    this.reveals.push(path.map((c) => c.key));
+    this.log.push(`reveal ${path.map((c) => c.key).join(' > ')}`);
+    return this.openPath(path);
+  }
+  async follow(link: Link) {
+    const menuLink = this.all().some((n) => [...(n.links ?? []), ...(n.hidden ?? [])].some((l) => l.href === link.href));
+    if (menuLink) {
+      const showing = (await this.links()).some((l) => l.href === link.href && l.visible !== false);
+      if (!showing) {
+        if (!link.via?.length || !(await this.openPath(link.via))) return false;
+        if (!(await this.links()).some((l) => l.href === link.href && l.visible !== false)) return false;
+      }
+    }
+    return super.follow(link);
+  }
+}
+const at0 = (p: string) => (p.startsWith('http') ? p : `${ORIGIN}${p}`);
+const ctl = (key: string, text = key): Control => ({ key, text });
+
+const MENU: MenuNode[] = [
+  {
+    control: ctl('#General-Ledger', 'General Ledger'),
+    children: [
+      { control: ctl('#journal', 'Journal'), links: [a('/App.aspx?comp=JournalEntries&NavLinkID=18', 'Create GL Journal Entries'), ...[93, 94, 95, 96].map((n) => a(`/UserMode.aspx?NavLinkID=${n}`, `Mode ${n}`))] },
+      { control: ctl('#gl-inquiry', 'GL Inquiry'), links: [a('/App.aspx?comp=BalanceInquiry&NavLinkID=349', 'Balance Sheet Schedule Inquiry')] }
+    ]
+  },
+  {
+    control: ctl('#Payables', 'Payables'),
+    children: [
+      {
+        control: ctl('#invoices', 'Invoices'),
+        links: [a('/App.aspx?comp=Invoices&NavLinkID=50', 'Invoices')],
+        children: [{ control: ctl('#archive', 'Archive'), links: [a('/App.aspx?comp=Archive&NavLinkID=51', 'Archive')], children: [{ control: ctl('#older', 'Older'), links: [a('/too-deep', 'Too deep')] }] }]
+      }
+    ]
+  },
+  { control: ctl('button#more', 'More'), hidden: [a('/reports', 'Reports')] },
+  { control: ctl('button#user', 'Jaime'), links: [a('/logout', 'Sign out')] },
+  { control: ctl('#delete-all', 'Delete all records'), links: [a('/deleted', 'Gone')] },
+  { control: ctl('#help', 'Help'), navigatesTo: '/help' }
+];
+const MENU_SITE: Record<string, FakePage> = {
+  '/Welcome.aspx': { links: [a('/Welcome.aspx', 'Home')] },
+  '/App.aspx': { links: [a('/Welcome.aspx', 'Home')] },
+  '/UserMode.aspx': { links: [a('/Welcome.aspx', 'Home')] },
+  '/reports': { links: [] },
+  '/help': { links: [] },
+  '/too-deep': { links: [] }
+};
+const menus = { '/Welcome.aspx': MENU, '/App.aspx': MENU, '/UserMode.aspx': MENU };
+
+describe('menus built on demand', () => {
+  test('the menus are unfolded, three levels deep, and every page behind them is visited by clicking the path that shows it (an app whose top level is in-page links)', async () => {
+    const site = new FakeMenuSite(MENU_SITE, menus, '/Welcome.aspx');
+    const result = await fly(site, options(site));
+    expect(result.ended).toBe('done');
+    const shown = (u: string) => new URL(u).pathname + new URL(u).search;
+    expect(result.visited.map(shown)).toEqual([
+      '/help',
+      '/reports',
+      '/App.aspx?comp=JournalEntries&NavLinkID=18',
+      '/UserMode.aspx?NavLinkID=93',
+      '/UserMode.aspx?NavLinkID=94',
+      '/UserMode.aspx?NavLinkID=95',
+      '/UserMode.aspx?NavLinkID=96',
+      '/App.aspx?comp=BalanceInquiry&NavLinkID=349',
+      '/App.aspx?comp=Invoices&NavLinkID=50',
+      '/App.aspx?comp=Archive&NavLinkID=51'
+    ]);
+    // Never past the third level, never signed out, never a control named delete.
+    const paths = site.commits.map((u) => new URL(u).pathname);
+    expect(paths).not.toContain('/too-deep');
+    expect(paths).not.toContain('/logout');
+    expect(paths).not.toContain('/deleted');
+    expect(site.reveals.some((p) => p.includes('#delete-all') || p.includes('#older'))).toBe(false);
+  });
+
+  test('a menu repeated on every page is unfolded once per flight, not on each page', async () => {
+    const site = new FakeMenuSite(MENU_SITE, menus, '/Welcome.aspx');
+    await fly(site, options(site));
+    const opened = site.reveals.map((p) => p.at(-1));
+    expect(new Set(opened).size).toBe(opened.length);
+    expect(opened.sort()).toEqual(['#General-Ledger', '#Payables', '#archive', '#gl-inquiry', '#help', '#invoices', '#journal', 'button#more', 'button#user'].sort());
+  });
+
+  test('a page whose only links are behind its menu is still explored when the flight reaches it', async () => {
+    const site = new FakeMenuSite(
+      { '/': { links: [a('/app', 'App')] }, '/app': { links: [] }, '/app/one': { links: [] } },
+      { '/app': [{ control: ctl('#tools', 'Tools'), links: [a('/app/one', 'One')] }] },
+      '/'
+    );
+    const result = await fly(site, options(site));
+    expect(result.visited.map((u) => new URL(u).pathname)).toEqual(['/app', '/app/one']);
+  });
+});
+
 describe('the rules the plan follows', () => {
   test('pages of one kind share a template: numbers, long hex and uuids stand for any', () => {
     expect(templateKey(at('/product/12'))).toBe(templateKey(at('/product/9876')));
@@ -242,6 +414,32 @@ describe('the rules the plan follows', () => {
     expect(templateKey(at('/o/123e4567-e89b-12d3-a456-426614174000'))).toBe(templateKey(at('/o/00000000-0000-0000-0000-000000000000')));
     expect(templateKey(at('/about'))).not.toBe(templateKey(at('/contact')));
     expect(templateKey(at('/blog/refactoring-hermes'))).not.toBe(templateKey(at('/blog/autopilot-notes')));
+  });
+
+  test('pages of one kind by their query too: id-like values (numbers, dates, long tokens) stand for any, other values name the page, tracking parameters are ignored', () => {
+    expect(templateKey(at('/product?id=12'))).toBe(templateKey(at('/product?id=9876')));
+    expect(templateKey(at('/report?day=2026-10-08'))).toBe(templateKey(at('/report?day=2026-10-09')));
+    expect(templateKey(at('/view?t=Zm9vYmFyYmF6cXV4cXV1eHh5enp6eg'))).toBe(templateKey(at('/view?t=YWJjZGVmZ2hpamtsbW5vcHFyc3R1dg')));
+    expect(templateKey(at('/App.aspx?comp=BalanceInquiry&NavLinkID=349'))).not.toBe(templateKey(at('/App.aspx?comp=JournalEntries&NavLinkID=18')));
+    expect(templateKey(at('/App.aspx?NavLinkID=18&comp=JournalEntries'))).toBe(templateKey(at('/App.aspx?comp=JournalEntries&NavLinkID=19')));
+    expect(templateKey(at('/about?utm_source=mail'))).toBe(templateKey(at('/about')));
+  });
+
+  test('a link to the same path with another query is another page to follow; the same query in another order, or with tracking added, is this page', () => {
+    const page = at('/App.aspx?comp=BalanceInquiry&NavLinkID=349');
+    const v = (href: string) => linkVerdict({ href: at(href), text: '' }, page, 'shop.example');
+    expect(v('/App.aspx?comp=JournalEntries&NavLinkID=18')).toBe('follow');
+    expect(v('/App.aspx?NavLinkID=349&comp=BalanceInquiry')).toBe('this page');
+    expect(v('/App.aspx?comp=BalanceInquiry&NavLinkID=349&utm_campaign=x#top')).toBe('this page');
+  });
+
+  test('the screens of a one-address application are all visited: App.aspx?comp=A, ?comp=B and ?comp=C are three pages, not one', async () => {
+    const site = new FakeSite(
+      { '/': { links: [a('/App.aspx?comp=A&NavLinkID=1'), a('/App.aspx?comp=B&NavLinkID=2'), a('/App.aspx?comp=C&NavLinkID=3')] }, '/App.aspx': { links: [a('/')] } },
+      '/'
+    );
+    const result = await fly(site, options(site));
+    expect(result.visited.map((u) => new URL(u).search)).toEqual(['?comp=A&NavLinkID=1', '?comp=B&NavLinkID=2', '?comp=C&NavLinkID=3']);
   });
 
   test('link verdicts', () => {

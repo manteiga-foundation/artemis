@@ -8,7 +8,7 @@
 // once, off stops the flight between steps (within a quarter second while it dwells).
 
 import type { ElectronApplication, Page } from 'playwright';
-import { fly, keyOf, type FlightDriver, type Link } from './autopilot';
+import { fly, keyOf, type Control, type FlightDriver, type Link } from './autopilot';
 import type { Recorder } from './recorder';
 import { inScope, scopeHostOf } from '../src/scope';
 
@@ -21,15 +21,48 @@ const NAV_TIMEOUT = 15_000;
 const STEP_MS = 250;
 
 // Page-side code goes as script strings: the server compiles without DOM types.
-const LINKS = `(() => [...document.querySelectorAll('a[href]')].map((a) => ({
+const VISIBLE = `function shows(e) {
+  const r = e.getBoundingClientRect();
+  const s = getComputedStyle(e);
+  return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
+}`;
+const LINKS = `(() => { ${VISIBLE}; return [...document.querySelectorAll('a[href]')].map((a) => ({
   href: a.href,
-  text: (a.innerText || a.getAttribute('aria-label') || a.title || '').replace(/\\s+/g, ' ').trim().slice(0, 120)
-})))()`;
+  text: (a.innerText || a.getAttribute('aria-label') || a.title || '').replace(/\\s+/g, ' ').trim().slice(0, 120),
+  visible: shows(a)
+})) })()`;
 const visibleLinkIndex = (href: string) => `(() => [...document.querySelectorAll('a[href]')].findIndex((a) => {
   const r = a.getBoundingClientRect();
   const s = getComputedStyle(a);
   return a.href === ${JSON.stringify(href)} && r.width > 0 && r.height > 0 && s.visibility !== 'hidden';
 }))()`;
+/**
+ * The menu controls showing on the page: in-page links (to this page, a fragment or '#'), closed
+ * expand buttons (aria-expanded false, aria-haspopup not open), closed details. A control is told
+ * apart by its id, else by what it is, where it points and what it says (and its rank among twins).
+ */
+const CONTROL_LIST = `function controlList() {
+  ${VISIBLE};
+  const here = location.href.split('#')[0];
+  const say = (e) => (e.innerText || e.getAttribute('aria-label') || e.title || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
+  const twins = new Map();
+  const out = [];
+  for (const e of document.querySelectorAll('a[href], [aria-expanded="false"], [aria-haspopup]:not([aria-expanded="true"]), details:not([open]) > summary')) {
+    if (!shows(e)) continue;
+    const toggle = e.matches('[aria-expanded="false"], [aria-haspopup], summary');
+    if (!toggle && e.href.split('#')[0] !== here) continue;
+    if (e.matches('[type=submit], [type=reset]')) continue;
+    const sig = e.id ? '#' + e.id : e.tagName.toLowerCase() + '|' + (e.getAttribute('href') || '') + '|' + say(e);
+    const n = twins.get(sig) || 0;
+    twins.set(sig, n + 1);
+    out.push({ el: e, key: n ? sig + '|' + n : sig, text: say(e) });
+  }
+  return out;
+}`;
+const CONTROLS = `(() => { ${CONTROL_LIST}; return controlList().map(({ key, text }) => ({ key, text })) })()`;
+const controlNamed = (key: string) => `(() => { ${CONTROL_LIST}; const c = controlList().find((c) => c.key === ${JSON.stringify(key)}); return c ? c.el : null })()`;
+/** What changes when a script builds or folds a menu: the page's address and its links and controls. */
+const SHAPE = `location.href + ' ' + document.querySelectorAll('a[href], [aria-expanded], summary').length`;
 /** One step of the slow speed's scroll: about 32 steps from the top to the bottom. */
 const SCROLL_STEP = `(() => {
   const max = document.documentElement.scrollHeight - innerHeight;
@@ -88,13 +121,75 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
   // box for that dialog closes only when the page navigates.
   let talkedBack = false;
 
+  /** Wait for the page to stop building (a menu from an API, a fold animating): its shape steady twice. */
+  const steady = async (maxMs: number) => {
+    const until = Date.now() + maxMs;
+    let last = '';
+    let steady = 0;
+    while (Date.now() < until && steady < 2) {
+      const shape = (await site.evaluate(SHAPE).catch(() => '')) as string;
+      steady = shape && shape === last ? steady + 1 : 0;
+      last = shape;
+      await Bun.sleep(150);
+    }
+  };
+  const showing = async (key: string) => ((await site.evaluate(CONTROLS).catch(() => [])) as Control[]).some((c) => c.key === key);
+  /** Click a menu control as the autopilot (its click is recorded as its own); false when it is not there. */
+  const press = async (c: Control) => {
+    const handle = (await site.evaluateHandle(controlNamed(c.key)).catch(() => null))?.asElement();
+    if (!handle) return false;
+    await shell('acting', true).catch(() => {});
+    try {
+      await handle.click({ timeout: 3000 });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await shell('acting', false).catch(() => {});
+      await handle.dispose().catch(() => {});
+      await steady(2500);
+    }
+  };
+  /** Open the path's last control: from the deepest one showing, each in turn. */
+  const openPath = async (path: Control[]) => {
+    const page = keyOf(site.url());
+    let from = path.length - 1;
+    while (from > 0 && !(await showing(path[from].key))) from--;
+    for (let i = from; i < path.length; i++) {
+      if (!(await showing(path[i].key))) return false;
+      if (!(await press(path[i]))) return false;
+      // The site made it a navigation: the path ends here.
+      if (keyOf(site.url()) !== page) return true;
+    }
+    return true;
+  };
+
   const driver: FlightDriver = {
     url: async () => site.url(),
-    links: async () => (await site.evaluate(LINKS)) as Link[],
+    links: async () => {
+      await steady(3000);
+      return (await site.evaluate(LINKS)) as Link[];
+    },
+    controls: async () => (await site.evaluate(CONTROLS)) as Control[],
+    async reveal(path) {
+      talkedBack = false;
+      const before = keyOf(site.url());
+      await steady(3000);
+      const ok = await openPath(path);
+      if (keyOf(site.url()) !== before) await site.waitForLoadState('domcontentloaded', { timeout: NAV_TIMEOUT }).catch(() => {});
+      return ok;
+    },
     async follow(link) {
       talkedBack = false;
       const before = keyOf(site.url());
-      const i = (await site.evaluate(visibleLinkIndex(link.href)).catch(() => -1)) as number;
+      let i = (await site.evaluate(visibleLinkIndex(link.href)).catch(() => -1)) as number;
+      // Behind a menu: open the path that shows it, as a person would, once the page has built it
+      // (back on the page, its menu may still be on its way from an API).
+      if (i < 0 && link.via?.length) {
+        await steady(3000);
+        await openPath(link.via).catch(() => false);
+        if (keyOf(site.url()) === before) i = (await site.evaluate(visibleLinkIndex(link.href)).catch(() => -1)) as number;
+      }
       let clicked = false;
       if (i >= 0) {
         await shell('acting', true).catch(() => {});
@@ -108,7 +203,7 @@ export function startAutopilot(o: { app: ElectronApplication; site: Page; record
         }
       }
       // Hidden or covered: reached by its address, still from the page that links to it.
-      if (!clicked) await site.goto(link.href, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
+      if (!clicked && keyOf(site.url()) === before) await site.goto(link.href, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT }).catch(() => {});
       await site.waitForURL((u) => keyOf(u.toString()) !== before, { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {});
       return keyOf(site.url()) !== before;
     },

@@ -43,7 +43,7 @@ git ignores; see `SECURITY.md`.
 ![Status](https://img.shields.io/badge/status-alpha-e0b85c?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-1034a6?style=flat-square)
 [![CI](https://github.com/manteiga-foundation/artemis/actions/workflows/ci.yml/badge.svg)](https://github.com/manteiga-foundation/artemis/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-233%20passing-005d2c?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-242%20passing-005d2c?style=flat-square)
 ![Bun](https://img.shields.io/badge/Bun-1.4-000000?style=flat-square&logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-20232A?style=flat-square&logo=react&logoColor=61DAFB)

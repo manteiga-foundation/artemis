@@ -61,6 +61,64 @@ const site = Bun.serve({
 });
 const siteUrl = `http://localhost:${site.port}`;
 
+// A one-address application with its menu built on demand, the way such back offices do: the menu
+// arrives from an API after the page has loaded; only the sections exist at first (in-page links);
+// a section builds its categories, a category builds its links to App?comp=... screens. Beside it,
+// a dropdown button whose links sit hidden in the page, and a user menu holding Sign out.
+const menuHits = new Map<string, number>();
+const MENU = {
+  'General Ledger': { journal: [['JournalEntries', 18], ['ConversionMode', 93]], 'gl-inquiry': [['BalanceInquiry', 349]] },
+  Payables: { invoices: [['Invoices', 50]] }
+};
+const MENU_SCRIPT = `<nav id="sections"></nav><nav id="categories"></nav><nav id="links"></nav>
+<button id="more" aria-expanded="false">More</button><div id="more-menu" hidden><a href="/reports">Reports</a></div>
+<button id="user" aria-haspopup="true" aria-expanded="false">Jaime</button><div id="user-menu" hidden><a href="/logout">Sign out</a></div>
+<script>
+for (const [b, m] of [['more', 'more-menu'], ['user', 'user-menu']]) document.getElementById(b).onclick = (e) => {
+  const open = e.currentTarget.getAttribute('aria-expanded') === 'true';
+  e.currentTarget.setAttribute('aria-expanded', String(!open));
+  document.getElementById(m).hidden = open;
+};
+setTimeout(async () => {
+  const menu = await (await fetch('/api/menu')).json();
+  const sections = document.getElementById('sections');
+  for (const name of Object.keys(menu)) {
+    const a = document.createElement('a');
+    a.href = '#' + name.replace(' ', '-');
+    a.textContent = name;
+    a.onclick = () => {
+      const cats = document.getElementById('categories');
+      cats.innerHTML = '';
+      document.getElementById('links').innerHTML = '';
+      for (const cat of Object.keys(menu[name])) {
+        const c = document.createElement('a');
+        c.href = '#' + cat;
+        c.textContent = cat;
+        c.onclick = () => {
+          document.getElementById('links').innerHTML = menu[name][cat].map(([comp, id]) => '<a href="/App?comp=' + comp + '&NavLinkID=' + id + '">' + comp + '</a>').join(' ');
+        };
+        cats.append(c, ' ');
+      }
+    };
+    sections.append(a, ' ');
+  }
+}, 400);
+</script>`;
+const menuSite = Bun.serve({
+  hostname: 'localhost',
+  port: 0,
+  fetch(req) {
+    const url = new URL(req.url);
+    const key = url.pathname + url.search;
+    menuHits.set(key, (menuHits.get(key) ?? 0) + 1);
+    if (url.pathname === '/api/menu') return Response.json(MENU);
+    const heading = url.pathname === '/Welcome' ? 'Welcome' : url.pathname === '/App' ? url.searchParams.get('comp') : url.pathname === '/reports' ? 'Reports' : url.pathname === '/logout' ? 'Signed out' : null;
+    if (!heading) return new Response('not found', { status: 404 });
+    return new Response(`<!doctype html><title>${heading}</title><body style="font:16px sans-serif;margin:40px"><h1>${heading}</h1>${MENU_SCRIPT}</body>`, { headers: { 'content-type': 'text/html' } });
+  }
+});
+const menuUrl = `http://localhost:${menuSite.port}`;
+
 let vite: ViteServer;
 let profileDir: string;
 let sessionsDir: string;
@@ -74,6 +132,7 @@ beforeAll(async () => {
 afterAll(async () => {
   vite?.stop();
   site.stop(true);
+  menuSite.stop(true);
   await rm(profileDir, { recursive: true, force: true });
   await rm(sessionsDir, { recursive: true, force: true });
 });
@@ -160,6 +219,47 @@ describe('the autopilot in the owned browser', () => {
       await shell.close();
     }
   }, 90000);
+
+  test('a one-address application whose menu is built on demand: it unfolds the menu (sections, categories, a dropdown), opens every screen behind it by clicking the path, never signs out; every screen is its own page in the cosmos', async () => {
+    menuHits.clear();
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true, sessionsDir, record: { video: false, har: false } });
+    const errors: string[] = [];
+    shell.console.on('pageerror', (e) => errors.push(e.message));
+    try {
+      const c = shell.console;
+      await engage(c, `${menuUrl}/Welcome`);
+      const page = await sitePage(shell, menuUrl);
+      await page.getByRole('heading', { name: 'Welcome' }).waitFor({ timeout: 10000 });
+      for (let i = 0; i < 3; i++) await c.keyboard.press('d');
+      await statusIs(c, 'Autopilot: the site is covered', 60000);
+      expect((await stateOf(c)).status).toBe('Autopilot: the site is covered. 5 pages visited, nothing left to open.');
+      for (const screen of ['/App?comp=JournalEntries&NavLinkID=18', '/App?comp=ConversionMode&NavLinkID=93', '/App?comp=BalanceInquiry&NavLinkID=349', '/App?comp=Invoices&NavLinkID=50', '/reports']) {
+        expect(menuHits.get(screen) ?? 0, screen).toBeGreaterThan(0);
+      }
+      expect(menuHits.get('/logout') ?? 0).toBe(0);
+
+      // Every screen is a page of its own, reached from the Welcome page.
+      const m = emptySiteModel();
+      applySiteEvents(m, shell.recorder!.snapshot());
+      const pages = m.nodes.filter((n) => n.kind === 'page');
+      expect(pages.map((n) => n.label).sort()).toEqual(['/App?comp=BalanceInquiry&…', '/App?comp=ConversionMode&…', '/App?comp=Invoices&…', '/App?comp=JournalEntries&…', '/Welcome', '/reports'].sort());
+      expect(pages.filter((n) => n.label !== '/Welcome').every((n) => n.parent === pages.findIndex((p) => p.label === '/Welcome'))).toBe(true);
+
+      // Its clicks on the menu and the links are its own, and the screens were opened by clicks.
+      const database = shell.recorder!.path()!;
+      await shell.close();
+      const db = new Database(database, { readonly: true });
+      const actions = db.query('SELECT actor, kind, name, href FROM actions').all() as { actor: string; kind: string; name: string | null; href: string | null }[];
+      db.close();
+      expect(new Set(actions.map((a) => `${a.actor} ${a.kind}`))).toEqual(new Set(['autopilot click']));
+      expect(actions.some((a) => a.name === 'General Ledger')).toBe(true);
+      expect(actions.some((a) => a.name === 'More')).toBe(true);
+      expect(actions.filter((a) => a.href?.includes('/App?comp=')).length).toBe(4);
+      expect(errors).toEqual([]);
+    } finally {
+      await shell.close();
+    }
+  }, 120000);
 
   test('a site that opens an alert, a confirm and a popup: it answers them (OK, Cancel), closes the popup, says so, and flies on; nothing is left on screen', async () => {
     const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });

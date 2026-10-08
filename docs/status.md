@@ -29,13 +29,15 @@ each slice that changes it.
   is closed (window, Cmd+Q, Ctrl+C; leftovers of a crash recovered at the next launch).
 - In the owned browser the Cosmos is the live recording, drawn as a computed radial tree: the core
   at the centre, sections evenly around it, sub-pages outward, every request a dot in its page's
-  cloud, no line crossing another; routes in the Routes lens; Scope on `E`; V lands on the current
+  cloud, no line crossing another; a page is its address with its query (tracking parameters
+  aside), so a one-address application's screens are pages of their own; routes in the Routes lens; Scope on `E`; V lands on the current
   page; a console reload rebuilds it from the database.
 - The configuration view (`,`): search, seven categories, checkboxes, Apply. Only the sound default
   is live; the other options are interface with emulated values.
 - The autopilot (D in the Browser view, a yoke with three speed squares): flies the site branch by
   branch at slow, regular or max, never repeating what the cosmos has, two or three pages of each
-  kind, never signing out; its clicks are recorded as the autopilot's and the operator's hand on
+  kind, never signing out; menus built on demand (in-page links, expand buttons, three levels) are
+  unfolded once per flight and their screens opened by clicking the path; its clicks are recorded as the autopilot's and the operator's hand on
   the site disengages it. The site's dialogs are the operator's (Electron's native box); while
   flying it answers them (OK, Leave, Cancel), moves on and closes the popups it caused. A glow
   breathes around the window's edges while it flies and its progress fills the header's graph box.
