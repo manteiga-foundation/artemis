@@ -331,36 +331,36 @@ const ctl = (key: string, text = key): Control => ({ key, text });
 
 const MENU: MenuNode[] = [
   {
-    control: ctl('#General-Ledger', 'General Ledger'),
+    control: ctl('#Sales', 'Sales'),
     children: [
-      { control: ctl('#journal', 'Journal'), links: [a('/App.aspx?comp=JournalEntries&NavLinkID=18', 'Create GL Journal Entries'), ...[93, 94, 95, 96].map((n) => a(`/UserMode.aspx?NavLinkID=${n}`, `Mode ${n}`))] },
-      { control: ctl('#gl-inquiry', 'GL Inquiry'), links: [a('/App.aspx?comp=BalanceInquiry&NavLinkID=349', 'Balance Sheet Schedule Inquiry')] }
+      { control: ctl('#orders', 'Orders'), links: [a('/App.aspx?comp=OrderEntry&NavLinkID=11', 'Order entry'), ...[1, 2, 3, 4].map((n) => a(`/Mode.aspx?NavLinkID=${n}`, `Mode ${n}`))] },
+      { control: ctl('#summaries', 'Summaries'), links: [a('/App.aspx?comp=SalesSummary&NavLinkID=21', 'Sales summary')] }
     ]
   },
   {
-    control: ctl('#Payables', 'Payables'),
+    control: ctl('#Purchasing', 'Purchasing'),
     children: [
       {
         control: ctl('#invoices', 'Invoices'),
-        links: [a('/App.aspx?comp=Invoices&NavLinkID=50', 'Invoices')],
-        children: [{ control: ctl('#archive', 'Archive'), links: [a('/App.aspx?comp=Archive&NavLinkID=51', 'Archive')], children: [{ control: ctl('#older', 'Older'), links: [a('/too-deep', 'Too deep')] }] }]
+        links: [a('/App.aspx?comp=Invoices&NavLinkID=31', 'Invoices')],
+        children: [{ control: ctl('#archive', 'Archive'), links: [a('/App.aspx?comp=Archive&NavLinkID=32', 'Archive')], children: [{ control: ctl('#older', 'Older'), links: [a('/too-deep', 'Too deep')] }] }]
       }
     ]
   },
   { control: ctl('button#more', 'More'), hidden: [a('/reports', 'Reports')] },
-  { control: ctl('button#user', 'Jaime'), links: [a('/logout', 'Sign out')] },
+  { control: ctl('button#user', 'Account'), links: [a('/logout', 'Sign out')] },
   { control: ctl('#delete-all', 'Delete all records'), links: [a('/deleted', 'Gone')] },
   { control: ctl('#help', 'Help'), navigatesTo: '/help' }
 ];
 const MENU_SITE: Record<string, FakePage> = {
   '/Welcome.aspx': { links: [a('/Welcome.aspx', 'Home')] },
   '/App.aspx': { links: [a('/Welcome.aspx', 'Home')] },
-  '/UserMode.aspx': { links: [a('/Welcome.aspx', 'Home')] },
+  '/Mode.aspx': { links: [a('/Welcome.aspx', 'Home')] },
   '/reports': { links: [] },
   '/help': { links: [] },
   '/too-deep': { links: [] }
 };
-const menus = { '/Welcome.aspx': MENU, '/App.aspx': MENU, '/UserMode.aspx': MENU };
+const menus = { '/Welcome.aspx': MENU, '/App.aspx': MENU, '/Mode.aspx': MENU };
 
 describe('menus built on demand', () => {
   test('the menus are unfolded, three levels deep, and every page behind them is visited by clicking the path that shows it (an app whose top level is in-page links)', async () => {
@@ -371,14 +371,14 @@ describe('menus built on demand', () => {
     expect(result.visited.map(shown)).toEqual([
       '/help',
       '/reports',
-      '/App.aspx?comp=JournalEntries&NavLinkID=18',
-      '/UserMode.aspx?NavLinkID=93',
-      '/UserMode.aspx?NavLinkID=94',
-      '/UserMode.aspx?NavLinkID=95',
-      '/UserMode.aspx?NavLinkID=96',
-      '/App.aspx?comp=BalanceInquiry&NavLinkID=349',
-      '/App.aspx?comp=Invoices&NavLinkID=50',
-      '/App.aspx?comp=Archive&NavLinkID=51'
+      '/App.aspx?comp=OrderEntry&NavLinkID=11',
+      '/Mode.aspx?NavLinkID=1',
+      '/Mode.aspx?NavLinkID=2',
+      '/Mode.aspx?NavLinkID=3',
+      '/Mode.aspx?NavLinkID=4',
+      '/App.aspx?comp=SalesSummary&NavLinkID=21',
+      '/App.aspx?comp=Invoices&NavLinkID=31',
+      '/App.aspx?comp=Archive&NavLinkID=32'
     ]);
     // Never past the third level, never signed out, never a control named delete.
     const paths = site.commits.map((u) => new URL(u).pathname);
@@ -393,7 +393,7 @@ describe('menus built on demand', () => {
     await fly(site, options(site));
     const opened = site.reveals.map((p) => p.at(-1));
     expect(new Set(opened).size).toBe(opened.length);
-    expect(opened.sort()).toEqual(['#General-Ledger', '#Payables', '#archive', '#gl-inquiry', '#help', '#invoices', '#journal', 'button#more', 'button#user'].sort());
+    expect(opened.sort()).toEqual(['#Purchasing', '#Sales', '#archive', '#help', '#invoices', '#orders', '#summaries', 'button#more', 'button#user'].sort());
   });
 
   test('a page whose only links are behind its menu is still explored when the flight reaches it', async () => {
@@ -420,17 +420,17 @@ describe('the rules the plan follows', () => {
     expect(templateKey(at('/product?id=12'))).toBe(templateKey(at('/product?id=9876')));
     expect(templateKey(at('/report?day=2026-10-08'))).toBe(templateKey(at('/report?day=2026-10-09')));
     expect(templateKey(at('/view?t=Zm9vYmFyYmF6cXV4cXV1eHh5enp6eg'))).toBe(templateKey(at('/view?t=YWJjZGVmZ2hpamtsbW5vcHFyc3R1dg')));
-    expect(templateKey(at('/App.aspx?comp=BalanceInquiry&NavLinkID=349'))).not.toBe(templateKey(at('/App.aspx?comp=JournalEntries&NavLinkID=18')));
-    expect(templateKey(at('/App.aspx?NavLinkID=18&comp=JournalEntries'))).toBe(templateKey(at('/App.aspx?comp=JournalEntries&NavLinkID=19')));
+    expect(templateKey(at('/App.aspx?comp=SalesSummary&NavLinkID=21'))).not.toBe(templateKey(at('/App.aspx?comp=OrderEntry&NavLinkID=11')));
+    expect(templateKey(at('/App.aspx?NavLinkID=11&comp=OrderEntry'))).toBe(templateKey(at('/App.aspx?comp=OrderEntry&NavLinkID=12')));
     expect(templateKey(at('/about?utm_source=mail'))).toBe(templateKey(at('/about')));
   });
 
   test('a link to the same path with another query is another page to follow; the same query in another order, or with tracking added, is this page', () => {
-    const page = at('/App.aspx?comp=BalanceInquiry&NavLinkID=349');
+    const page = at('/App.aspx?comp=SalesSummary&NavLinkID=21');
     const v = (href: string) => linkVerdict({ href: at(href), text: '' }, page, 'shop.example');
-    expect(v('/App.aspx?comp=JournalEntries&NavLinkID=18')).toBe('follow');
-    expect(v('/App.aspx?NavLinkID=349&comp=BalanceInquiry')).toBe('this page');
-    expect(v('/App.aspx?comp=BalanceInquiry&NavLinkID=349&utm_campaign=x#top')).toBe('this page');
+    expect(v('/App.aspx?comp=OrderEntry&NavLinkID=11')).toBe('follow');
+    expect(v('/App.aspx?NavLinkID=21&comp=SalesSummary')).toBe('this page');
+    expect(v('/App.aspx?comp=SalesSummary&NavLinkID=21&utm_campaign=x#top')).toBe('this page');
   });
 
   test('the screens of a one-address application are all visited: App.aspx?comp=A, ?comp=B and ?comp=C are three pages, not one', async () => {

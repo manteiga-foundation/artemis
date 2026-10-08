@@ -44,13 +44,13 @@ describe('the site model', () => {
     const m = build([
       session,
       visit(1, `${S}/Welcome.aspx`),
-      visit(2, `${S}/App.aspx?comp=BalanceInquiry&NavLinkID=349`),
+      visit(2, `${S}/App.aspx?comp=SalesSummary&NavLinkID=21`),
       visit(3, `${S}/Welcome.aspx#journal`),
-      visit(4, `${S}/App.aspx?comp=JournalEntries&NavLinkID=18`),
-      visit(5, `${S}/App.aspx?NavLinkID=349&comp=BalanceInquiry#top`)
+      visit(4, `${S}/App.aspx?comp=OrderEntry&NavLinkID=11`),
+      visit(5, `${S}/App.aspx?NavLinkID=21&comp=SalesSummary#top`)
     ]);
-    expect(labels(m)).toEqual(['page:/Welcome.aspx', 'page:/App.aspx?comp=BalanceInquiry&…', 'page:/App.aspx?comp=JournalEntries&…']);
-    expect(m.nodes[1].key).toBe(`${S}/App.aspx?NavLinkID=349&comp=BalanceInquiry`);
+    expect(labels(m)).toEqual(['page:/Welcome.aspx', 'page:/App.aspx?comp=SalesSummary&…', 'page:/App.aspx?comp=OrderEntry&…']);
+    expect(m.nodes[1].key).toBe(`${S}/App.aspx?NavLinkID=21&comp=SalesSummary`);
     expect(m.nodes.map((n) => n.parent)).toEqual([null, 0, 0]);
     expect(m.current).toBe(1);
   });

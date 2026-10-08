@@ -67,12 +67,12 @@ const siteUrl = `http://localhost:${site.port}`;
 // a dropdown button whose links sit hidden in the page, and a user menu holding Sign out.
 const menuHits = new Map<string, number>();
 const MENU = {
-  'General Ledger': { journal: [['JournalEntries', 18], ['ConversionMode', 93]], 'gl-inquiry': [['BalanceInquiry', 349]] },
-  Payables: { invoices: [['Invoices', 50]] }
+  Sales: { orders: [['OrderEntry', 11], ['Returns', 12]], summaries: [['SalesSummary', 21]] },
+  Purchasing: { invoices: [['Invoices', 31]] }
 };
 const MENU_SCRIPT = `<nav id="sections"></nav><nav id="categories"></nav><nav id="links"></nav>
 <button id="more" aria-expanded="false">More</button><div id="more-menu" hidden><a href="/reports">Reports</a></div>
-<button id="user" aria-haspopup="true" aria-expanded="false">Jaime</button><div id="user-menu" hidden><a href="/logout">Sign out</a></div>
+<button id="user" aria-haspopup="true" aria-expanded="false">Account</button><div id="user-menu" hidden><a href="/logout">Sign out</a></div>
 <script>
 for (const [b, m] of [['more', 'more-menu'], ['user', 'user-menu']]) document.getElementById(b).onclick = (e) => {
   const open = e.currentTarget.getAttribute('aria-expanded') === 'true';
@@ -233,7 +233,7 @@ describe('the autopilot in the owned browser', () => {
       for (let i = 0; i < 3; i++) await c.keyboard.press('d');
       await statusIs(c, 'Autopilot: the site is covered', 60000);
       expect((await stateOf(c)).status).toBe('Autopilot: the site is covered. 5 pages visited, nothing left to open.');
-      for (const screen of ['/App?comp=JournalEntries&NavLinkID=18', '/App?comp=ConversionMode&NavLinkID=93', '/App?comp=BalanceInquiry&NavLinkID=349', '/App?comp=Invoices&NavLinkID=50', '/reports']) {
+      for (const screen of ['/App?comp=OrderEntry&NavLinkID=11', '/App?comp=Returns&NavLinkID=12', '/App?comp=SalesSummary&NavLinkID=21', '/App?comp=Invoices&NavLinkID=31', '/reports']) {
         expect(menuHits.get(screen) ?? 0, screen).toBeGreaterThan(0);
       }
       expect(menuHits.get('/logout') ?? 0).toBe(0);
@@ -242,7 +242,7 @@ describe('the autopilot in the owned browser', () => {
       const m = emptySiteModel();
       applySiteEvents(m, shell.recorder!.snapshot());
       const pages = m.nodes.filter((n) => n.kind === 'page');
-      expect(pages.map((n) => n.label).sort()).toEqual(['/App?comp=BalanceInquiry&…', '/App?comp=ConversionMode&…', '/App?comp=Invoices&…', '/App?comp=JournalEntries&…', '/Welcome', '/reports'].sort());
+      expect(pages.map((n) => n.label).sort()).toEqual(['/App?comp=Invoices&…', '/App?comp=OrderEntry&…', '/App?comp=Returns&…', '/App?comp=SalesSummary&…', '/Welcome', '/reports'].sort());
       expect(pages.filter((n) => n.label !== '/Welcome').every((n) => n.parent === pages.findIndex((p) => p.label === '/Welcome'))).toBe(true);
 
       // Its clicks on the menu and the links are its own, and the screens were opened by clicks.
@@ -252,7 +252,7 @@ describe('the autopilot in the owned browser', () => {
       const actions = db.query('SELECT actor, kind, name, href FROM actions').all() as { actor: string; kind: string; name: string | null; href: string | null }[];
       db.close();
       expect(new Set(actions.map((a) => `${a.actor} ${a.kind}`))).toEqual(new Set(['autopilot click']));
-      expect(actions.some((a) => a.name === 'General Ledger')).toBe(true);
+      expect(actions.some((a) => a.name === 'Sales')).toBe(true);
       expect(actions.some((a) => a.name === 'More')).toBe(true);
       expect(actions.filter((a) => a.href?.includes('/App?comp=')).length).toBe(4);
       expect(errors).toEqual([]);

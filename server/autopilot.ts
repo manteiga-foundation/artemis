@@ -122,7 +122,7 @@ const isId = (s: string) =>
 
 /**
  * Pages of one kind share a template: path segments and query values that are ids stand for any;
- * other query values name the page (App.aspx?comp=Journal is not App.aspx?comp=Balance).
+ * other query values name the page (App.aspx?comp=Orders is not App.aspx?comp=Invoices).
  */
 export function templateKey(href: string): string {
   const u = parse(href);
