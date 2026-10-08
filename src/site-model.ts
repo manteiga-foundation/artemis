@@ -11,7 +11,7 @@
 //
 // The model only grows (indices stay stable), and applying an event twice changes nothing, so a
 // snapshot replayed after live events is harmless. toNetwork() turns it into the graph's shape.
-import { inScope, pageKeyOf } from './scope';
+import { inScope, pageKeyOf, pageLabelOf } from './scope';
 import { SECTOR_COUNT, SPACE_SIZE, type LinkKind, type NetworkData, type NodeMeta } from './graph/data';
 import type { SiteEvent } from './site-events';
 
@@ -122,9 +122,9 @@ export function applySiteEvents(m: SiteModel, events: SiteEvent[]): boolean {
     v.committed = true;
     const out = external(u.hostname);
     const from = m.lastPage;
-    const page = node(pageKeyOf(u), () => ({
+    const page = node(pageKeyOf(u, !out), () => ({
       kind: 'page',
-      label: out ? `${u.hostname}${u.pathname}` : u.pathname,
+      label: out ? `${u.hostname}${u.pathname}` : pageLabelOf(u),
       host: u.hostname,
       external: out,
       section: sectionOf(u.pathname),

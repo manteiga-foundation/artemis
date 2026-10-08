@@ -28,8 +28,8 @@ const build = (events: SiteEvent[]) => {
 const labels = (m: ReturnType<typeof build>) => m.nodes.map((n) => `${n.kind}:${n.label}`);
 
 describe('the site model', () => {
-  test('pages are nodes keyed by address without the query; navigation links them in order; the last page is current', () => {
-    const m = build([session, visit(1, `${S}/`), visit(2, `${S}/contact?ref=home`), visit(3, `${S}/contact?ref=footer`), visit(4, `${S}/`)]);
+  test('pages are nodes keyed by address with the query, tracking parameters aside; navigation links them in order; the last page is current', () => {
+    const m = build([session, visit(1, `${S}/`), visit(2, `${S}/contact?utm_source=home`), visit(3, `${S}/contact?utm_source=footer&fbclid=x1`), visit(4, `${S}/`)]);
     expect(labels(m)).toEqual(['page:/', 'page:/contact']);
     expect(m.links).toEqual([
       { a: 0, b: 1, kind: 'nav' },
@@ -38,6 +38,26 @@ describe('the site model', () => {
     expect(m.current).toBe(0);
     expect(m.entry).toBe(0);
     expect(m.nodes[1].parent).toBe(0);
+  });
+
+  test('one address with a different query is a different page (an app whose screens are App.aspx?comp=...): the order of the parameters does not matter, the fragment never counts', () => {
+    const m = build([
+      session,
+      visit(1, `${S}/Welcome.aspx`),
+      visit(2, `${S}/App.aspx?comp=BalanceInquiry&NavLinkID=349`),
+      visit(3, `${S}/Welcome.aspx#journal`),
+      visit(4, `${S}/App.aspx?comp=JournalEntries&NavLinkID=18`),
+      visit(5, `${S}/App.aspx?NavLinkID=349&comp=BalanceInquiry#top`)
+    ]);
+    expect(labels(m)).toEqual(['page:/Welcome.aspx', 'page:/App.aspx?comp=BalanceInquiry&…', 'page:/App.aspx?comp=JournalEntries&…']);
+    expect(m.nodes[1].key).toBe(`${S}/App.aspx?NavLinkID=349&comp=BalanceInquiry`);
+    expect(m.nodes.map((n) => n.parent)).toEqual([null, 0, 0]);
+    expect(m.current).toBe(1);
+  });
+
+  test('outside the scope a page is its path only: a sign-in provider\'s handshakes (state, nonce) are one page, not one per sign-in', () => {
+    const m = build([session, visit(1, `${S}/`), visit(2, 'https://login.idp.example/authorize?state=a1&nonce=n1'), visit(3, `${S}/`), visit(4, 'https://login.idp.example/authorize?state=b2&nonce=n2')]);
+    expect(labels(m)).toEqual(['page:/', 'page:login.idp.example/authorize']);
   });
 
   test('a page appears when its navigation commits, at its final address, with the requests made meanwhile', () => {
