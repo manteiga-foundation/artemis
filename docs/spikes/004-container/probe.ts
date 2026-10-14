@@ -56,6 +56,33 @@ const cosmos = await page.evaluate(() => ({
 const lat = [...(cosmos.feed?.latencyMs ?? [])].sort((a: number, b: number) => a - b);
 const pct = (p: number) => (lat.length ? lat[Math.min(lat.length - 1, Math.floor(p * lat.length))] : null);
 
+// A console reload: the shim asks for the session so far, and the cosmos comes back whole.
+await page.reload();
+await page.waitForSelector('.boot', { state: 'detached', timeout: 20_000 }).catch(() => {});
+await page.waitForTimeout(2500);
+await page.keyboard.press('v');
+await page.waitForTimeout(2500);
+await page.screenshot({ path: join(outDir, 'after-reload.png') });
+const afterReload = await page.evaluate(() => ({
+  view: document.querySelector('.app')?.getAttribute('data-shown'),
+  labels: document.querySelectorAll('.hub-label').length,
+  nodes: document.querySelector('.hud-header')?.textContent?.match(/NODES\s*(\d+)/)?.[1] ?? null,
+  feed: (() => {
+    const f = (window as any).__artemisFeedStats;
+    return f && { batches: f.batches, events: f.events, resets: f.resets };
+  })(),
+  address: document.body.innerText.match(/127\.0\.0\.1:\d+[^\s]*/)?.[0] ?? null
+}));
+
+// The server's round trip from here (the WebSocket's one-way latency cannot be read across two clocks).
+const rtt: number[] = [];
+for (let i = 0; i < 20; i++) {
+  const t = performance.now();
+  await fetch(`${consoleUrl}/api/snapshot`);
+  rtt.push(performance.now() - t);
+}
+rtt.sort((a, b) => a - b);
+
 const done = s.flight.find((e: any) => e.event === 'done');
 console.log(
   JSON.stringify(
@@ -67,7 +94,9 @@ console.log(
       flightMs,
       flight: { events: s.flight.length, visited: done?.visited ?? null, pending: done?.pending ?? null, speeds: s.flight.filter((e: any) => e.event === 'speed').map((e: any) => e.speed) },
       cosmos: { labels: cosmos.labels, selected: cosmos.selected, labelTexts: cosmos.labelTexts },
-      feed: { batches: cosmos.feed?.batches, events: cosmos.feed?.events, latencyMs: { median: pct(0.5), p95: pct(0.95), max: lat.at(-1) ?? null } },
+      feed: { batches: cosmos.feed?.batches, events: cosmos.feed?.events, oneWayMsAcrossClocks: { median: pct(0.5), p95: pct(0.95), max: lat.at(-1) ?? null } },
+      httpRoundTripMs: { median: rtt[Math.floor(rtt.length / 2)], p95: rtt[Math.floor(rtt.length * 0.95)] },
+      afterReload,
       pageErrors: errors,
       screenshots: outDir
     },

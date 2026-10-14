@@ -1,0 +1,10 @@
+# What never goes into an image: the build context is the repository, and these are not the product.
+**/node_modules
+data
+dist
+dist-shell
+.git
+docs/screenshots
+docs/readme
+*.log
+*.bundle

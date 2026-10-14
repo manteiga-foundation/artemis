@@ -90,6 +90,14 @@ element rects; adaptive graph quality.
 
 ## Open questions
 
+- Hosted Artemis (spike 004, `docs/spikes/004-container.md`): the recorder, autopilot, live HAR
+  and live cosmos run without Electron from one Bun process in a Linux container (the Playwright
+  image plus Bun), the console fed over a WebSocket through its existing shell bridge; 24 of 24
+  Chromium tests pass inside the image. Decided direction: the Browser view becomes a view-only
+  stream of the site with a hand on it for sign-in, the Cosmos the home; next is spike 005 (the
+  streamed preview at scope-map size and full stage, the input path for sign-in, measured through
+  Docker), then the product slices (root Dockerfile, `server/host.ts`, the console's socket bridge,
+  the site preload in an isolated world, the Electron-bound tests rewritten against the Bun host).
 - The live HAR has not yet been imported into Burp, ZAP or Charles.
 - Record dialogs (type, message, who answered), the autopilot's closed popups and accepted
   certificate errors as observations in the session database (and the HAR). Popups are not

@@ -32,8 +32,16 @@ type Listener = (x: unknown) => void;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(text);
     else queue.push(text);
   };
-  const stats = { batches: 0, events: 0, latencyMs: [] as number[] };
+  const stats = { batches: 0, events: 0, resets: 0, latencyMs: [] as number[] };
   (window as unknown as { __artemisFeedStats: typeof stats }).__artemisFeedStats = stats;
+
+  // Like server/site-feed.ts: nothing is dispatched until the console listens (SITE_FEED_READY).
+  const pending: unknown[][] = [];
+  const deliver = () => {
+    if (!(window as unknown as Record<string, boolean>).__artemisSiteFeed) return;
+    while (pending.length) window.dispatchEvent(new CustomEvent('artemis:site', { detail: pending.shift() }));
+  };
+  setInterval(deliver, 50);
 
   const connect = () => {
     ws = new WebSocket(url);
@@ -48,8 +56,10 @@ type Listener = (x: unknown) => void;
         const batch = msg.events as unknown[];
         stats.batches++;
         stats.events += batch.length;
+        if ((batch[0] as { type?: string } | undefined)?.type === 'reset') stats.resets++;
         if (typeof msg.sentAt === 'number') stats.latencyMs.push(Date.now() - msg.sentAt);
-        window.dispatchEvent(new CustomEvent('artemis:site', { detail: batch }));
+        pending.push(batch);
+        deliver();
       } else emit(msg.type, msg.value);
     };
     ws.onclose = () => setTimeout(connect, 500);
