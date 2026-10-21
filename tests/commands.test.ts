@@ -84,6 +84,38 @@ describe('the command card adapts to the view', () => {
   });
 });
 
+describe('the Interceptor takes key 1', () => {
+  test('its card holds nine unique keys with A, S on the top row and V in the middle', () => {
+    const cmds = commandsFor('browser', false, false, true);
+    expect(cmds).toHaveLength(9);
+    expect(new Set(cmds.map((c) => c.key)).size).toBe(9);
+    expect(cmds.map((c) => c.key)).toEqual(['A', 'S', 'H', 'V', 'E', 'F', 'D', 'L', 'R']);
+    expect(cmds.map((c) => c.name)).toEqual(['Arm', 'Hold', 'Next', 'Close', 'Edit', 'Forward', 'Drop', 'Forward all', 'Reset']);
+  });
+
+  test('A arms the proxy and V closes the panel, in every view', () => {
+    for (const view of VIEWS) {
+      const arm = commandByKey(view.id, 'A', false, false, true)!;
+      expect(arm.name).toBe('Arm');
+      expect(arm.isActive!(getState())).toBe(false);
+      arm.run();
+      expect(getState().traffic!.armed).toBe(true);
+      expect(arm.isActive!(getState())).toBe(true);
+      arm.run();
+      expect(getState().traffic!.armed).toBe(false);
+      const close = commandByKey(view.id, 'V', false, false, true)!;
+      expect(close.name).toBe('Close');
+      expect(close.hint).toBe('Close the Interceptor and return to the view.');
+    }
+  });
+
+  test('the view card is untouched by it: the Interceptor set is its own', () => {
+    expect(commandsFor('browser').map((c) => c.name)[0]).toBe('Annotate');
+    expect(commandsFor('browser', false, true).map((c) => c.name)[0]).toBe('Apply');
+    expect(commandsFor('browser', false, false, true).map((c) => c.name)[0]).toBe('Arm');
+  });
+});
+
 describe('page view shows one page and its connections', () => {
   test('pageSubgraph returns the focus plus every node within the hop limit, each truly adjacent', () => {
     const d = controller.data;

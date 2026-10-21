@@ -10,6 +10,14 @@ each slice that changes it.
   them; the Page view is hidden, not removed. Pulling back from the Browser opens the Cosmos on the
   current page, selected and zoomed in on; an operator camera move cancels the first layout's
   pending auto-fit.
+- The Interceptor (key 1), the console's own instrument in every view: a traffic inspector and proxy
+  panel over the stage. Every request and response between the browser and the site, http and
+  websocket, whole (method, host, path, status, size, time, headers, bodies); history with a filter
+  and counts; the proxy armed and disarmed, every request held; a held request edited in place
+  (method, address, headers, body), forwarded as edited, or dropped; websockets listed and read like
+  anything else. A strip of its own on the command card keeps A, S and V where they are. The
+  positioning is deliberate: it is a direct alternative to Burp Suite's proxy history and
+  interception, and its form is the claim — see "Now" below.
 - The entry screen with the website field.
 - The owned browser, the Electron shell (`bun run artemis`): the website as a genuine native page,
   click pass-through, hotkeys from the site, a live address strip with Back/Forward/Reload, an
@@ -54,6 +62,12 @@ each slice that changes it.
 
 - In an ordinary browser (`bun run dev`) the Cosmos is a procedurally generated network of about
   2,000 nodes (`src/graph/data.ts`); only the owned browser draws a real recording.
+- The Interceptor's proxy does not listen on a port yet. The panel, its history, its counts, its
+  filter and every action on a held request (arm, hold, edit, forward, drop, forward all, reset) work
+  and are tested end to end, but nothing is intercepted on the wire: the panel opens on a sample
+  capture (`seedTraffic`, 16 requests shaped like a real session, http and websocket, a 404, a 503,
+  a failure, two held, one dropped), and when the owned browser's recorder feeds real traffic it
+  gives way to that. Observed traffic is history and cannot be edited, forwarded or dropped.
 - The Browser view commands Annotate, Snapshot, Flow, Links, DOM, Reload (card) and Clear answer
   as interface placeholders.
 - The header's `T/S`, `N/S`, `R/S` are a simulated feed (`useTelemetry` in `src/hooks.ts`); the
@@ -67,12 +81,18 @@ Direction: use Artemis on real applications (two so far) and let what it lacks t
 next features. Usefulness first: an interface element earns its place by answering a question a
 product manager, tester or UX reviewer actually has.
 
-1. Wire the configuration view's options as each feature arrives: recording defaults read by
+1. The Interceptor's listening proxy: a real forward proxy the owned browser is pointed through, so
+   arming, holding, editing, forwarding and dropping act on traffic over the wire instead of on the
+   panel's own state. Then websocket frames (not only the handshake), replay of any request from the
+   history, and the interceptor's readouts in the header. The target is Burp Suite's proxy history
+   and interception, with a form Burp does not attempt: this is the feature Artemis is measured
+   against, not a side panel.
+2. Wire the configuration view's options as each feature arrives: recording defaults read by
    `bun run artemis`, Scope subdomains, export formats.
-2. DOM session replay (spike first).
-3. Export policies on the HAR (masking or scoping, as options; today it is whole and unmasked by
+3. DOM session replay (spike first).
+4. Export policies on the HAR (masking or scoping, as options; today it is whole and unmasked by
    choice).
-4. Categorisation, then more autopilot. No LLMs or new dependencies for now; strong open-source
+5. Categorisation, then more autopilot. No LLMs or new dependencies for now; strong open-source
    tools are welcome. A small model for categorisation (and compliance mapping such as NIST CSF 2.0
    or PCI DSS) comes later, because hard-coded heuristics would put wrong labels in the database.
 

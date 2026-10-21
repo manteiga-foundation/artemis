@@ -21,7 +21,12 @@ import {
   GiOpenFolder,
   GiBackwardTime,
   GiAnticlockwiseRotation,
-  GiTrashCan
+  GiTrashCan,
+  GiPowerLightning,
+  GiPaperPlane,
+  GiFastForwardButton,
+  GiSandsOfTime,
+  GiCrossMark
 } from 'react-icons/gi';
 import { FaLayerGroup } from 'react-icons/fa6';
 import { controller, type CommandResult } from './graph/controller';
@@ -40,6 +45,19 @@ import {
 } from './settings-session';
 import { stepAutopilot } from './autopilot';
 import { YokeIcon } from './icons';
+import { LENSES, type LensId } from './store';
+import {
+  armTraffic,
+  closeInterceptor,
+  dropSelected,
+  focusTrafficEditor,
+  focusTrafficSearch,
+  forwardAll,
+  forwardSelected,
+  nextHeld,
+  pauseTraffic,
+  resetTraffic
+} from './interceptor-session';
 
 export interface CommandDef {
   key: string; // hotkey (single uppercase letter)
@@ -213,6 +231,114 @@ const SETS: Record<ViewId, CommandDef[]> = {
   browser: BROWSER_COMMANDS
 };
 
+// The Interceptor's card (key 1): the proxy and the queue in the six slots under A, S, V. A arms,
+// S holds the next request, V closes as it closes the configuration view; the rest walk the held
+// queue and send it on.
+const interceptorCommands = (view: ViewId): CommandDef[] => [
+  {
+    key: 'A',
+    name: 'Arm',
+    hint: 'Arm or disarm the proxy: armed, requests stop here before they reach the site.',
+    Icon: GiPowerLightning,
+    run: () => {
+      const t = armTraffic();
+      return { ok: true, message: getState().status, sfx: t.armed ? 'command-ok' : 'click' };
+    },
+    isActive: (s) => (s.traffic?.armed ?? false)
+  },
+  {
+    key: 'S',
+    name: 'Hold',
+    hint: 'Hold every request as it arrives, or let them all go (the proxy must be armed).',
+    Icon: GiSandsOfTime,
+    run: () => {
+      pauseTraffic();
+      return { ok: true, message: getState().status, sfx: 'command-ok' };
+    },
+    isActive: (s) => (s.traffic?.paused ?? false)
+  },
+  {
+    key: 'H',
+    name: 'Next',
+    hint: 'Select the next held request, wrapping round the queue.',
+    Icon: GiNextButton,
+    run: () => {
+      nextHeld();
+      return { ok: true, message: getState().status };
+    }
+  },
+  { ...interceptorCommand('V', 'Close', 'Close the Interceptor and return to the view.', FaLayerGroup, closeInterceptor) },
+  {
+    key: 'E',
+    name: 'Edit',
+    hint: 'Put the cursor in the selected held request: method, address and body are yours to change.',
+    Icon: GiNotebook,
+    run: () => {
+      focusTrafficEditor();
+      return { ok: true, message: getState().status };
+    }
+  },
+  {
+    key: 'F',
+    name: 'Forward',
+    hint: 'Send the selected held request on, as edited if it was.',
+    Icon: GiPaperPlane,
+    run: () => {
+      forwardSelected();
+      return { ok: true, message: getState().status };
+    }
+  },
+  {
+    key: 'D',
+    name: 'Drop',
+    hint: 'Refuse the selected held request: it never reaches the site.',
+    Icon: GiCrossMark,
+    run: () => {
+      dropSelected();
+      return { ok: true, message: getState().status };
+    }
+  },
+  {
+    key: 'L',
+    name: 'Forward all',
+    hint: 'Everything the proxy is holding, on its way at once.',
+    Icon: GiFastForwardButton,
+    run: () => {
+      forwardAll();
+      return { ok: true, message: getState().status };
+    }
+  },
+  {
+    key: 'R',
+    name: 'Reset',
+    hint: 'Back to the sample capture shown before anything was intercepted.',
+    Icon: GiAnticlockwiseRotation,
+    run: () => {
+      resetTraffic();
+      return { ok: true, message: getState().status };
+    }
+  }
+];
+
+function interceptorCommand(key: string, name: string, hint: string, Icon: IconType, act: () => unknown): CommandDef {
+  return {
+    key,
+    name,
+    hint,
+    Icon,
+    run: () => {
+      act();
+      return { ok: true, message: getState().status };
+    }
+  };
+}
+
+const INTERCEPTOR_SETS = new Map<ViewId, CommandDef[]>();
+const interceptorSet = (view: ViewId) => {
+  if (!INTERCEPTOR_SETS.has(view)) INTERCEPTOR_SETS.set(view, interceptorCommands(view));
+  return INTERCEPTOR_SETS.get(view)!;
+};
+
 // The recorded cosmos (owned browser) has nothing to regenerate; its slot holds Scope instead.
 const scope: CommandDef = {
   key: 'E',
@@ -257,8 +383,32 @@ const settingsSet = (view: ViewId) => {
   return SETTINGS_SETS.get(view)!;
 };
 
-export const commandsFor = (view: ViewId, recorded = false, settings = false): CommandDef[] =>
-  settings ? settingsSet(view) : recorded && view === 'cosmos' ? RECORDED_COSMOS_COMMANDS : SETS[view];
+export const commandsFor = (view: ViewId, recorded = false, settings = false, interceptor = false): CommandDef[] =>
+  interceptor ? interceptorSet(view) : settings ? settingsSet(view) : recorded && view === 'cosmos' ? RECORDED_COSMOS_COMMANDS : SETS[view];
 
-export const commandByKey = (view: ViewId, key: string, recorded = false, settings = false): CommandDef | undefined =>
-  commandsFor(view, recorded, settings).find((c) => c.key === key);
+export const commandByKey = (view: ViewId, key: string, recorded = false, settings = false, interceptor = false): CommandDef | undefined =>
+  commandsFor(view, recorded, settings, interceptor).find((c) => c.key === key);
+
+// ---------------------------------------------------------------- the strip
+// One row of keys above the command card, the same in every view. Key 1 is the Interceptor: it is
+// a panel over the stage, not a lens, so pressing it again (or Escape) closes it. Keys 2-5 pick a
+// lens; with the Interceptor closed the strip sits on no lens at all, the plain reading of the
+// graph (`overview` in the store).
+
+export interface StripItem {
+  /** The digit printed on the tab. */
+  key: string;
+  label: string;
+  /** The lens the tab picks; null for the Interceptor, which is a panel. */
+  lens: LensId | null;
+}
+
+export const STRIP: StripItem[] = [
+  { key: '1', label: 'Interceptor', lens: null },
+  ...LENSES.map((l, i) => ({ key: String(i + 2), label: l.label, lens: l.id }))
+];
+
+/** The lens tabs of the strip (everything but the Interceptor). */
+export const stripLenses = (): { id: LensId; label: string }[] => STRIP.filter((s) => s.lens !== null).map((s) => ({ id: s.lens!, label: s.label }));
+
+export const stripByKey = (key: string): StripItem | undefined => STRIP.find((s) => s.key === key);

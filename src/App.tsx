@@ -4,14 +4,14 @@ import { Background } from './components/Background';
 import { Stage } from './components/Stage';
 import { Header } from './components/Header';
 import { MiniMap } from './components/MiniMap';
-import { Console, stepLens } from './components/Console';
+import { Console, stepStrip } from './components/Console';
 import { CommandCard, runCommand } from './components/CommandCard';
 import { BootOverlay, TARGET_FIELD_ID } from './components/BootOverlay';
 import { AutopilotGlow } from './components/AutopilotGlow';
 import { pageLoadSignal } from './page-load';
-import { commandByKey } from './commands';
+import { commandByKey, stripByKey } from './commands';
 import { controller } from './graph/controller';
-import { LENSES, getState, setState, useStore } from './store';
+import { getState, setState, useStore } from './store';
 import { SfxBridge, bleepsSettings, useSfx } from './sfx';
 import { paletteStyle } from './views';
 import { FRAME_KEY_MESSAGE, isOwnedBrowser } from './owned';
@@ -20,6 +20,8 @@ import { SITE_EVENT, SITE_FEED_READY, type SiteEvent } from './site-events';
 import { usePerfSampler } from './metrics';
 import { closeSettings, toggleSettings } from './settings-session';
 import { autopilotFromShell } from './autopilot';
+import { closeInterceptor, openInterceptor, toggleInterceptor, trafficFromFeed } from './interceptor-session';
+import { trafficFromSiteEvents } from './interceptor';
 
 function Hotkeys() {
   const play = useSfx();
@@ -34,8 +36,9 @@ function Hotkeys() {
         return false;
       }
       const k = key.length === 1 ? key.toUpperCase() : key;
-      // The configuration view: "," opens and closes it, Escape closes it; while it is open the
-      // card holds the settings commands and the lenses rest (the graph is behind it).
+      // The configuration view: "," opens and closes it, Escape closes it; while it is open its own
+      // card holds the keys and the lenses rest. The Interceptor does the same on 1, and the two
+      // panels cannot stack: each closes the other as it opens (src/interceptor-session.ts).
       if (k === ',') {
         toggleSettings();
         play('click');
@@ -46,23 +49,41 @@ function Hotkeys() {
         play('click');
         return true;
       }
-      const cmd = commandByKey(s.view, k, s.recorded, s.settingsOpen);
+      // The strip's digits rest while the configuration view is open.
+      if (s.settingsOpen && (k === 'ArrowLeft' || k === 'ArrowRight' || /^[1-9]$/.test(k))) return false;
+      // The strip's digits. 1 opens and closes the Interceptor (a panel over the stage, not a lens);
+      // 2-5 pick a lens, and picking one closes the panel.
+      if (stripByKey(k)) {
+        const item = stripByKey(k)!;
+        if (item.lens === null) {
+          toggleInterceptor();
+          play('click');
+          return true;
+        }
+        if (s.interceptorOpen) closeInterceptor();
+        if (item.lens !== s.lens) controller.setLens(item.lens);
+        play('click');
+        return true;
+      }
+      if (k === 'Escape' && s.interceptorOpen) {
+        closeInterceptor();
+        play('click');
+        return true;
+      }
+      const cmd = commandByKey(s.view, k, s.recorded, s.settingsOpen, s.interceptorOpen);
       if (cmd) {
         runCommand(cmd, play);
         return true;
       }
-      if (s.settingsOpen && (k === 'ArrowLeft' || k === 'ArrowRight' || /^[1-9]$/.test(k))) return false;
+      if (s.settingsOpen && (k === 'ArrowLeft' || k === 'ArrowRight')) return false;
       if (k === 'ArrowLeft' || k === 'ArrowRight') {
-        controller.setLens(stepLens(k === 'ArrowLeft' ? -1 : 1));
-        play('click');
-        return true;
-      }
-      if (/^[1-9]$/.test(k) && Number(k) <= LENSES.length) {
-        const v = LENSES[Number(k) - 1].id;
-        if (v !== s.lens) {
-          controller.setLens(v);
-          play('click');
+        const item = stripByKey(stepStrip(k === 'ArrowLeft' ? -1 : 1))!;
+        if (item.lens === null) openInterceptor();
+        else {
+          if (s.interceptorOpen) closeInterceptor();
+          controller.setLens(item.lens);
         }
+        play('click');
         return true;
       }
       if (k === 'M') {
@@ -138,7 +159,13 @@ function AutopilotFeed() {
 /** The owned browser's recording, delivered live by the recorder's feed (server/site-feed.ts). */
 function SiteFeed() {
   useEffect(() => {
-    const on = (e: Event) => controller.applySiteEvents((e as CustomEvent<SiteEvent[]>).detail);
+    const on = (e: Event) => {
+      const events = (e as CustomEvent<SiteEvent[]>).detail;
+      controller.applySiteEvents(events);
+      // The same events fill the Interceptor: one entry per request, completed by its response.
+      // Observed traffic is history, so the panel keeps what it has and appends.
+      trafficFromFeed(events);
+    };
     const w = window as unknown as Record<string, boolean>;
     window.addEventListener(SITE_EVENT, on);
     w[SITE_FEED_READY] = true;

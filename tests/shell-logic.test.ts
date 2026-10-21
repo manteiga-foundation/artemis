@@ -17,6 +17,11 @@ describe('slot layout for the native site view', () => {
     expect(slotLayout({ engaged: true, stageView: 'browser', viewTransition: null }, null)).toEqual(hidden);
     expect(slotLayout({ engaged: true, stageView: 'browser', viewTransition: null }, { x: 0, y: 0, width: 0, height: 0 })).toEqual(hidden);
   });
+  test('a panel over the stage takes the site aside: the configuration view and the Interceptor', () => {
+    expect(slotLayout({ engaged: true, stageView: 'browser', viewTransition: null, settingsOpen: true }, rect).visible).toBe(false);
+    expect(slotLayout({ engaged: true, stageView: 'browser', viewTransition: null, interceptorOpen: true }, rect).visible).toBe(false);
+    expect(slotLayout({ engaged: true, stageView: 'browser', viewTransition: null, settingsOpen: false, interceptorOpen: false }, rect).visible).toBe(true);
+  });
 });
 
 describe('click pass-through', () => {

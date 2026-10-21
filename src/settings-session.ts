@@ -13,6 +13,9 @@ const draftOf = (s: UIState) => s.settingsDraft ?? s.settings;
 export function openSettings(): void {
   const s = getState();
   if (s.settingsOpen) return;
+  // The two panels both take the stage; the Interceptor steps aside (and stops nothing while it
+  // is out of sight, so its held requests keep waiting in the store).
+  if (s.interceptorOpen) setState({ interceptorOpen: false });
   setState({ settingsOpen: true, settingsDraft: { ...s.settings }, settingsQuery: '' });
   say('Settings open. Tick what you want, then Apply (A).');
 }

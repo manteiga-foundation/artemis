@@ -78,7 +78,10 @@ test('after engaging, the console is in the browser view; V pulls back to the co
     expect(await page.locator('.browser-surface').count()).toBe(1);
     expect(await anyCount(page, 'button', 'Annotate (A)')).toBe(1);
     expect(await anyCount(page, 'button', 'Vision (V)')).toBe(0);
-    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(0);
+    // The lens strip belongs to every view, the Browser included: it is how the auditor picks the
+    // perspective the pull-back will open in.
+    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(1);
+    await page.getByRole('tablist', { name: 'Lenses' }).waitFor({ state: 'visible', timeout: 5000 });
     expect(await page.locator('.graph-layer').isVisible()).toBe(false);
 
     await page.keyboard.press('v');
@@ -318,24 +321,149 @@ test('with reduced motion the switch still completes and clears its transition',
   }
 }, 30000);
 
-test('lenses keep working from the keyboard inside the cosmos, and step aside in the browser', async () => {
+test('lenses keep working from the keyboard inside the cosmos, and the strip stays on screen in the browser', async () => {
   const { page, errors } = await engaged();
   try {
+    // The strip is in the browser view too, over the live page, and its tabs pick the lens.
+    const strip = page.getByRole('tablist', { name: 'Lenses' });
+    await strip.waitFor({ state: 'visible', timeout: 5000 });
+    await page.getByRole('tab', { name: /Anomalies/ }).click();
+    expect(await page.getByRole('tab', { name: /Anomalies/ }).getAttribute('aria-selected')).toBe('true');
+    expect(await stateOf(page)).toMatchObject({ view: 'browser', lens: 'anomalies' });
+
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
+    await page.keyboard.press('2');
+    expect(await page.getByRole('tab', { name: /Clusters/ }).getAttribute('aria-selected')).toBe('true');
     await page.keyboard.press('3');
     expect(await page.getByRole('tab', { name: /Hubs/ }).getAttribute('aria-selected')).toBe('true');
     await page.keyboard.press('4');
     expect(await page.getByRole('tab', { name: /Routes/ }).getAttribute('aria-selected')).toBe('true');
     expect(await stateOf(page)).toMatchObject({ view: 'cosmos', lens: 'routes' });
+    // A lens tab closes the Interceptor and takes its lens in the same press.
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().view === "browser" && window.__artemis().viewTransition === null', { timeout: 4000 });
-    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(0);
+    // Back in the browser the strip is still there, on the lens the cosmos left it on.
+    expect(await anyCount(page, 'tablist', 'Lenses')).toBe(1);
+    expect(await page.getByRole('tab', { name: /Routes/ }).getAttribute('aria-selected')).toBe('true');
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
   }
 }, 30000);
+
+test('key 1 is the Interceptor: the panel opens over the stage with the traffic, and 1 or Esc closes it', async () => {
+  const { page, errors } = await engaged();
+  try {
+    const strip = page.getByRole('tablist', { name: 'Lenses' });
+    await strip.waitFor({ state: 'visible', timeout: 5000 });
+    // Nothing is picked at the start: Overview is gone as a lens, so no tab is selected.
+    expect(await page.locator('.tab[aria-selected="true"]').count()).toBe(0);
+    const labels = await page.locator('.tab-label').allTextContents();
+    expect(labels.map((t) => t.replace(/^\d/, ''))).toEqual(['Interceptor', 'Clusters', 'Hubs', 'Routes', 'Anomalies']);
+
+    await page.keyboard.press('1');
+    await page.waitForFunction('window.__artemis().interceptorOpen === true');
+    const dialog = page.getByRole('dialog', { name: 'Interceptor' });
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
+    expect(await page.getByRole('tab', { name: /Interceptor/ }).getAttribute('aria-selected')).toBe('true');
+    // The panel sits over the live page: the point at the centre of the site's slot now belongs to
+    // the panel, not to the page. The entry screen's overlay covers the stage while it fades, so
+    // wait for it to go first (it keeps the clicks until then). In the owned browser the shell also
+    // takes the site aside (slotLayout, pinned by tests/shell-logic.test.ts).
+    await page.waitForFunction(() => !document.querySelector('.boot'));
+    const overSite = await page.evaluate(() => {
+      const slot = document.querySelector('.browser-slot')!.getBoundingClientRect();
+      const at = document.elementFromPoint(slot.left + slot.width / 2, slot.top + slot.height / 2);
+      return !!at?.closest('.interceptor-surface');
+    });
+    expect(overSite).toBe(true);
+
+    // The capture is there to read: a status, a size and a time per answered request.
+    const rows = page.locator('.inter-row');
+    expect(await rows.count()).toBeGreaterThan(12);
+    const held = page.locator('.inter-row.is-held');
+    expect(await held.count()).toBeGreaterThan(0);
+    const first = await rows.first().textContent();
+    expect(first).toContain('intranet.example');
+    // A websocket and a failure are in it, not only plain 200s.
+    expect(await page.locator('.inter-row .inter-tag', { hasText: 'WS' }).count()).toBeGreaterThan(0);
+    expect(await page.locator('.inter-row.is-failed').count()).toBeGreaterThan(0);
+    // The summary counts what was seen.
+    const stats = await page.locator('.inter-stats').textContent();
+    expect(stats).toContain('ERR');
+    expect(stats).toContain('WS');
+
+    // Closing with the same key, then with Escape.
+    await page.keyboard.press('1');
+    await page.waitForFunction('window.__artemis().interceptorOpen === false');
+    await dialog.waitFor({ state: 'detached', timeout: 3000 });
+    expect(await page.locator('.browser-slot').isVisible()).toBe(true);
+    await page.keyboard.press('1');
+    await page.waitForFunction('window.__artemis().interceptorOpen === true');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction('window.__artemis().interceptorOpen === false');
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
+test('the Interceptor inspects, edits, forwards and drops a held request, and arms the proxy', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.getByRole('tablist', { name: 'Lenses' }).waitFor({ state: 'visible', timeout: 5000 });
+    await page.keyboard.press('1');
+    await page.getByRole('dialog', { name: 'Interceptor' }).waitFor({ state: 'visible', timeout: 5000 });
+
+    // A held request is selected at the start and read whole: request line, headers, body.
+    const held = page.locator('.inter-row.is-held').first();
+    await held.click();
+    const detail = page.getByRole('region', { name: 'Request detail' });
+    expect(await detail.textContent()).toContain('Request headers');
+    const body = page.getByRole('textbox', { name: 'Request body' });
+    expect(await body.count()).toBe(1);
+
+    // Editing it marks it in the list and keeps it held.
+    await body.fill('{"ids":[],"action":"archive"}');
+    await page.waitForFunction('window.__artemis().traffic.entries.some((e) => e.edited === true)');
+    expect(await page.locator('.inter-row .inter-tag.is-edit').count()).toBeGreaterThan(0);
+
+    // Forwarding it takes it out of the queue; the answer it got is what the row then reads.
+    const id = await page.evaluate(() => window.__artemis().trafficSelected);
+    await page.getByRole('button', { name: 'Forward request' }).click();
+    await page.waitForFunction(`window.__artemis().traffic.entries.find((e) => e.id === ${id}).state === "forwarded"`);
+    expect(await page.locator('.inter-row.is-forwarded').count()).toBe(1);
+    expect(await page.locator('.inter-row.is-forwarded .col-status').textContent()).toBe('200');
+
+    // Dropping another one: it never reaches the site.
+    const nextHeld = page.locator('.inter-row.is-held').first();
+    await nextHeld.click();
+    const dropId = await page.evaluate(() => window.__artemis().trafficSelected);
+    await page.getByRole('button', { name: 'Drop request' }).click();
+    await page.waitForFunction(`window.__artemis().traffic.entries.find((e) => e.id === ${dropId}).state === "dropped"`);
+    expect(await page.locator('.inter-row.is-dropped').count()).toBeGreaterThan(0);
+
+    // Arming from the panel's own control, and the readout follows.
+    await page.getByRole('button', { name: 'Arm proxy' }).click();
+    await page.waitForFunction('window.__artemis().traffic.armed === true');
+    expect(await page.locator('.inter-proxy').textContent()).toContain('ARMED');
+    expect(await page.getByRole('button', { name: 'Arm proxy' }).getAttribute('aria-pressed')).toBe('true');
+    // Hold needs an armed proxy, so it works now.
+    await page.getByRole('button', { name: 'Hold requests' }).click();
+    await page.waitForFunction('window.__artemis().traffic.paused === true');
+
+    // The filter narrows the list and says how much it is showing.
+    await page.getByRole('searchbox', { name: 'Filter traffic' }).fill('404');
+    await page.waitForFunction(() => document.querySelectorAll('.inter-row').length === 1);
+    expect(await page.locator('.inter-count').textContent()).toContain('/');
+    await page.getByRole('searchbox', { name: 'Filter traffic' }).fill('');
+    await page.waitForFunction(() => document.querySelectorAll('.inter-row').length > 12);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 45000);
 
 test('the console page carries Artemis\'s name and icon: the title and a favicon drawn from the header\'s mark', async () => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });

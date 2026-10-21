@@ -62,6 +62,19 @@ await page.getByRole('checkbox', { name: /Start exploring after Engage/ }).check
 await page.waitForTimeout(900);
 await shot(page, 'settings');
 await page.keyboard.press(',');
+await page.waitForTimeout(400);
+
+// The Interceptor over the cosmos: the traffic, a held request read whole, the proxy armed.
+await page.keyboard.press('1');
+await page.getByRole('dialog', { name: 'Interceptor' }).waitFor({ state: 'visible' });
+await page.waitForTimeout(900);
+await shot(page, 'interceptor');
+await page.getByRole('button', { name: 'Arm proxy' }).click();
+await page.getByRole('tab', { name: 'RESPONSE' }).click();
+await page.waitForTimeout(700);
+await shot(page, 'interceptor-armed-response');
+await page.keyboard.press('1');
+await page.waitForTimeout(400);
 await page.close();
 
 // 1280x800 check.
@@ -80,6 +93,17 @@ await page.getByRole('dialog', { name: 'Settings' }).waitFor({ state: 'visible' 
 await page.getByRole('searchbox', { name: 'Search settings' }).fill('video');
 await page.waitForTimeout(900);
 await shot(page, 'settings-browser-1280');
+// The cursor is in the search box, where a key is typing, not a hotkey: step out of it first (the
+// console's own rule, pinned by the "a typed key is not a hotkey" test). Page-side code goes as a
+// script string: the scripts compile without DOM types.
+await page.evaluate('document.activeElement && document.activeElement.blur && document.activeElement.blur()');
+await page.keyboard.press(',');
+await page.waitForTimeout(400);
+// The Interceptor at the narrower size: the two columns stack rather than shrink sideways.
+await page.keyboard.press('1');
+await page.getByRole('dialog', { name: 'Interceptor' }).waitFor({ state: 'visible' });
+await page.waitForTimeout(900);
+await shot(page, 'interceptor-1280');
 await page.close();
 
 await browser.close();

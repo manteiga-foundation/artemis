@@ -57,14 +57,14 @@ const HIDDEN: SlotLayout = { visible: false, x: 0, y: 0, w: 0, h: 0 };
 
 /**
  * The native view is shown only while the console is engaged, showing the Browser view, and not
- * diving (a native view cannot travel with the stage's animation).
+ * diving (a native view cannot travel with the stage's animation). A panel over the stage (the
+ * configuration view, the Interceptor) covers the site, which steps aside until it closes.
  */
 export function slotLayout(
-  s: { engaged: boolean; stageView: ViewId; viewTransition: unknown; settingsOpen?: boolean },
+  s: { engaged: boolean; stageView: ViewId; viewTransition: unknown; settingsOpen?: boolean; interceptorOpen?: boolean },
   rect: { x: number; y: number; width: number; height: number } | null
 ): SlotLayout {
-  // The configuration view covers the stage: the site steps aside until it closes.
-  if (!rect || !s.engaged || s.stageView !== 'browser' || s.viewTransition || s.settingsOpen || rect.width <= 0 || rect.height <= 0) return HIDDEN;
+  if (!rect || !s.engaged || s.stageView !== 'browser' || s.viewTransition || s.settingsOpen || s.interceptorOpen || rect.width <= 0 || rect.height <= 0) return HIDDEN;
   return { visible: true, x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) };
 }
 

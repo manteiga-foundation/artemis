@@ -3,14 +3,19 @@ import type { ViewId } from './views';
 import type { MachineStats, PerfStats } from './metrics';
 import { browserStorage, loadSettings, startsMuted, type Settings } from './settings';
 import type { PageLoad } from './page-load';
+import type { Traffic } from './interceptor';
 
 export type { ViewId } from './views';
 
-/** A lens is a perspective within a view: same graph, different emphasis. Keys 1-5. */
+/** A lens is a perspective within a view: same graph, different emphasis. Keys 2-5. */
 export type LensId = 'overview' | 'clusters' | 'hubs' | 'routes' | 'anomalies';
 
+/**
+ * The lenses of the strip, in key order, as shown. Overview is not among them: it is the neutral
+ * state the strip returns to when the Interceptor (key 1) is closed, so the graph is read plainly
+ * rather than through a named perspective. The id stays for that state and for the stored value.
+ */
 export const LENSES: { id: LensId; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
   { id: 'clusters', label: 'Clusters' },
   { id: 'hubs', label: 'Hubs' },
   { id: 'routes', label: 'Routes' },
@@ -76,6 +81,14 @@ export interface UIState {
   settings: Settings;
   /** The configuration view is open over the current view (`,`). */
   settingsOpen: boolean;
+  /** The Interceptor is open over the current view (1): the traffic inspector and proxy. */
+  interceptorOpen: boolean;
+  /** The traffic the Interceptor shows; null until the panel is first opened (the sample). */
+  traffic: Traffic | null;
+  /** The request selected in the Interceptor's list, by id. */
+  trafficSelected: number | null;
+  /** What was typed in the Interceptor's filter. */
+  trafficQuery: string;
   /** The settings as edited, until Apply; null while the configuration view is closed. */
   settingsDraft: Settings | null;
   settingsCategory: string;
@@ -123,6 +136,10 @@ let state: UIState = {
   graphVersion: 0,
   settings: savedSettings,
   settingsOpen: false,
+  interceptorOpen: false,
+  traffic: null,
+  trafficSelected: null,
+  trafficQuery: '',
   settingsDraft: null,
   settingsCategory: 'scope',
   settingsQuery: '',

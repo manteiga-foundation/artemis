@@ -397,15 +397,17 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   pointer-events: auto;
 }
 
-/* Arwes frames: colours are driven by CSS custom properties read by the SVG paths. */
+/* Arwes frames: colours are driven by CSS custom properties read by the SVG paths. No
+   backdrop-filter here: it blurs the page across the whole rectangle, so the notched corners (where
+   the frame is cut away) showed a soft-grey plate hanging behind the panel. The frame's own bg fill
+   is the panel's surface, and it follows the outline exactly. */
 .panel {
   position: relative;
   overflow: hidden;
-  --arwes-frames-bg-color: color-mix(in srgb, var(--deep) 62%, transparent);
+  --arwes-frames-bg-color: color-mix(in srgb, var(--deep) 78%, transparent);
   --arwes-frames-line-color: var(--azure);
   --arwes-frames-deco-color: var(--mist);
   --arwes-frames-line-filter: drop-shadow(0 0 3px color-mix(in srgb, var(--azure) 60%, transparent));
-  backdrop-filter: blur(5px);
 }
 
 .panel > :not(.frame) {
@@ -857,15 +859,16 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   max-width: 900px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  padding: 12px 16px 10px;
 }
 
+/* The three rows are one instrument: no gaps between them, hairline dividers instead. */
 .console-status {
   display: flex;
   gap: 10px;
   min-height: 30px;
   align-items: center;
-  padding: 5px 12px;
+  padding: 5px 0 5px 10px;
   font: 13px var(--mono);
   color: var(--frost);
   white-space: nowrap;
@@ -894,9 +897,10 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 20px;
-  padding: 0 12px;
+  padding: 7px 0 7px 10px;
   font: 12px var(--mono);
   color: var(--frost);
+  border-top: 1px solid color-mix(in srgb, var(--azure) 22%, transparent);
 }
 
 .console-readout em {
@@ -910,23 +914,18 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   color: var(--alert);
 }
 
-/* Over the live page the console text needs its own backing; the panels already have theirs. */
-.app[data-view='browser'] .console-status,
-.app[data-view='browser'] .console-readout {
-  background: color-mix(in srgb, var(--bg2) 78%, transparent);
-  backdrop-filter: blur(6px);
-}
-
-.app[data-view='browser'] .console-readout {
-  padding: 6px 12px;
-}
+/* Over the live page the console needs one continuous backing, or the page shows through between
+   its rows: the panel frame's own bg fill covers the notched shape, exactly as on the command card.
+   The rows inside carry no backing of their own. */
 
 .tabstrip {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-bottom: 10px;
+  padding-bottom: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--azure) 22%, transparent);
+  padding-top: 8px;
 }
 
 .tab-arrow {
@@ -1787,4 +1786,646 @@ html:has(.debug) #root {
   background: var(--white);
   border-color: var(--white);
   box-shadow: 0 0 4px color-mix(in srgb, var(--azure) 80%, transparent);
+}
+
+/* ---------------------------------------------------------------- the Interceptor (key 1) */
+
+/* The traffic inspector and proxy, over the stage between the header and the bottom panels, as the
+   configuration view is. Two columns: the traffic on the left, the selected request read whole on
+   the right. Everything here takes the shown view's palette, so it wears the Cosmos or the Browser
+   colours of whatever is behind it. */
+.stage .interceptor-surface {
+  position: absolute;
+  top: 58px;
+  left: 14px;
+  right: 14px;
+  bottom: 340px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px 14px;
+  color: var(--frost);
+  /* Denser than the console's other glass: this panel is read cell by cell, so the page behind it
+     must not show through the numbers (92%, as the settings use, left the page's text legible on
+     top of the data). A trace of the page stays, so the panel still belongs to the glass family. */
+  --arwes-frames-bg-color: color-mix(in srgb, var(--deep) 97%, transparent);
+}
+
+.inter-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--azure) 26%, transparent);
+}
+
+.inter-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--white);
+}
+
+/* The proxy's state, at a glance: a dot that is lit only when requests are actually stopping. */
+.inter-proxy {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 10px;
+  font: 500 11px var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mist);
+  border: 1px solid color-mix(in srgb, var(--azure) 40%, transparent);
+}
+
+.inter-proxy.is-armed {
+  color: var(--white);
+  border-color: color-mix(in srgb, var(--alert) 70%, transparent);
+}
+
+.inter-dot {
+  width: 7px;
+  height: 7px;
+  background: color-mix(in srgb, var(--sky) 55%, transparent);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.inter-proxy.is-armed .inter-dot {
+  background: var(--alert);
+  box-shadow: 0 0 7px var(--alert);
+}
+
+.inter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 10px;
+  font: 500 11px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sky);
+  background: color-mix(in srgb, var(--base) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--azure) 50%, transparent);
+  cursor: pointer;
+}
+
+.inter-toggle:hover {
+  color: var(--white);
+  border-color: var(--mist);
+}
+
+.inter-toggle.is-on {
+  color: var(--white);
+  background: color-mix(in srgb, var(--alert) 26%, transparent);
+  border-color: color-mix(in srgb, var(--alert) 75%, transparent);
+}
+
+.inter-toggle kbd,
+.inter-act kbd {
+  padding: 0 4px;
+  font: inherit;
+  font-size: 10px;
+  color: var(--azure);
+  border: 1px solid color-mix(in srgb, var(--azure) 45%, transparent);
+}
+
+.inter-toggle.is-on kbd {
+  color: var(--white);
+  border-color: color-mix(in srgb, var(--white) 40%, transparent);
+}
+
+.inter-stats {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 12px var(--mono);
+  color: var(--frost);
+  white-space: nowrap;
+}
+
+/* One figure with its name. Each pair carries the rule before it, so the run reads as six readings
+   rather than one phrase. */
+.inter-stats .inter-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-left: 13px;
+  padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, var(--azure) 26%, transparent);
+}
+
+.inter-stats .inter-pair:first-child {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.inter-stats em {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--sky) 75%, transparent);
+}
+
+.inter-stats .is-held {
+  color: var(--alert);
+}
+
+.inter-stats .is-err {
+  color: color-mix(in srgb, var(--alert) 85%, var(--white));
+}
+
+.inter-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(420px, 1.25fr) minmax(360px, 1fr);
+  gap: 18px;
+}
+
+.inter-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid color-mix(in srgb, var(--azure) 22%, transparent);
+  padding-right: 16px;
+}
+
+.inter-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.inter-search {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--white);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--azure) 42%, transparent);
+  outline: none;
+}
+
+.inter-search::placeholder {
+  color: color-mix(in srgb, var(--sky) 60%, transparent);
+  letter-spacing: 0.08em;
+}
+
+.inter-search:focus {
+  border-color: var(--azure);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--azure) 35%, transparent);
+}
+
+.inter-count {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: stretch;
+  min-width: 52px;
+  padding-left: 10px;
+  font: 11px var(--mono);
+  text-align: right;
+  color: var(--azure);
+  border-left: 1px solid color-mix(in srgb, var(--azure) 24%, transparent);
+}
+
+.inter-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* The list can hold more than fits: the bar says so rather than slicing the last row silently. */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--azure) 55%, transparent) transparent;
+}
+
+.inter-table-wrap::-webkit-scrollbar {
+  width: 8px;
+}
+
+.inter-table-wrap::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+
+.inter-table-wrap::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--azure) 55%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.inter-block::-webkit-scrollbar {
+  width: 8px;
+}
+
+.inter-block::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--azure) 45%, transparent);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.inter-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 12px var(--mono);
+  table-layout: fixed;
+}
+
+.inter-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 8px 4px 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-align: left;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sky) 80%, transparent);
+  background: var(--deep);
+  border-bottom: 1px solid color-mix(in srgb, var(--azure) 30%, transparent);
+}
+
+.inter-table th:nth-child(1) { width: 40px; }
+.inter-table th:nth-child(2) { width: 84px; }
+.inter-table th:nth-child(3) { width: 132px; }
+.inter-table th:nth-child(5) { width: 74px; }
+.inter-table th:nth-child(6) { width: 74px; }
+.inter-table th:nth-child(7) { width: 66px; }
+
+/* A heading sits over the values it names: the three numeric columns are right-aligned in the
+   rows, so their headings are too. */
+.inter-table th:nth-child(5),
+.inter-table th:nth-child(6),
+.inter-table th:nth-child(7) {
+  text-align: right;
+}
+
+/* One request a row. Held requests are the operator's queue, so they read as lit; the traffic
+   that simply happened stays quiet. */
+.inter-row {
+  cursor: pointer;
+  color: var(--frost);
+}
+
+.inter-row td {
+  padding: 5px 8px 5px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--azure) 12%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inter-row:hover td {
+  background: color-mix(in srgb, var(--azure) 10%, transparent);
+}
+
+.inter-row.is-selected td {
+  background: color-mix(in srgb, var(--azure) 20%, transparent);
+  color: var(--white);
+}
+
+.inter-row.is-selected td:first-child {
+  box-shadow: inset 2px 0 0 var(--azure);
+}
+
+.inter-row.is-held td {
+  color: var(--white);
+}
+
+.inter-row.is-held .col-status {
+  color: var(--alert);
+}
+
+.inter-row.is-dropped td,
+.inter-row.is-failed td {
+  color: color-mix(in srgb, var(--frost) 62%, transparent);
+}
+
+.inter-row.is-dropped .col-status,
+.inter-row.is-failed .col-status {
+  color: color-mix(in srgb, var(--alert) 80%, var(--white));
+}
+
+.inter-row:focus-visible {
+  outline: 1px dashed var(--mist);
+  outline-offset: -1px;
+}
+
+.col-n { color: color-mix(in srgb, var(--sky) 65%, transparent); }
+.col-method { letter-spacing: 0.04em; }
+.col-host { color: var(--mist); }
+.col-path { color: var(--frost); }
+.col-status { text-align: right; }
+.col-status.is-err { color: color-mix(in srgb, var(--alert) 90%, var(--white)); }
+.col-size, .col-time { text-align: right; color: color-mix(in srgb, var(--sky) 82%, transparent); }
+
+.m-post, .m-put, .m-patch { color: color-mix(in srgb, var(--alert) 70%, var(--white)); }
+.m-delete { color: color-mix(in srgb, var(--alert) 90%, var(--white)); }
+
+.inter-tag {
+  margin-left: 5px;
+  padding: 0 3px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--azure);
+  border: 1px solid color-mix(in srgb, var(--azure) 45%, transparent);
+}
+
+.inter-tag.is-edit {
+  color: var(--alert);
+  border-color: color-mix(in srgb, var(--alert) 60%, transparent);
+}
+
+/* The selected request, whole: request line, headers, body; then the response's. */
+.inter-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.inter-read {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inter-tab {
+  padding: 4px 12px;
+  font: 500 11px var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--sky);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--azure) 40%, transparent);
+  cursor: pointer;
+}
+
+.inter-tab.is-active {
+  color: var(--white);
+  background: color-mix(in srgb, var(--azure) 24%, transparent);
+  border-color: var(--mist);
+}
+
+.inter-state {
+  margin-left: auto;
+  padding: 3px 8px;
+  font: 500 10px var(--mono);
+  letter-spacing: 0.14em;
+  color: var(--mist);
+  border: 1px solid color-mix(in srgb, var(--azure) 40%, transparent);
+}
+
+.inter-state.is-held {
+  color: var(--alert);
+  border-color: color-mix(in srgb, var(--alert) 65%, transparent);
+}
+
+.inter-block {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.inter-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.inter-line.is-static {
+  font: 12px var(--mono);
+  color: var(--frost);
+}
+
+.inter-method,
+.inter-url,
+.inter-body-text {
+  font: 12px var(--mono);
+  color: var(--white);
+  background: color-mix(in srgb, var(--bg) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--azure) 40%, transparent);
+  outline: none;
+}
+
+.inter-method {
+  width: 96px;
+  height: 26px;
+  padding: 0 6px;
+}
+
+.inter-url {
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+}
+
+.inter-method:focus,
+.inter-url:focus,
+.inter-body-text:focus {
+  border-color: var(--azure);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--azure) 30%, transparent);
+}
+
+.inter-method-label {
+  min-width: 62px;
+  font: 600 12px var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--white);
+}
+
+.inter-method-label.is-err {
+  color: color-mix(in srgb, var(--alert) 90%, var(--white));
+}
+
+.inter-url-label {
+  font: 12px var(--mono);
+  color: var(--mist);
+  overflow-wrap: anywhere;
+}
+
+.inter-body-label {
+  display: block;
+  margin-top: 2px;
+  font: 500 10px var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--sky) 78%, transparent);
+}
+
+.inter-headers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inter-header-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 11px var(--mono);
+}
+
+.inter-header-table th {
+  width: 42%;
+  padding: 2px 8px 2px 0;
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+  color: color-mix(in srgb, var(--sky) 80%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.inter-header-table td {
+  padding: 2px 0;
+  color: var(--frost);
+  overflow-wrap: anywhere;
+}
+
+.inter-body-text {
+  min-height: 72px;
+  margin: 0;
+  padding: 8px;
+  resize: vertical;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inter-body-text.is-static {
+  flex: 1;
+  border-color: color-mix(in srgb, var(--azure) 22%, transparent);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.inter-none {
+  color: color-mix(in srgb, var(--sky) 55%, transparent);
+  font-style: italic;
+}
+
+.inter-empty {
+  margin: 10px 0;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--frost) 70%, transparent);
+}
+
+.inter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--azure) 22%, transparent);
+}
+
+.inter-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  font: 500 11px var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--sky);
+  background: color-mix(in srgb, var(--base) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--azure) 45%, transparent);
+  cursor: pointer;
+}
+
+.inter-act:hover:not(:disabled) {
+  color: var(--white);
+  border-color: var(--mist);
+}
+
+.inter-act:disabled {
+  color: color-mix(in srgb, var(--sky) 40%, transparent);
+  border-color: color-mix(in srgb, var(--azure) 20%, transparent);
+  cursor: default;
+}
+
+.inter-act.is-danger:hover:not(:disabled) {
+  color: var(--white);
+  background: color-mix(in srgb, var(--alert) 28%, transparent);
+  border-color: var(--alert);
+}
+
+.inter-act-end {
+  margin-left: 0;
+}
+
+.inter-act-end:first-of-type {
+  margin-left: auto;
+}
+
+.inter-act-end + .inter-act-end {
+  margin-left: 0;
+}
+
+/* The strip's first tab is the Interceptor, not a lens: it reads as the console's own instrument,
+   the same in every view, so the eye finds it in the same place. */
+.tab.is-interceptor .tab-num {
+  color: var(--alert);
+}
+
+.tab.is-interceptor.is-active .tab-num {
+  color: var(--white);
+}
+
+.tab.is-interceptor.is-active {
+  --arwes-frames-bg-color: color-mix(in srgb, var(--alert) 42%, transparent);
+  --arwes-frames-line-color: color-mix(in srgb, var(--alert) 85%, transparent);
+}
+
+/* Wide enough for the request line and the response beside the list; below that the two columns
+   stack, the list above the detail, so neither has to scroll sideways. */
+@media (max-width: 1180px) {
+  .inter-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .inter-list {
+    border-right: 0;
+    padding-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--azure) 22%, transparent);
+    padding-bottom: 8px;
+  }
+}
+
+/* The list holds more than fits. The caption is the list's own footer, outside the scroll area, so
+   it can never share a line with a sliced row; the fade over the rows' last few pixels says the
+   rest is under it. The fade is only there when there is more: a list that fits must not look cut. */
+.inter-table-wrap {
+  position: relative;
+}
+
+.inter-list:has(.inter-more) .inter-table-wrap {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+
+.inter-more {
+  display: block;
+  margin-top: 8px;
+  font: 500 9px var(--mono);
+  letter-spacing: 0.2em;
+  text-align: center;
+  color: color-mix(in srgb, var(--sky) 82%, transparent);
+  pointer-events: none;
 }

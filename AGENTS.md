@@ -24,14 +24,21 @@ Stack: Bun, Vite, React 18, `@arwes/react` (alpha), `@cosmos.gl/graph` (WebGL gr
 - **View** - the console's mode: Browser (home after Engage) and Cosmos are shown; Page is kept
   in code but hidden (`hidden` in `src/views.ts`). `V` pulls back from the Browser to the Cosmos,
   landing on the current page (selected, zoomed in on), and returns to the Browser.
-- **Lens** - a perspective inside a view: Overview, Clusters, Hubs, Routes, Anomalies (`1-5`).
+- **Lens** - a perspective inside a view: Clusters, Hubs, Routes, Anomalies (`2-5`). With no lens
+  picked the graph is read plainly; that neutral state stays `overview` in the store but is not a tab.
+- **Interceptor** - the traffic inspector and proxy (`1`), a panel over the current view rather than
+  part of the V cycle: every request and response, http and websocket, whole, with the proxy armed,
+  holding, editing, forwarding and dropping. Its own card takes the six slots under A, S and V while
+  it is open. It is the feature Artemis is measured against Burp Suite on, so its form is part of the
+  feature, not decoration after it.
 - **Layer** - an independent toggle (Links, labels, annotations).
 - **Command card** - the 3x3 grid; A and S keep the top row, V the middle row, in every view.
 - **Owned browser** - the Electron shell `bun run artemis` launches: the website as a genuine native
   page, the console in a transparent window over it.
 - **Dive** - the depth transition between views.
 - **Configuration view** - the settings (`,` or the header cog), opened over the current view, not
-  part of the V cycle; changes wait in a draft until Apply.
+  part of the V cycle; changes wait in a draft until Apply. It and the Interceptor both take the
+  stage, so each closes the other as it opens.
 
 ## How we work: the methodology
 
@@ -110,6 +117,9 @@ src/commands.tsx        per-view command sets                src/graph/controlle
 src/components/Stage.tsx  the dive                           src/components/BrowserSurface.tsx  the website frame
 src/metrics.ts          FPS sampler (header readouts)        src/quality.ts       graph pixel-ratio budget
 src/settings.ts         settings: categories, defaults, search  src/settings-session.ts  the draft, Apply, close
+src/interceptor.ts      the traffic: sample capture, recording, reading it (pure)
+src/interceptor-session.ts  arm, hold, edit, forward, drop; the panel's session
+src/components/InterceptorSurface.tsx  the traffic panel (key 1)
 src/autopilot.ts        the D control, reports from the shell  server/autopilot.ts  flight plan (pure)
 src/page-load.ts        the address field's loading bar (phases, progress)
 server/autopilot-driver.ts  flies the site (Playwright)     shell/autopilot-state.ts  speed, actor, disengage
