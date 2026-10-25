@@ -98,8 +98,8 @@ describe('the autopilot control', () => {
     expect(d.isActive!({ ...getState(), autopilot: 1 })).toBe(true);
   });
 
-  test('only in the Browser view for now: D stays Disperse in the Cosmos', () => {
-    expect(commandByKey('cosmos', 'D')!.name).toBe('Disperse');
-    expect(commandByKey('cosmos', 'D', true)!.name).toBe('Disperse');
+  test('D is the machine acting in both views: the autopilot here, Artemis (Player Two) in the Cosmos', () => {
+    expect(commandByKey('cosmos', 'D')!.name).toBe('Artemis');
+    expect(commandByKey('cosmos', 'D', true)!.name).toBe('Artemis');
   });
 });

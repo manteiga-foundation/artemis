@@ -8,8 +8,12 @@ import { useStore } from '../store';
  */
 export function AutopilotGlow() {
   const speed = useStore((s) => s.autopilot);
+  // Player Two breathes the same edge in her red while she reads; with the autopilot flying as
+  // well the ring wears a third colour, the two mixed, so neither is mistaken for the other.
+  const player = useStore((s) => s.agent.on);
+  const who = player && speed ? ' is-both' : player ? ' is-player' : '';
   return (
-    <div className={`autopilot-glow${speed > 0 ? ' is-on' : ''}`} data-speed={speed} aria-hidden>
+    <div className={`autopilot-glow${speed > 0 || player ? ' is-on' : ''}${who}`} data-speed={speed || (player ? 2 : 0)} aria-hidden>
       <div className="autopilot-glow-ring" />
     </div>
   );

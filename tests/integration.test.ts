@@ -89,7 +89,7 @@ test('after engaging, the console is in the browser view; V pulls back to the co
     expect(await page.getAttribute('.app', 'data-view')).toBe('cosmos');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     expect(await cssVar(page, '--base')).toBe('#1034a6');
-    await visible(page, 'Disperse (D)');
+    await visible(page, 'Artemis (D)');
     expect(await anyCount(page, 'button', 'Depth (D)')).toBe(0);
     expect(await anyCount(page, 'tablist', 'Lenses')).toBe(1);
     expect(await page.locator('.hud-header').textContent()).toContain('COSMOS');
@@ -747,10 +747,10 @@ test('autopilot (the sketch): D in the old bulb slot with a yoke and three squar
       if (n === 1) expect(((await stateOf(page)) as { status: string }).status).toContain('flies in the owned browser');
     }
 
-    // Only in the Browser view for now: in the Cosmos, D is still Disperse.
+    // In the Cosmos, D is Artemis (Player Two): the machine acting, in both views.
     await page.keyboard.press('v');
     await page.waitForFunction(() => (window as unknown as { __artemis: () => { viewTransition: unknown; view: string } }).__artemis().view === 'cosmos' && !(window as unknown as { __artemis: () => { viewTransition: unknown } }).__artemis().viewTransition);
-    await page.getByRole('button', { name: 'Disperse (D)' }).waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Artemis (D)' }).waitFor({ state: 'visible' });
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
@@ -911,6 +911,98 @@ test('the address strip: small Back, Forward and Reload beside LIVE PAGE; the ad
     await button('Reload').click();
     await page.waitForFunction(() => document.querySelector('.browser-frame') && !(document.querySelector('.browser-frame') as HTMLElement).dataset.before);
     expect(await frameSrc()).toBe('https://example.com/search?q=artemis&page=2');
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
+test('labels stay put while the cosmos grows (no flash), and both players together turn the glow a third colour', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.waitForFunction('window.__artemisSiteFeed === true');
+    await feed(page, [{ type: 'reset' }, { type: 'session', target: `${S}/`, scopeHost: 'shop.example' }, ...recorded(1, ['/', '/contact'])]);
+    await page.waitForFunction('window.__artemis().recorded === true');
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 4000 });
+    await page.waitForFunction(() => [...document.querySelectorAll('.hub-label')].some((e) => (e as HTMLElement).style.opacity === '1'));
+    // Artemis reads along; her reticle is a label of the same family.
+    await page.keyboard.press('d');
+    await page.waitForFunction('window.__artemis().agent.on === true');
+    await page.waitForFunction(() => !!document.querySelector('.p2-mark.is-here'));
+    // Mark every shown label and watch its opacity: a growth must neither replace nor hide it.
+    await page.evaluate(() => {
+      const w = window as unknown as { __dips: string[] };
+      w.__dips = [];
+      document.querySelectorAll<HTMLElement>('.hub-label, .p2-mark.is-here').forEach((el) => {
+        el.dataset.kept = el.querySelector('.hub-text, .p2-note')!.textContent ?? '?';
+        new MutationObserver(() => {
+          if (el.style.opacity !== '1') w.__dips.push(`${el.dataset.kept}:${el.style.opacity}`);
+        }).observe(el, { attributes: true, attributeFilter: ['style'] });
+      });
+    });
+    const keptBefore = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-kept]')].map((e) => e.dataset.kept).sort());
+    expect(keptBefore.length).toBeGreaterThanOrEqual(3);
+
+    // The autopilot adds pages while she reads.
+    await feed(page, recorded(3, ['/thanks']));
+    await page.waitForFunction('window.__artemis().nodeCount === 9');
+    await page.waitForFunction(() => [...document.querySelectorAll('.hub-label .hub-text')].some((e) => e.textContent === '/thanks'));
+    await feed(page, recorded(4, ['/account']));
+    await page.waitForFunction('window.__artemis().nodeCount === 12');
+    await page.waitForTimeout(800);
+    const keptAfter = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-kept]')].filter((e) => e.isConnected).map((e) => e.dataset.kept).sort());
+    expect(keptAfter).toEqual(keptBefore);
+    expect(await page.evaluate('window.__dips')).toEqual([]);
+
+    // Both players: the edge glow wears neither gold nor red alone.
+    const player = await cssVar(page, '--player');
+    const alert = await cssVar(page, '--alert');
+    const glowOf = () => page.evaluate(() => getComputedStyle(document.querySelector('.autopilot-glow')!).getPropertyValue('--glow').trim());
+    expect(await glowOf()).toBe(player);
+    await page.keyboard.press('v');
+    await page.waitForFunction('window.__artemis().view === "browser" && window.__artemis().viewTransition === null', { timeout: 4000 });
+    await page.keyboard.press('d');
+    await page.waitForFunction('window.__artemis().autopilot === 1');
+    const both = await glowOf();
+    expect(both).not.toBe(player);
+    expect(both).not.toBe(alert);
+    expect(both).not.toBe('');
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 60000);
+
+test('the Scope map wears the same frame as the other panels, and the companion sits in a box beside it', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.locator('.minimap').waitFor({ state: 'visible' });
+    const frames = await page.evaluate(() => {
+      // The panel's own frame (a direct child), not the frames of the buttons inside it.
+      const sig = (sel: string) => [...(document.querySelector(sel)?.querySelectorAll(':scope > .frame path') ?? [])].map((p) => p.getAttribute('data-name') ?? p.tagName).join(',');
+      return { minimap: sig('.minimap'), card: sig('.command-card'), companion: sig('.companion') };
+    });
+    expect(frames.minimap).toBe(frames.card);
+    expect(frames.companion).toBe(frames.card);
+    // The bottom row reads: Scope map, the companion, the console, the command card.
+    const order = await page.evaluate(() => [...document.querySelectorAll('.hud-bottom > *')].map((e) => e.className.split(' ').filter((c) => c !== 'panel' && !c.startsWith('is-'))[0]));
+    expect(order.slice(0, 2)).toEqual(['minimap', 'companion']);
+    const boxes = await page.evaluate(() => {
+      const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
+      const m = r('.minimap');
+      const c = r('.companion');
+      return { gap: c.left - m.right, height: [Math.round(m.height), Math.round(c.height)], top: [Math.round(m.top), Math.round(c.top)] };
+    });
+    expect(boxes.gap).toBeGreaterThanOrEqual(8);
+    expect(boxes.gap).toBeLessThanOrEqual(24);
+    expect(boxes.height[0]).toBe(boxes.height[1]);
+    expect(boxes.top[0]).toBe(boxes.top[1]);
+    // It folds with the panels (C), like the rest of the row.
+    await page.keyboard.press('c');
+    await page.waitForFunction('window.__artemis().panelsHidden === true');
+    await page.waitForTimeout(700);
+    expect(await page.locator('.companion').isVisible()).toBe(false);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();

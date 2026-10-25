@@ -5,7 +5,7 @@ import {
   GiCheckedShield,
   GiCrosshair,
   GiLinkedRings,
-  GiExplosionRays,
+  GiBowman,
   GiCycle,
   GiBroom,
   GiStairs,
@@ -146,11 +146,14 @@ const COSMOS_COMMANDS: CommandDef[] = [
   focus,
   links,
   {
+    // Player Two. D is the machine acting in both views: the autopilot flies the site in the
+    // Browser; here Artemis reads the cosmos beside the operator, in red.
     key: 'D',
-    name: 'Disperse',
-    hint: 'Repulsion pulse; the layout scatters and re-settles.',
-    Icon: GiExplosionRays,
-    run: () => controller.disperse()
+    name: 'Artemis',
+    hint: 'Let Artemis play: she reads the cosmos node by node, in red, and marks what she finds.',
+    Icon: GiBowman,
+    run: () => controller.agent(),
+    isActive: (s) => s.agent.on
   },
   {
     key: 'R',

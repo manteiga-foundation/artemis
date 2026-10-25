@@ -8,6 +8,7 @@ import { Console, stepStrip } from './components/Console';
 import { CommandCard, runCommand } from './components/CommandCard';
 import { BootOverlay, TARGET_FIELD_ID } from './components/BootOverlay';
 import { AutopilotGlow } from './components/AutopilotGlow';
+import { PlayerTwo } from './components/PlayerTwo';
 import { pageLoadSignal } from './page-load';
 import { commandByKey, stripByKey } from './commands';
 import { controller } from './graph/controller';
@@ -206,6 +207,8 @@ export function App() {
               <Animator root active={hudActive && !panelsHidden} combine manager="stagger">
                 <div className="hud-bottom" data-hidden={panelsHidden || undefined}>
                   <MiniMap />
+                  {/* Player Two's box, beside the Scope map, like an adjutant in the HUD. */}
+                  <PlayerTwo />
                   <Console />
                   <CommandCard />
                 </div>

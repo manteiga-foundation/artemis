@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { Animated, Animator, FrameCorners } from '@arwes/react';
+import { Animated, Animator, FrameKranox } from '@arwes/react';
 import { controller } from '../graph/controller';
 import { useIlluminator } from '../hooks';
 
@@ -56,7 +56,7 @@ export function MiniMap() {
     <Animator>
       <Animated elementRef={panelRef} className="panel minimap" animated={['fade', ['x', -18, 0]]}>
         <Animator>
-          <FrameCorners className="frame" strokeWidth={1.5} cornerLength={16} />
+          <FrameKranox className="frame" strokeWidth={1.5} squareSize={10} smallLineLength={10} largeLineLength={36} />
         </Animator>
         <div className="panel-title">
           <span>SCOPE</span>

@@ -3,6 +3,7 @@ import { controller } from '../graph/controller';
 import { setState, useStore } from '../store';
 import { GraphCanvas } from './GraphCanvas';
 import { HubLabels } from './HubLabels';
+import { PlayerTwoMarks } from './PlayerTwoMarks';
 import { BrowserSurface } from './BrowserSurface';
 import { SettingsSurface } from './SettingsSurface';
 import { InterceptorSurface } from './InterceptorSurface';
@@ -85,6 +86,7 @@ export function Stage() {
     >
       <GraphCanvas />
       <HubLabels />
+      <PlayerTwoMarks />
       {shown === 'browser' && <BrowserSurface />}
       {settingsOpen && <SettingsSurface />}
       {interceptorOpen && <InterceptorSurface />}

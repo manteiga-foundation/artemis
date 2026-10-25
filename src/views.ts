@@ -63,6 +63,8 @@ export interface Palette {
   white: string;
   /** Attention accent: target lock, armed state, anomalies. */
   alert: string;
+  /** Player Two's colour: everything Artemis does on the cosmos is drawn in it. */
+  player: string;
 }
 
 export const PALETTES: Record<ViewId, Palette> = {
@@ -79,7 +81,9 @@ export const PALETTES: Record<ViewId, Palette> = {
     mist: '#a9bdf7',
     frost: '#d6e0fc',
     white: '#eef3ff',
-    alert: '#e0b85c'
+    alert: '#e0b85c',
+    // Player Two: a vermilion that reads on the night blue and never confuses with the gold.
+    player: '#ff5a4a'
   },
   // Viridian (OKLCH hue 165). Gold accent stays, 8.9:1 on panels.
   browser: {
@@ -94,7 +98,8 @@ export const PALETTES: Record<ViewId, Palette> = {
     mist: '#8fcfb3',
     frost: '#cce9db',
     white: '#eaf7f0',
-    alert: '#e0b85c'
+    alert: '#e0b85c',
+    player: '#ff5a4a'
   },
   // Orpiment amber (OKLCH hue 80). Pale blue accent, 8.9:1 on panels; gold would vanish here.
   page: {
@@ -109,7 +114,9 @@ export const PALETTES: Record<ViewId, Palette> = {
     mist: '#e3c085',
     frost: '#efdec4',
     white: '#f9f2e7',
-    alert: '#9fb6ff'
+    alert: '#9fb6ff',
+    // On amber a cooler red keeps her apart from the base.
+    player: '#ff4d6d'
   }
 };
 

@@ -74,6 +74,9 @@ each slice that changes it.
   page facts panel (title, forms) waits for the live page.
 - The configuration view's options other than the sound default, including the whole Autopilot
   category.
+- Player Two (D in the Cosmos): Artemis reads the cosmos in red beside the operator, marks the
+  emulated anomalies as findings, and sits as a companion card under the header; the walk and the
+  findings are emulated (`docs/console.md`, "Player Two"). The real agent comes later.
 
 ## Next, in the maintainer's order
 
@@ -107,6 +110,36 @@ emulated data first; true categorisations for every page (is it authentication? 
 which step?); the final sound picks as defaults; page title and forms readouts from the site's
 Playwright page; the Page view's ego layout (when it returns); annotation overlays anchored to
 element rects; adaptive graph quality.
+
+### Player Two (defined and built emulated, 2026-10-24)
+
+Player One is the operator; Player Two is Artemis herself: an agent that reads the cosmos beside
+the operator, in real time, and marks what she finds. The interface comes first, with an emulated
+flight, and the real agent (a model with the session database as its memory) attaches to these
+shapes later; the backend never dictates them.
+
+- Colour: the cosmos stays blue; everything Artemis does is red (`player` in every palette,
+  `--player` on `.app`). Her current node is full red; the nodes she has read keep a red tint that
+  fades with age (her trail); the links she walked are red; a finding is a red mark that stays.
+- Her hand is visible: a red reticle on the node she is reading, with what she is doing in one
+  line ("Reading /checkout", "Comparing with 4 siblings", "Anomaly on /api/session: ...").
+- A finding is a pin with a short note on the node (the emulated network's anomalies become her
+  findings when she reaches them); findings and the trail survive her standing down.
+- She never takes the camera: Player One owns it. The edge glow breathes red while she plays, as
+  it breathes gold for the autopilot.
+- Key: `D` in the Cosmos view ("Artemis"), the same key that flies the site in the Browser view:
+  D is the machine acting, in both views. Disperse leaves the card (Regenerate stays on R).
+- Store: `agent: { on, at, trail, note, findings }`; controller: `agent()` toggle, `agentStep()`,
+  `agentVisit(i)`; the emulated walk is deterministic (unvisited neighbours first, anomalies
+  preferred, backtracking along the trail).
+- The companion portrait: the maintainer wanted a clear live companion, StarCraft adjutant
+  style, a girl or something divine. A goddess head as a hologram of lit points and feature
+  lines with a halo was built from a CC-BY model and then parked: too much for the value it
+  gives. It lives, committed, on the local branch `player-two-portrait` (never pushed; cherry-pick
+  or merge if it comes back). Main keeps a plain breathing core with halo rings in the slot.
+- Later, not now: her context window as a lit constellation (the nodes she currently holds), her
+  turns as a timeline beside the session, each finding linked to the evidence row in the
+  Interceptor, an 'agent' actor in the session database.
 
 ## Open questions
 

@@ -27,6 +27,28 @@ const PAGE_ZOOM = 4;
 const LAND_MIN_EXTENT = 220;
 /** How long the recorded cosmos takes to glide into its new shape as the site grows. */
 const GROW_GLIDE_MS = 450;
+/** Player Two: one node per beat, slow enough to follow; how many of her last nodes keep a tint. */
+const AGENT_STEP_MS = 1100;
+const AGENT_TRAIL = 48;
+/** Emulated findings, in her words; the real agent writes its own later. */
+const AGENT_FINDINGS = {
+  page: [
+    'Session identifier carried in the address',
+    'Form posts to a different origin',
+    'Error page prints a stack trace',
+    'Reachable without the sign-in it is linked from',
+    'Same screen served under three addresses',
+    'Password field without autocomplete off'
+  ],
+  api: [
+    'Response names an internal host',
+    'Identifier accepted without an ownership check',
+    'Error body carries a database fragment',
+    'Answers to any origin',
+    'Token repeated in the query string',
+    'Listing unpaged: whole table returned'
+  ]
+};
 
 const LINK_WIDTH: Record<string, number> = {
   trunk: 2.4,
@@ -132,7 +154,25 @@ class GraphController {
     const white = rgba(P.white);
     const bg = rgba(P.bg);
     const out = new Float32Array(count * 4);
-    for (let i = 0; i < count; i++) out.set(this.pointColor(i, lens, P, white, bg), i * 4);
+    // Player Two over everything: her node full red, her trail fading, her findings held red.
+    const a = getState().agent;
+    const red = rgba(P.player);
+    const tint = new Map<number, number>();
+    const n = Math.min(a.trail.length, AGENT_TRAIL);
+    for (let k = 0; k < n; k++) {
+      const idx = a.trail[a.trail.length - 1 - k];
+      if (!tint.has(idx)) tint.set(idx, 0.78 - 0.5 * (k / AGENT_TRAIL));
+    }
+    for (const f of a.findings) tint.set(f.node, 0.92);
+    for (let i = 0; i < count; i++) {
+      let c = this.pointColor(i, lens, P, white, bg);
+      if (i === a.at) c = red;
+      else {
+        const t = tint.get(i);
+        if (t !== undefined) c = mix(c, red, t);
+      }
+      out.set(c, i * 4);
+    }
     return out;
   }
 
@@ -140,10 +180,14 @@ class GraphController {
     const { linkKinds, links, meta } = this.data;
     const P = this.palette();
     const out = new Float32Array(linkKinds.length * 4);
+    const walked = this.agentLinks;
+    const red = rgba(P.player, 0.9);
     for (let l = 0; l < linkKinds.length; l++) {
       const kind = linkKinds[l];
       let c: RGBA;
-      if (lens === 'clusters' && kind !== 'trunk' && kind !== 'backbone' && kind !== 'cross') {
+      if (walked.has(l)) {
+        c = red;
+      } else if (lens === 'clusters' && kind !== 'trunk' && kind !== 'backbone' && kind !== 'cross') {
         const s = meta[links[l * 2 + 1]].sector;
         c = rgba(SECTOR_HUES[Math.max(0, s)], kind === 'branch' ? 0.6 : 0.26);
       } else if (lens === 'routes' && (kind === 'cross' || kind === 'nav')) {
@@ -673,8 +717,11 @@ class GraphController {
 
   private trackedIndices(): number[] {
     const base = this.labelIndices();
-    const sel = getState().selected;
-    return sel === null || base.includes(sel) ? base : [...base, sel];
+    const { selected, agent } = getState();
+    const extra = [selected, agent.at, ...agent.findings.map((f) => f.node)];
+    const out = [...base];
+    for (const i of extra) if (i !== null && i < this.data.count && !out.includes(i)) out.push(i);
+    return out;
   }
 
   private handlePointClick(index: number) {
@@ -930,6 +977,134 @@ class GraphController {
       return this.done({ ok: true, message: 'Selection cleared.', sfx: 'command-ok' });
     }
     return null;
+  }
+
+  // ---------------------------------------------------------------- Player Two
+  // Artemis reading the cosmos beside the operator. Emulated for now: a deterministic walk from
+  // the core (unvisited neighbours first, anomalies preferred, backtracking along the way she
+  // came) at a human pace, marking the emulated anomalies as findings when she reaches them. The
+  // real agent attaches to these same shapes later. She never takes the camera.
+  private agentTimer = 0;
+  private agentVisited = new Set<number>();
+  private agentStack: number[] = [];
+  private agentLinks = new Set<number>();
+  private agentSteps = 0;
+  private agentAdjacencyFor: NetworkData | null = null;
+  private agentAdjacency: Map<number, [number, number][]> = new Map();
+
+  private adjacency(): Map<number, [number, number][]> {
+    if (this.agentAdjacencyFor === this.data) return this.agentAdjacency;
+    const { links } = this.data;
+    const adj = new Map<number, [number, number][]>();
+    for (let l = 0; l < links.length; l += 2) {
+      const a = links[l];
+      const b = links[l + 1];
+      (adj.get(a) ?? adj.set(a, []).get(a)!).push([b, l / 2]);
+      (adj.get(b) ?? adj.set(b, []).get(b)!).push([a, l / 2]);
+    }
+    this.agentAdjacencyFor = this.data;
+    this.agentAdjacency = adj;
+    return adj;
+  }
+
+  /** D in the Cosmos: let her play, or stand her down. The trail and the findings stay. */
+  agent(): CommandResult {
+    const s = getState();
+    if (s.agent.on) {
+      this.agentStop();
+      const { trail, findings } = getState().agent;
+      return this.done({
+        ok: true,
+        message: `Artemis stood down after ${trail.length} nodes, ${findings.length} finding${findings.length === 1 ? '' : 's'} marked.`,
+        sfx: 'command-ok'
+      });
+    }
+    if (!this.data.count) return this.done({ ok: false, message: 'Nothing to read yet.', sfx: 'command-error' });
+    this.agentVisited = new Set();
+    this.agentStack = [];
+    this.agentLinks = new Set();
+    this.agentSteps = 0;
+    setState((st) => ({ agent: { ...st.agent, on: true, trail: [], findings: [], at: null } }));
+    this.agentVisit(this.data.core);
+    if (typeof window.setInterval === 'function') this.agentTimer = window.setInterval(() => this.agentStep(), AGENT_STEP_MS);
+    return this.done({ ok: true, message: 'Artemis is reading the cosmos. Red is hers.', sfx: 'notice' });
+  }
+
+  agentStop() {
+    if (this.agentTimer && typeof window.clearInterval === 'function') window.clearInterval(this.agentTimer);
+    this.agentTimer = 0;
+    const s = getState().agent;
+    if (!s.on && s.at === null) return;
+    const trail = s.at === null ? s.trail : [...s.trail, s.at];
+    setState({ agent: { ...s, on: false, at: null, trail, note: s.on ? 'Standing by.' : s.note } });
+    this.main?.trackPointPositionsByIndices(this.trackedIndices());
+    this.applyLens();
+  }
+
+  /** She reads a node: it turns red, the one before joins her trail, and she says what she is doing. */
+  agentVisit(index: number, parent?: number | null) {
+    const s = getState().agent;
+    const d = this.data;
+    const m = d.meta[index];
+    // She came from the node she was reading unless the walk says otherwise (a backtrack).
+    if (parent === undefined) parent = s.at;
+    const trail = s.at === null || s.at === index ? s.trail : [...s.trail, s.at];
+    this.agentVisited.add(index);
+    this.agentStack.push(index);
+    this.agentSteps++;
+    if (parent !== null) {
+      const link = this.adjacency().get(parent)?.find(([n]) => n === index)?.[1];
+      if (link !== undefined) this.agentLinks.add(link);
+    }
+    const siblings = this.adjacency().get(index)?.length ?? 0;
+    let note = `Reading ${m.id}`;
+    if (this.agentSteps % 3 === 2 && siblings > 2) note = `Comparing ${m.id} with ${siblings - 1} siblings`;
+    const findings = [...s.findings];
+    if (d.anomalies.includes(index) && !findings.some((f) => f.node === index)) {
+      const text = AGENT_FINDINGS[m.kind === 'api' ? 'api' : 'page'][index % AGENT_FINDINGS.page.length];
+      findings.push({ node: index, kind: 'anomaly', note: text, step: this.agentSteps });
+      note = `Anomaly on ${m.id}: ${text.toLowerCase()}`;
+      this.status(`Artemis: ${note}.`, 'warn');
+      this.emitSfx('notice');
+    }
+    setState({ agent: { ...s, at: index, trail, note, findings } });
+    this.main?.trackPointPositionsByIndices(this.trackedIndices());
+    this.applyLens();
+  }
+
+  /** One move of her walk; stands her down when the whole cosmos has been read. */
+  agentStep() {
+    const s = getState().agent;
+    if (!s.on || s.at === null) return;
+    const adj = this.adjacency();
+    const d = this.data;
+    const pick = (from: number): number | null => {
+      const open = (adj.get(from) ?? []).map(([n]) => n).filter((n) => !this.agentVisited.has(n));
+      if (!open.length) return null;
+      open.sort((a, b) => Number(d.anomalies.includes(b)) - Number(d.anomalies.includes(a)) || a - b);
+      return open[0];
+    };
+    let next = pick(s.at);
+    let from = s.at;
+    while (next === null && this.agentStack.length) {
+      this.agentStack.pop();
+      from = this.agentStack[this.agentStack.length - 1];
+      if (from === undefined) break;
+      next = pick(from);
+    }
+    if (next === null || from === undefined) {
+      const n = this.agentVisited.size;
+      this.agentStop();
+      setState((st) => ({ agent: { ...st.agent, note: `Read the whole cosmos: ${n} nodes, ${st.agent.findings.length} findings.` } }));
+      this.status(`Artemis read the whole cosmos: ${n} nodes, ${getState().agent.findings.length} findings.`, 'ok');
+      return;
+    }
+    this.agentVisit(next, from);
+  }
+
+  /** Links she walked, for the red link colouring. */
+  agentLinkSet(): ReadonlySet<number> {
+    return this.agentLinks;
   }
 }
 

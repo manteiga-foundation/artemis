@@ -97,6 +97,28 @@ export interface UIState {
   autopilot: 0 | 1 | 2 | 3;
   /** The flight's progress as the owned browser reports it; null before the first report. */
   autopilotProgress: { visited: number; pending: number; etaMs: number } | null;
+  /**
+   * Player Two: Artemis reading the cosmos beside the operator (emulated flight for now). `at` is
+   * the node she is reading, `trail` the nodes she has read in order, `note` what she is doing in
+   * one line, `findings` what she marked; the trail and the findings outlive her standing down.
+   */
+  agent: AgentState;
+}
+
+export interface AgentFinding {
+  node: number;
+  kind: 'anomaly';
+  note: string;
+  /** Her step count when she found it. */
+  step: number;
+}
+
+export interface AgentState {
+  on: boolean;
+  at: number | null;
+  trail: number[];
+  note: string;
+  findings: AgentFinding[];
 }
 
 const savedSettings = loadSettings(browserStorage());
@@ -144,7 +166,8 @@ let state: UIState = {
   settingsCategory: 'scope',
   settingsQuery: '',
   autopilot: 0,
-  autopilotProgress: null
+  autopilotProgress: null,
+  agent: { on: false, at: null, trail: [], note: '', findings: [] }
 };
 
 const listeners = new Set<() => void>();
