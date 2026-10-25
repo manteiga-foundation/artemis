@@ -517,6 +517,34 @@ test('the entry screen asks for the website and nothing starts until a valid one
     expect(await stateOf(page)).toMatchObject({ view: 'browser' });
     expect(await page.getByRole('textbox', { name: 'Address' }).inputValue()).toBe('https://shop.example.co.uk/checkout');
     expect(errors).toEqual([]);
+
+    // Back at the entry screen, as a new tab on the same machine would be (a reload alone resumes
+    // the session), the web apps engaged before are listed under the field, newest first, in
+    // small text; each is a button that engages it again in one click.
+    const freshTab = async () => {
+      await page.evaluate(() => sessionStorage.clear());
+      await page.goto(`http://127.0.0.1:${port}`, { waitUntil: 'networkidle' });
+      await page.waitForFunction('typeof window.__artemis === "function"');
+    };
+    await freshTab();
+    const recents = page.getByRole('list', { name: 'Recently engaged' });
+    await recents.waitFor({ state: 'visible' });
+    expect(await recents.getByRole('button').allTextContents()).toEqual(['shop.example.co.uk/checkout']);
+    const recentFont = await recents.getByRole('button').first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(recentFont).toBeLessThanOrEqual(12);
+    const fieldBox = (await page.getByRole('textbox', { name: 'Web App' }).boundingBox())!;
+    const recentsBox = (await recents.boundingBox())!;
+    expect(recentsBox.y).toBeGreaterThan(fieldBox.y + fieldBox.height);
+    await page.getByRole('textbox', { name: 'Web App' }).fill('news.example');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction('window.__artemis().engaged === true');
+    await freshTab();
+    await recents.waitFor({ state: 'visible' });
+    expect(await recents.getByRole('button').allTextContents()).toEqual(['news.example', 'shop.example.co.uk/checkout']);
+    await recents.getByRole('button', { name: 'shop.example.co.uk/checkout' }).click();
+    await page.waitForFunction('window.__artemis().engaged === true');
+    expect(await stateOf(page)).toMatchObject({ targetUrl: 'https://shop.example.co.uk/checkout' });
+    expect(errors).toEqual([]);
   } finally {
     await context.close();
   }

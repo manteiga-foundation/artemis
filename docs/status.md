@@ -18,7 +18,8 @@ each slice that changes it.
   anything else. A strip of its own on the command card keeps A, S and V where they are. The
   positioning is deliberate: it is a direct alternative to Burp Suite's proxy history and
   interception, and its form is the claim — see "Now" below.
-- The entry screen with the website field.
+- The entry screen with the website field and, under it, the last five web apps engaged on this
+  machine, one click each (`src/recents.ts`, localStorage).
 - The owned browser, the Electron shell (`bun run artemis`): the website as a genuine native page,
   click pass-through, hotkeys from the site, a live address strip with Back/Forward/Reload, an
   editable address (GET parameters rewritable) that doubles as the page's loading bar, right-click

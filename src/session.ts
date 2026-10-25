@@ -2,6 +2,7 @@ import { controller } from './graph/controller';
 import { setState } from './store';
 import { hostOf, normalizeTarget } from './target';
 import { writeResume } from './resume';
+import { rememberRecent } from './recents';
 import { shellBridge } from './shell';
 
 /**
@@ -33,6 +34,7 @@ export function engageConsole(input: string, opts: { resume?: boolean } = {}): b
     statusId: s.statusId + 1
   }));
   if (typeof sessionStorage !== 'undefined') writeResume(sessionStorage, { targetUrl });
+  if (!opts.resume && typeof localStorage !== 'undefined') rememberRecent(localStorage, targetUrl, Date.now());
   if (!opts.resume) shellBridge()?.navigate(targetUrl);
   controller.applyLens();
   controller.fitAll(900, 0.16, false);

@@ -1148,6 +1148,68 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   color: var(--alert);
 }
 
+/* The web apps engaged before, under the field: small text, one click each. */
+.boot-recents {
+  text-align: left;
+  margin: -12px 0 20px;
+  padding: 0 12px;
+}
+
+.boot-recents-title {
+  font: 600 9px var(--font);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--azure) 70%, transparent);
+  margin-bottom: 4px;
+}
+
+.boot-recents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.boot-recents-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.boot-recent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: var(--sky);
+  font: 500 11px var(--mono);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-align: left;
+}
+
+.boot-recent:hover,
+.boot-recent:focus-visible {
+  color: var(--white);
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.boot-recent-age {
+  flex: none;
+  font: 400 9px var(--font);
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--sky) 55%, transparent);
+}
+
 .boot-btn:disabled {
   cursor: not-allowed;
   color: color-mix(in srgb, var(--sky) 60%, transparent);

@@ -4,6 +4,7 @@ import type { AnimatorNode } from '@arwes/react';
 import { engageConsole } from '../session';
 import { useStore } from '../store';
 import { normalizeTarget } from '../target';
+import { ageLabel, loadRecents, recentLabel } from '../recents';
 import { useSfx } from '../sfx';
 
 export const TARGET_FIELD_ID = 'target-url';
@@ -49,6 +50,9 @@ export function BootOverlay() {
   const [rejected, setRejected] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const valid = normalizeTarget(value) !== null;
+  // The web apps engaged before, read once per entry screen (it unmounts on Engage).
+  const [recents] = useState(() => loadRecents(typeof localStorage !== 'undefined' ? localStorage : null));
+  const [now] = useState(() => Date.now());
 
   const submit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -101,6 +105,33 @@ export function BootOverlay() {
               />
             </Animated>
           </Animator>
+          {recents.length > 0 && (
+            <Animator>
+              <Animated as="div" className="boot-recents" animated={['fade', ['y', 10, 0]]}>
+                <div className="boot-recents-title" id="boot-recents-title">
+                  Recently engaged
+                </div>
+                <ul className="boot-recents-list" aria-labelledby="boot-recents-title">
+                  {recents.map((r) => (
+                    <li key={r.url}>
+                      <button
+                        type="button"
+                        className="boot-recent"
+                        title={r.url}
+                        onClick={() => {
+                          setValue(r.url);
+                          if (!engage(r.url)) setRejected(true);
+                        }}
+                      >
+                        {recentLabel(r.url)}
+                      </button>
+                      <span className="boot-recent-age">{ageLabel(r.at, now)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Animated>
+            </Animator>
+          )}
           <Animator>
             <Animated animated={['fade', ['y', 10, 0]]}>
               <button type="submit" className="boot-btn" disabled={!valid}>
