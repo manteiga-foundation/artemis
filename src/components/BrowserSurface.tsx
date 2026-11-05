@@ -19,6 +19,7 @@ export function BrowserSurface() {
   const stageView = useStore((s) => s.stageView);
   const diving = useStore((s) => s.viewTransition !== null);
   const settingsOpen = useStore((s) => s.settingsOpen);
+  const backdropOn = useStore((s) => s.backdropOn);
   const [loaded, setLoaded] = useState(false);
   const owned = isOwnedBrowser();
   const shell = shellBridge();
@@ -132,6 +133,9 @@ export function BrowserSurface() {
               </Text>
             </Animator>
           )}
+          {/* The Backdrop layer (B): a light glass over the page, above the site (native page or
+              iframe) and below the panels; clicks go through it. */}
+          {targetUrl && backdropOn && <div className="browser-backdrop" aria-hidden />}
         </div>
       </Animated>
     </Animator>

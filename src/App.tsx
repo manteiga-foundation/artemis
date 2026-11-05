@@ -95,6 +95,19 @@ function Hotkeys() {
         play(s.panelsHidden ? 'panels-open' : 'panels-close');
         return true;
       }
+      // The Backdrop layer: a light glass over the page, for reading the console against a bright
+      // site. Off by default; the page is meant to be seen as it is.
+      if (k === 'B') {
+        const on = !s.backdropOn;
+        setState((st) => ({
+          backdropOn: on,
+          status: on ? 'Backdrop on: a light glass over the page.' : 'Backdrop off: the page as it is.',
+          statusTone: 'info',
+          statusId: st.statusId + 1
+        }));
+        play('click');
+        return true;
+      }
       if (k === 'Escape') {
         const r = controller.cancel();
         if (r) play(r.sfx ?? 'command-ok');

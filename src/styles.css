@@ -271,6 +271,14 @@ html[data-shell] .browser-slot {
   background: none;
 }
 
+/* The Backdrop layer (B): a light glass over the page, well under the old 55% veil; one number. */
+.browser-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg) var(--backdrop-strength, 15%), transparent);
+}
+
 .browser-frame {
   display: block;
   flex: 1;

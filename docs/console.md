@@ -40,7 +40,7 @@ since the console resumes its session (`src/resume.ts`), a new tab does.
 | --- | --- | --- |
 | **View** | The console's mode: what fills the stage, which commands the card offers, which palette everything uses. Browser (home) and Cosmos are shown; Page is kept in code but hidden. | `V` pulls back from the Browser to the Cosmos, onto the current page, and returns |
 | **Lens** | A perspective within a view: same graph, different emphasis. Clusters, Hubs, Routes, Anomalies; with no lens picked the graph is read plainly (the neutral state, `overview` in the store). | `2-5`, `Left/Right` |
-| **Layer** | An independent toggle drawn on top: links, labels, annotations. | `L` (links) |
+| **Layer** | An independent toggle drawn on top: links, labels, annotations, the Backdrop (a light glass over the page in the Browser view, off by default). | `L` (links), `B` (backdrop) |
 | **Interceptor** | The traffic inspector and proxy, over the stage in every view: every request and response between the browser and the site, http and websocket, whole — status, size, time, headers, bodies — with the proxy able to hold, edit, forward and drop. | `1` opens and closes it; its own card takes over while it is open |
 
 ## The Interceptor (key 1)
@@ -164,7 +164,10 @@ Also: `,` opens and closes the configuration view (below), `1` opens and closes 
 (its own card takes the six slots under A, S and V while it is open), `C` hides and shows the bottom
 panels in every view (the header stays, with a `PANELS ON/OFF`
 switch for when C was pressed by mistake; handy for reading a page in the Browser view), `2-5` /
-`Left` / `Right` lenses, `Esc` cancel (and closes the Interceptor), `M` mute. The configuration view
+`Left` / `Right` lenses, `Esc` cancel (and closes the Interceptor), `M` mute, `B` the Backdrop
+layer (a light glass, 15% of the view's base colour, over the page in the Browser view: for
+reading the console's panels against a bright site; off by default so the page is seen as it is,
+and clicks go through it). The configuration view
 and the Interceptor both take the stage, so each closes the other as it opens.
 
 ## The Interceptor's card (key 1)
@@ -703,6 +706,7 @@ actions yet), a pulse when a node is added, page titles and full-URL lists in a 
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, landing on the current page when pulling back from the Browser (selected, focused, zoomed in on, labelled, announced; an earlier selection gives way), the first layout's auto-fit and its cancellation by any operator camera move (landing, Focus, wheel/drag), Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, V hints for the two shown views, Depth and Route, Page subgraph (BFS) and framing, minimap context (the Page view's behaviour stays tested while hidden); the Interceptor's own card (nine unique keys, A/S top row and V middle, Arm toggling the proxy and Close in every view, the view card untouched).
 - `tests/interceptor.test.ts` — the Interceptor's traffic without a browser: the sample capture is real-shaped (http and websocket, answered, failed, dropped and held, full headers and bodies, a 404 and a 503, deterministic ids in time order); only the operator's own held requests are actionable, observed traffic is history; arming says so and disarming releases what was held; holding needs an armed proxy and refuses otherwise; a held request can be edited (method, address, headers, body, marked edited), forwarded as edited or dropped, and nothing else can be; a reset returns the sample; host and path read as a person reads them; a filter matches method, host, path, status, kind and protocol; the summary counts what was seen, the bytes it moved, an error status or a request that never answered (a 101 socket is not one); sizes and times in human units; the recording folds a request and its response into one entry (in flight, then answered, failed, a socket, a repeated event changing nothing) and replaces the sample once, then grows, while an event that is not about traffic leaves it alone; the strip leads with the Interceptor and keeps the four named lenses, Overview being the neutral state rather than a tab.
+- `tests/integration.test.ts` (added) — B is the Backdrop layer: off by default with no element; B puts a glass exactly over the slot that takes no click (the slot's centre still belongs to the page), 12 to 35% opaque (the old veil was 55%), the console saying so; B again removes it.
 - `tests/integration.test.ts` (added) — in the owned browser the site shows through the slot untinted: with the document marked as the shell, the slot's computed background is transparent with no image (fails with the 55% backing and the grid).
 - `tests/integration.test.ts` (added) — the Scope map wears the same frame as the other panels (the panels' own `.frame` paths match the command card's, `bg,line,line`; fails with FrameCorners' eight lines) and the bottom row is the map, the console and the card: no companion box, the console starting 8 to 24 px after the map.
 - `tests/integration.test.ts` (added) — labels stay put while the cosmos grows: with Artemis reading and the recorded cosmos fed two more pages, every marked label and her reticle are the same elements afterwards and none ever set opacity 0 (fails when the layer rebuilds on growth); with both players on, the glow's `--glow` is neither `--player` nor `--alert`.
@@ -848,7 +852,11 @@ composed from its own captures (`scripts/screenshots-shell.ts`). The slot's back
 (`.browser-slot`) are for the external browser's iframe and the empty slot; in the shell the slot
 is glass (`html[data-shell] .browser-slot { background: none }`), so the live page reads with its
 own colours. The darker cast earlier screenshots show was that backing; it was removed because a
-reviewer judging a page's colour and contrast must see the page, not a tint of it.
+reviewer judging a page's colour and contrast must see the page, not a tint of it. What remains
+is a choice: the Backdrop layer (`B`, `.browser-backdrop`, `--backdrop-strength` 15%, the
+maintainer's pick from 15, 22, 30 and 40 rendered over a bright page), a light
+glass above the site and below the panels, in both the shell and the iframe fallback, off until
+asked for.
 
 ## Arwes usage
 

@@ -104,7 +104,8 @@ For the shell, in order: session save and restore through cookies behind one API
 the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs (today
 `_blank` links load in the site view and featured popups stay windows); remove the framed owned
 browser (`server/owned-browser.ts` and its tests) once agreed. The slot's navy veil over the site
-is gone (the slot is glass in the shell); a dimming Layer can return as an option if a review asks.
+is gone (the slot is glass in the shell); in its place the Backdrop layer (`B`), a light glass off
+by default.
 
 Interface elements being designed (node selection, annotations, and more), each built with
 emulated data first; true categorisations for every page (is it authentication? part of a flow,

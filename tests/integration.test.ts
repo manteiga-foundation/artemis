@@ -232,6 +232,46 @@ test('the recorded cosmos grows live from the feed; V lands on the current page;
   }
 }, 40000);
 
+test('B is the Backdrop layer: a light glass over the page, off by default, lighter than the old veil, never in the way of a click', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.locator('.browser-slot').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => !document.querySelector('.boot'));
+    expect(await stateOf(page)).toMatchObject({ backdropOn: false });
+    expect(await page.locator('.browser-backdrop').count()).toBe(0);
+
+    await page.keyboard.press('b');
+    await page.waitForFunction('window.__artemis().backdropOn === true');
+    expect(((await stateOf(page)) as { status: string }).status).toContain('Backdrop on');
+    const glass = page.locator('.browser-backdrop');
+    await glass.waitFor({ state: 'visible' });
+    const probe = await page.evaluate(() => {
+      const el = document.querySelector('.browser-backdrop')!;
+      const slot = document.querySelector('.browser-slot')!.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      const m = s.backgroundColor.match(/[\d.]+/g) ?? [];
+      const alpha = m.length === 4 ? Number(m[3]) : 1;
+      const under = document.elementFromPoint(slot.left + slot.width / 2, slot.top + slot.height / 2);
+      return { covers: Math.abs(r.width - slot.width) < 2 && Math.abs(r.height - slot.height) < 2, pointer: s.pointerEvents, alpha, clickReachesPage: !under?.closest('.browser-backdrop') };
+    });
+    expect(probe.covers).toBe(true);
+    expect(probe.pointer).toBe('none');
+    expect(probe.clickReachesPage).toBe(true);
+    // A light glass: the old veil was 55%.
+    expect(probe.alpha).toBeGreaterThanOrEqual(0.12);
+    expect(probe.alpha).toBeLessThanOrEqual(0.35);
+
+    await page.keyboard.press('b');
+    await page.waitForFunction('window.__artemis().backdropOn === false');
+    expect(((await stateOf(page)) as { status: string }).status).toContain('Backdrop off');
+    await glass.waitFor({ state: 'detached', timeout: 4000 });
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('C hides and shows the panels in every view; the header switch does the same', async () => {
   const { page, errors } = await engaged();
   try {

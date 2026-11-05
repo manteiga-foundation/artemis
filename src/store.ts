@@ -55,6 +55,8 @@ export interface UIState {
   keyboardInPage: boolean;
   /** Bottom panels folded away (C); the header stays so they can be brought back. */
   panelsHidden: boolean;
+  /** The Backdrop layer (B): a light glass over the page in the Browser view, off by default. */
+  backdropOn: boolean;
   /** The page's own performance (src/metrics.ts); null until the first sample. */
   perf: PerfStats | null;
   /** Machine and Artemis-process figures from the owned browser; null elsewhere. */
@@ -139,6 +141,7 @@ let state: UIState = {
   pageHops: 1,
   keyboardInPage: false,
   panelsHidden: false,
+  backdropOn: false,
   perf: null,
   machine: null,
   paused: false,
