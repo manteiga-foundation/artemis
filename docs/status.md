@@ -75,9 +75,9 @@ each slice that changes it.
   page facts panel (title, forms) waits for the live page.
 - The configuration view's options other than the sound default, including the whole Autopilot
   category.
-- Player Two (D in the Cosmos): Artemis reads the cosmos in red beside the operator, marks the
-  emulated anomalies as findings, and sits as a companion card under the header; the walk and the
-  findings are emulated (`docs/console.md`, "Player Two"). The real agent comes later.
+- Player Two (D in the Cosmos): Artemis reads the cosmos in red beside the operator and marks the
+  emulated anomalies as findings; the walk and the findings are emulated (`docs/console.md`,
+  "Player Two"). The real agent comes later.
 
 ## Next, in the maintainer's order
 
@@ -103,8 +103,8 @@ product manager, tester or UX reviewer actually has.
 For the shell, in order: session save and restore through cookies behind one API; a snapshot of
 the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs (today
 `_blank` links load in the site view and featured popups stay windows); remove the framed owned
-browser (`server/owned-browser.ts` and its tests) once agreed; the slot's navy veil over the site
-as a switchable Layer (kept on for now).
+browser (`server/owned-browser.ts` and its tests) once agreed. The slot's navy veil over the site
+is gone (the slot is glass in the shell); a dimming Layer can return as an option if a review asks.
 
 Interface elements being designed (node selection, annotations, and more), each built with
 emulated data first; true categorisations for every page (is it authentication? part of a flow,
@@ -137,7 +137,9 @@ shapes later; the backend never dictates them.
   style, a girl or something divine. A goddess head as a hologram of lit points and feature
   lines with a halo was built from a CC-BY model and then parked: too much for the value it
   gives. It lives, committed, on the local branch `player-two-portrait` (never pushed; cherry-pick
-  or merge if it comes back). Main keeps a plain breathing core with halo rings in the slot.
+  or merge if it comes back). The plain breathing-core box that replaced it on main was removed
+  too (2026-11-05): not useful enough for the stage width it took. There is no companion panel
+  now; D, her marks and the red glow are her presence.
 - Later, not now: her context window as a lit constellation (the nodes she currently holds), her
   turns as a timeline beside the session, each finding linked to the evidence row in the
   Interceptor, an 'agent' actor in the session database.

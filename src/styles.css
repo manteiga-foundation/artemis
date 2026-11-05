@@ -265,6 +265,12 @@ html[data-shell] .app[data-shown='browser'] .bg-layer {
   visibility: hidden;
 }
 
+/* The slot's grid and backing are for the external browser's iframe (and the empty slot); in
+   the shell they would tint the live site, so the slot is glass and the page reads as it is. */
+html[data-shell] .browser-slot {
+  background: none;
+}
+
 .browser-frame {
   display: block;
   flex: 1;
@@ -2620,79 +2626,6 @@ html:has(.debug) #root {
   }
 }
 
-/* The companion's box: beside the Scope map in the bottom row, on the panels' frame, folding with C. */
-.companion {
-  width: 210px;
-  height: 262px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px 14px;
-  --arwes-frames-line-color: var(--sky);
-  transition: --arwes-frames-line-color 0.4s ease;
-}
-
-.companion.is-live {
-  --arwes-frames-line-color: var(--player);
-  --arwes-frames-line-filter: drop-shadow(0 0 4px color-mix(in srgb, var(--player) 60%, transparent));
-}
-
-.companion .p2-state {
-  font-size: 8px;
-  letter-spacing: 0.2em;
-  color: var(--sky);
-}
-
-.companion.is-live .p2-state {
-  color: var(--player);
-}
-
-.p2-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.p2-portrait {
-  flex: none;
-  width: 124px;
-  height: 124px;
-  display: block;
-}
-
-.p2-say {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  font: 400 11.5px var(--font);
-  line-height: 1.35;
-  color: var(--frost);
-  text-align: center;
-  overflow: hidden;
-}
-
-.p2-stats {
-  flex: none;
-  display: flex;
-  gap: 16px;
-  font: 500 9px var(--mono);
-  letter-spacing: 0.14em;
-  color: var(--mist);
-  text-transform: uppercase;
-}
-
-.p2-stats b {
-  font-weight: 700;
-  color: var(--white);
-}
-
-.companion.is-live .p2-stats b {
-  color: var(--player);
-}
-
 .autopilot-glow.is-player {
   --glow: var(--player);
 }
@@ -2702,21 +2635,10 @@ html:has(.debug) #root {
   --glow: color-mix(in oklch, var(--alert) 50%, var(--player));
 }
 
-/* The console beside the Scope map and the companion is narrower; its lens tabs follow. */
+/* The console beside the Scope map can be narrow; its lens tabs follow. */
 @container (max-width: 520px) {
   .tab {
     font-size: 12px;
     padding: 0 6px;
-  }
-}
-
-@media (max-width: 1280px) {
-  .companion {
-    width: 190px;
-    height: 236px;
-  }
-  .p2-portrait {
-    width: 104px;
-    height: 104px;
   }
 }

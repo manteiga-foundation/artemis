@@ -318,20 +318,14 @@ database as its memory) attaches to them later.
   with one line of what she is doing (`Reading /checkout`, `Comparing /x with 4 siblings`,
   `Anomaly on /api/session: token repeated in the query string`), and a red pin with its note on
   every node she marked. Positions come from the tracked points, as the hub labels do.
-- The companion (`PlayerTwo.tsx`): a panel of its own in the bottom row, beside the Scope map, on
-  the same frame as the other panels (Kranox; the Scope map moved from corner brackets to it so
-  the row is one family), folding with C; 210 x 262 at 1440, 190 x 236 at 1280 like the map. Inside:
-  a plain live portrait on a canvas, no library: a breathing core inside two halo rings, blue at
-  rest, her red while she reads, a beat on every step, a flare on a finding; drawn only once
-  engaged, colours read from the palette on state and view changes, never per frame. The slot is
-  the point: a richer companion attaches here later. A 3D portrait was built and parked (a CC-BY
-  goddess head as a hologram of lit points and feature lines, `src/portrait-points.ts`,
-  `scripts/portrait.ts`): it lives on the local branch `player-two-portrait`, never pushed; the
-  maintainer judged it too much for the value it gives. Next to the portrait: ARTEMIS with the
-  state at the right (IDLE, READING, STANDING BY), what she is doing, and `N read / M found`.
-  Nothing to click. The console's lens tabs
+- No companion box. A portrait panel for her (`PlayerTwo.tsx`, a breathing core inside halo
+  rings beside the Scope map, 210 px wide) shipped in ecf88be and was removed the next slice: the
+  maintainer judged it not useful enough for the stage width it took. Her presence is her marks on
+  the stage, the red edge glow and the D button's state; a companion returns only if it answers a
+  question (what she holds, her turns, her findings linked to evidence). The 3D portrait built
+  before it lives on the local branch `player-two-portrait`, never pushed. The console's lens tabs
   size from their own words (`flex: 1 1 auto`) and drop to 12 px under a container query when the
-  console is narrower than 520 px, so the row's new member never clips them.
+  console is narrower than 520 px.
 - The edge glow breathes her red while she reads (`.autopilot-glow.is-player`), as it breathes gold
   for the autopilot; with both playing it wears the two mixed (`.is-both`, `color-mix` of `--alert`
   and `--player`), a colour that is neither, so the operator knows both are on.
@@ -709,7 +703,8 @@ actions yet), a pulse when a node is added, page titles and full-URL lists in a 
 - `tests/controller.test.ts` — view/lens state, transition lifecycle, landing on the current page when pulling back from the Browser (selected, focused, zoomed in on, labelled, announced; an earlier selection gives way), the first layout's auto-fit and its cancellation by any operator camera move (landing, Focus, wheel/drag), Focus absorbing Vision (real controller, fake GPU boundary).
 - `tests/commands.test.ts` — nine commands per view with A/S/V fixed, V hints for the two shown views, Depth and Route, Page subgraph (BFS) and framing, minimap context (the Page view's behaviour stays tested while hidden); the Interceptor's own card (nine unique keys, A/S top row and V middle, Arm toggling the proxy and Close in every view, the view card untouched).
 - `tests/interceptor.test.ts` — the Interceptor's traffic without a browser: the sample capture is real-shaped (http and websocket, answered, failed, dropped and held, full headers and bodies, a 404 and a 503, deterministic ids in time order); only the operator's own held requests are actionable, observed traffic is history; arming says so and disarming releases what was held; holding needs an armed proxy and refuses otherwise; a held request can be edited (method, address, headers, body, marked edited), forwarded as edited or dropped, and nothing else can be; a reset returns the sample; host and path read as a person reads them; a filter matches method, host, path, status, kind and protocol; the summary counts what was seen, the bytes it moved, an error status or a request that never answered (a 101 socket is not one); sizes and times in human units; the recording folds a request and its response into one entry (in flight, then answered, failed, a socket, a repeated event changing nothing) and replaces the sample once, then grows, while an event that is not about traffic leaves it alone; the strip leads with the Interceptor and keeps the four named lenses, Overview being the neutral state rather than a tab.
-- `tests/integration.test.ts` (added) — the Scope map wears the same frame as the other panels (the panels' own `.frame` paths match the command card's, `bg,line,line`; fails with FrameCorners' eight lines) and the companion sits in a box beside it: second in the row, same height and top, 8 to 24 px gap, folding with C.
+- `tests/integration.test.ts` (added) — in the owned browser the site shows through the slot untinted: with the document marked as the shell, the slot's computed background is transparent with no image (fails with the 55% backing and the grid).
+- `tests/integration.test.ts` (added) — the Scope map wears the same frame as the other panels (the panels' own `.frame` paths match the command card's, `bg,line,line`; fails with FrameCorners' eight lines) and the bottom row is the map, the console and the card: no companion box, the console starting 8 to 24 px after the map.
 - `tests/integration.test.ts` (added) — labels stay put while the cosmos grows: with Artemis reading and the recorded cosmos fed two more pages, every marked label and her reticle are the same elements afterwards and none ever set opacity 0 (fails when the layer rebuilds on growth); with both players on, the glow's `--glow` is neither `--player` nor `--alert`.
 - `tests/recents.test.ts` — the recently engaged list: empty and malformed storage give an empty list, remembering puts the newest first with one entry per address and keeps five, a path is distinct from the bare host, ages read as a person says them (just now, 5 min ago, 3 h ago, yesterday, 4 days ago).
 - `tests/player-two.test.ts` — Player Two: every palette names her colour and the app exposes `--player`; the node she reads is full red, her trail tinted, the links she walked red; D is Artemis in the Cosmos (emulated and recorded) while the Browser keeps the autopilot; D starts her at the core and says so, D again stands her down keeping the trail; her walk is deterministic, never repeats a node and reaches every anomaly, each becoming a finding with a note; a finding stays after she stands down and after Clear.
@@ -849,9 +844,11 @@ framed, navigates on a click inside the frame, and still has its cookie on the s
 replaced: `docs/spikes/002-streamed-browser.md` (streamed tab: works, but imitates input and
 browser-drawn widgets) and `docs/spikes/003-electron-shell.md` (the chosen design, with its
 Playwright findings). `docs/screenshots/shell-browser-1440.png` and `-1280.png` show the shell,
-composed from its own captures (`scripts/screenshots-shell.ts`). The darker cast over the site
-comes from the slot's navy backing showing through the console (`.browser-slot`); kept for now,
-a candidate Layer to switch off for colour and contrast reviews.
+composed from its own captures (`scripts/screenshots-shell.ts`). The slot's backing and grid
+(`.browser-slot`) are for the external browser's iframe and the empty slot; in the shell the slot
+is glass (`html[data-shell] .browser-slot { background: none }`), so the live page reads with its
+own colours. The darker cast earlier screenshots show was that backing; it was removed because a
+reviewer judging a page's colour and contrast must see the page, not a tint of it.
 
 ## Arwes usage
 

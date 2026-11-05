@@ -291,6 +291,27 @@ test('the header shows real resource readouts: FPS from the page; machine CPU on
   }
 }, 40000);
 
+test('in the owned browser the site shows through the slot untinted: no backing colour, no grid over the live page', async () => {
+  const { page, errors } = await engaged();
+  try {
+    await page.locator('.browser-slot').waitFor({ state: 'visible' });
+    // In an ordinary browser the slot backs an opaque iframe, so its tint shows nowhere.
+    // The shell marks the document (main.tsx) and the site is a native page behind the window:
+    // the same slot must then be glass, or every page reads darker than it is.
+    const probe = () => {
+      const s = getComputedStyle(document.querySelector('.browser-slot')!);
+      return { color: s.backgroundColor, image: s.backgroundImage };
+    };
+    await page.evaluate(() => { document.documentElement.dataset.shell = ''; });
+    const shell = await page.evaluate(probe);
+    expect(shell.color).toBe('rgba(0, 0, 0, 0)');
+    expect(shell.image).toBe('none');
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+}, 40000);
+
 test('the dive is a staged depth animation: the old view leaves before the new one is shown', async () => {
   const { page, errors } = await engaged();
   try {
@@ -1002,35 +1023,30 @@ test('labels stay put while the cosmos grows (no flash), and both players togeth
   }
 }, 60000);
 
-test('the Scope map wears the same frame as the other panels, and the companion sits in a box beside it', async () => {
+test('the Scope map wears the same frame as the other panels, and the bottom row is the map, the console and the card (no companion box)', async () => {
   const { page, errors } = await engaged();
   try {
     await page.locator('.minimap').waitFor({ state: 'visible' });
     const frames = await page.evaluate(() => {
       // The panel's own frame (a direct child), not the frames of the buttons inside it.
       const sig = (sel: string) => [...(document.querySelector(sel)?.querySelectorAll(':scope > .frame path') ?? [])].map((p) => p.getAttribute('data-name') ?? p.tagName).join(',');
-      return { minimap: sig('.minimap'), card: sig('.command-card'), companion: sig('.companion') };
+      return { minimap: sig('.minimap'), card: sig('.command-card') };
     });
     expect(frames.minimap).toBe(frames.card);
-    expect(frames.companion).toBe(frames.card);
-    // The bottom row reads: Scope map, the companion, the console, the command card.
+    // The bottom row reads: Scope map, the console, the command card. The companion (Artemis's
+    // portrait box) was removed: it took stage width for little value; D and her marks stay.
     const order = await page.evaluate(() => [...document.querySelectorAll('.hud-bottom > *')].map((e) => e.className.split(' ').filter((c) => c !== 'panel' && !c.startsWith('is-'))[0]));
-    expect(order.slice(0, 2)).toEqual(['minimap', 'companion']);
+    expect(order).toEqual(['minimap', 'console', 'command-card']);
+    expect(await page.locator('.companion').count()).toBe(0);
+    // The console takes the width the companion held: it starts right after the Scope map.
     const boxes = await page.evaluate(() => {
       const r = (sel: string) => document.querySelector(sel)!.getBoundingClientRect();
       const m = r('.minimap');
-      const c = r('.companion');
-      return { gap: c.left - m.right, height: [Math.round(m.height), Math.round(c.height)], top: [Math.round(m.top), Math.round(c.top)] };
+      const c = r('.console');
+      return { gap: c.left - m.right };
     });
     expect(boxes.gap).toBeGreaterThanOrEqual(8);
     expect(boxes.gap).toBeLessThanOrEqual(24);
-    expect(boxes.height[0]).toBe(boxes.height[1]);
-    expect(boxes.top[0]).toBe(boxes.top[1]);
-    // It folds with the panels (C), like the rest of the row.
-    await page.keyboard.press('c');
-    await page.waitForFunction('window.__artemis().panelsHidden === true');
-    await page.waitForTimeout(700);
-    expect(await page.locator('.companion').isVisible()).toBe(false);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
