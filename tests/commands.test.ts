@@ -73,7 +73,7 @@ describe('one command card in every view', () => {
     expect(getState().pageHops).toBe(1);
   });
 
-  test('I is the Interceptor: it opens and closes the panel from the card and is lit while open', () => {
+  test('I is the Interceptor: it opens and closes the panel from the card, lit while open, and the card never changes', () => {
     attach();
     const i = commandByKey('browser', 'I')!;
     expect(i.name).toBe('Interceptor');
@@ -81,11 +81,15 @@ describe('one command card in every view', () => {
     i.run();
     expect(getState().interceptorOpen).toBe(true);
     expect(i.isActive!(getState())).toBe(true);
-    // While it is open its own card takes over, so the hotkey closes it from the console (App).
-    expect(commandByKey('browser', 'I', false, false, true)).toBeUndefined();
+    // The panel has its own buttons (Arm, Hold, Edit, Forward, Drop, Forward all, Next, Reset);
+    // the card stays the card, so I is still there to close it and A is still Target.
+    expect(commandsFor('browser').map((c) => c.name)).toEqual(['Target', 'Stop', 'Autopilot', 'View', 'Focus', 'Interceptor', 'Artemis', 'Regenerate', 'Clear']);
+    expect(commandByKey('browser', 'I')!.name).toBe('Interceptor');
+    i.run();
+    expect(getState().interceptorOpen).toBe(false);
   });
 
-  test('Links left the card but keeps its key: L toggles the layer in a view, never over the settings or the Interceptor', () => {
+  test('Links left the card but keeps its key: L toggles the layer in a view, never over the settings', () => {
     attach();
     expect(commandsFor('cosmos').map((c) => c.name)).not.toContain('Links');
     const l = commandByKey('cosmos', 'L')!;
@@ -94,7 +98,6 @@ describe('one command card in every view', () => {
     l.run();
     expect(getState().linksOn).toBe(!before);
     expect(commandByKey('cosmos', 'L', false, true)).toBeUndefined();
-    expect(commandByKey('cosmos', 'L', false, false, true)!.name).toBe('Forward all');
     // Hold left with no key: pinning stays in the controller for later.
     expect(commandByKey('cosmos', 'H')).toBeUndefined();
   });
@@ -107,35 +110,10 @@ describe('one command card in every view', () => {
   });
 });
 
-describe('the Interceptor card', () => {
-  test('its card holds nine unique keys with A, S on the top row and V in the middle', () => {
-    const cmds = commandsFor('browser', false, false, true);
-    expect(cmds).toHaveLength(9);
-    expect(new Set(cmds.map((c) => c.key)).size).toBe(9);
-    expect(cmds.map((c) => c.key)).toEqual(['A', 'S', 'H', 'V', 'E', 'F', 'D', 'L', 'R']);
-    expect(cmds.map((c) => c.name)).toEqual(['Arm', 'Hold', 'Next', 'Close', 'Edit', 'Forward', 'Drop', 'Forward all', 'Reset']);
-  });
-
-  test('A arms the proxy and V closes the panel, in every view', () => {
-    for (const view of VIEWS) {
-      const arm = commandByKey(view.id, 'A', false, false, true)!;
-      expect(arm.name).toBe('Arm');
-      expect(arm.isActive!(getState())).toBe(false);
-      arm.run();
-      expect(getState().traffic!.armed).toBe(true);
-      expect(arm.isActive!(getState())).toBe(true);
-      arm.run();
-      expect(getState().traffic!.armed).toBe(false);
-      const close = commandByKey(view.id, 'V', false, false, true)!;
-      expect(close.name).toBe('Close');
-      expect(close.hint).toBe('Close the Interceptor and return to the view.');
-    }
-  });
-
-  test('the view card is untouched by it: the Interceptor set is its own', () => {
+describe('the settings card is the only one that replaces the view card', () => {
+  test('the Interceptor has no card of its own: its actions are the panel\'s buttons', () => {
     expect(commandsFor('browser').map((c) => c.name)[0]).toBe('Target');
     expect(commandsFor('browser', false, true).map((c) => c.name)[0]).toBe('Apply');
-    expect(commandsFor('browser', false, false, true).map((c) => c.name)[0]).toBe('Arm');
   });
 });
 

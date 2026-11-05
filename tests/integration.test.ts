@@ -435,10 +435,14 @@ test('I is the Interceptor, on the card: the panel opens over the stage with the
     await page.waitForFunction('window.__artemis().interceptorOpen === true');
     const dialog = page.getByRole('dialog', { name: 'Interceptor' });
     await dialog.waitFor({ state: 'visible', timeout: 5000 });
-    // Its own card took over; the strip has no Interceptor tab and sits on no lens.
+    // The card is untouched by the panel: the same nine commands, I lit; the panel's actions are
+    // its own buttons. The strip has no Interceptor tab and sits on no lens.
     expect(await page.getByRole('tab', { name: /Interceptor/ }).count()).toBe(0);
     expect(await page.locator('.tab[aria-selected="true"]').count()).toBe(0);
-    await page.getByRole('button', { name: 'Arm (A)' }).waitFor({ state: 'visible' });
+    expect(await page.getByRole('button', { name: 'Arm (A)' }).count()).toBe(0);
+    expect(await page.locator('.cmd-grid .cmd-btn').evaluateAll((b) => b.map((e) => e.getAttribute('aria-label')))).toEqual(['Target (A)', 'Stop (S)', 'Autopilot (D)', 'View (V)', 'Focus (F)', 'Interceptor (I)', 'Artemis (P)', 'Regenerate (R)', 'Clear (X)']);
+    expect(await button.getAttribute('aria-pressed')).toBe('true');
+    expect(await page.locator('.command-card .panel-title-right').textContent()).toBe('BROWSER');
     // The panel sits over the live page: the point at the centre of the site's slot now belongs to
     // the panel, not to the page. The entry screen's overlay covers the stage while it fades, so
     // wait for it to go first (it keeps the clicks until then). In the owned browser the shell also
@@ -474,7 +478,11 @@ test('I is the Interceptor, on the card: the panel opens over the stage with the
     expect(await button.getAttribute('aria-pressed')).toBe('false');
     await button.click();
     await page.waitForFunction('window.__artemis().interceptorOpen === true');
-    expect(await page.getByRole('button', { name: 'Interceptor (I)' }).count()).toBe(0);
+    // The card's own button closes it too.
+    await button.click();
+    await page.waitForFunction('window.__artemis().interceptorOpen === false');
+    await page.keyboard.press('i');
+    await page.waitForFunction('window.__artemis().interceptorOpen === true');
     await page.keyboard.press('Escape');
     await page.waitForFunction('window.__artemis().interceptorOpen === false');
     await page.keyboard.press('i');

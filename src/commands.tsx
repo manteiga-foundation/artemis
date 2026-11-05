@@ -7,7 +7,6 @@ import {
   GiBowman,
   GiCycle,
   GiBroom,
-  GiNotebook,
   GiRadarSweep,
   GiCheckMark,
   GiMagnifyingGlass,
@@ -17,11 +16,6 @@ import {
   GiBackwardTime,
   GiAnticlockwiseRotation,
   GiTrashCan,
-  GiPowerLightning,
-  GiPaperPlane,
-  GiFastForwardButton,
-  GiSandsOfTime,
-  GiCrossMark,
   GiRadarDish
 } from 'react-icons/gi';
 import { FaLayerGroup } from 'react-icons/fa6';
@@ -42,19 +36,7 @@ import {
 import { stepAutopilot } from './autopilot';
 import { YokeIcon } from './icons';
 import { LENSES, type LensId } from './store';
-import {
-  armTraffic,
-  closeInterceptor,
-  toggleInterceptor,
-  dropSelected,
-  focusTrafficEditor,
-  focusTrafficSearch,
-  forwardAll,
-  forwardSelected,
-  nextHeld,
-  pauseTraffic,
-  resetTraffic
-} from './interceptor-session';
+import { toggleInterceptor } from './interceptor-session';
 
 export interface CommandDef {
   key: string; // hotkey (single uppercase letter)
@@ -145,7 +127,7 @@ const autopilot: CommandDef = {
 };
 
 // The Interceptor on the card (I): the traffic inspector and proxy, a panel over the stage. It
-// opens from here; while it is open its own card takes over and I closes it again (App).
+// opens from here and closes from here; the card is untouched while it is open.
 const interceptor: CommandDef = {
   key: 'I',
   name: 'Interceptor',
@@ -208,114 +190,6 @@ const cardSet = (view: ViewId, recorded: boolean) => {
 // Commands with a key but no slot: layers the operator toggles without looking.
 const HOTKEY_ONLY: CommandDef[] = [links];
 
-// The Interceptor's card (key 1): the proxy and the queue in the six slots under A, S, V. A arms,
-// S holds the next request, V closes as it closes the configuration view; the rest walk the held
-// queue and send it on.
-const interceptorCommands = (view: ViewId): CommandDef[] => [
-  {
-    key: 'A',
-    name: 'Arm',
-    hint: 'Arm or disarm the proxy: armed, requests stop here before they reach the site.',
-    Icon: GiPowerLightning,
-    run: () => {
-      const t = armTraffic();
-      return { ok: true, message: getState().status, sfx: t.armed ? 'command-ok' : 'click' };
-    },
-    isActive: (s) => (s.traffic?.armed ?? false)
-  },
-  {
-    key: 'S',
-    name: 'Hold',
-    hint: 'Hold every request as it arrives, or let them all go (the proxy must be armed).',
-    Icon: GiSandsOfTime,
-    run: () => {
-      pauseTraffic();
-      return { ok: true, message: getState().status, sfx: 'command-ok' };
-    },
-    isActive: (s) => (s.traffic?.paused ?? false)
-  },
-  {
-    key: 'H',
-    name: 'Next',
-    hint: 'Select the next held request, wrapping round the queue.',
-    Icon: GiNextButton,
-    run: () => {
-      nextHeld();
-      return { ok: true, message: getState().status };
-    }
-  },
-  { ...interceptorCommand('V', 'Close', 'Close the Interceptor and return to the view.', FaLayerGroup, closeInterceptor) },
-  {
-    key: 'E',
-    name: 'Edit',
-    hint: 'Put the cursor in the selected held request: method, address and body are yours to change.',
-    Icon: GiNotebook,
-    run: () => {
-      focusTrafficEditor();
-      return { ok: true, message: getState().status };
-    }
-  },
-  {
-    key: 'F',
-    name: 'Forward',
-    hint: 'Send the selected held request on, as edited if it was.',
-    Icon: GiPaperPlane,
-    run: () => {
-      forwardSelected();
-      return { ok: true, message: getState().status };
-    }
-  },
-  {
-    key: 'D',
-    name: 'Drop',
-    hint: 'Refuse the selected held request: it never reaches the site.',
-    Icon: GiCrossMark,
-    run: () => {
-      dropSelected();
-      return { ok: true, message: getState().status };
-    }
-  },
-  {
-    key: 'L',
-    name: 'Forward all',
-    hint: 'Everything the proxy is holding, on its way at once.',
-    Icon: GiFastForwardButton,
-    run: () => {
-      forwardAll();
-      return { ok: true, message: getState().status };
-    }
-  },
-  {
-    key: 'R',
-    name: 'Reset',
-    hint: 'Back to the sample capture shown before anything was intercepted.',
-    Icon: GiAnticlockwiseRotation,
-    run: () => {
-      resetTraffic();
-      return { ok: true, message: getState().status };
-    }
-  }
-];
-
-function interceptorCommand(key: string, name: string, hint: string, Icon: IconType, act: () => unknown): CommandDef {
-  return {
-    key,
-    name,
-    hint,
-    Icon,
-    run: () => {
-      act();
-      return { ok: true, message: getState().status };
-    }
-  };
-}
-
-const INTERCEPTOR_SETS = new Map<ViewId, CommandDef[]>();
-const interceptorSet = (view: ViewId) => {
-  if (!INTERCEPTOR_SETS.has(view)) INTERCEPTOR_SETS.set(view, interceptorCommands(view));
-  return INTERCEPTOR_SETS.get(view)!;
-};
-
 // The configuration view keeps the card: A applies, S searches, V closes back to the view it was
 // opened over; the rest edit the draft. Each answers on the console like any command.
 const settingsCommand = (key: string, name: string, hint: string, Icon: IconType, act: () => unknown, isActive?: CommandDef['isActive']): CommandDef => ({
@@ -349,12 +223,14 @@ const settingsSet = (view: ViewId) => {
   return SETTINGS_SETS.get(view)!;
 };
 
-export const commandsFor = (view: ViewId, recorded = false, settings = false, interceptor = false): CommandDef[] =>
-  interceptor ? interceptorSet(view) : settings ? settingsSet(view) : cardSet(view, recorded);
+// The Interceptor never replaces the card (the maintainer's rule): its actions are the panel's
+// own buttons, and the card's I stays lit while it is open and closes it again.
+export const commandsFor = (view: ViewId, recorded = false, settings = false): CommandDef[] =>
+  settings ? settingsSet(view) : cardSet(view, recorded);
 
-/** The command a key runs: the card shown, then (in a view, not over a panel) the hotkey-only ones. */
-export const commandByKey = (view: ViewId, key: string, recorded = false, settings = false, interceptor = false): CommandDef | undefined =>
-  commandsFor(view, recorded, settings, interceptor).find((c) => c.key === key) ?? (settings || interceptor ? undefined : HOTKEY_ONLY.find((c) => c.key === key));
+/** The command a key runs: the card shown, then (in a view, not over the settings) the hotkey-only ones. */
+export const commandByKey = (view: ViewId, key: string, recorded = false, settings = false): CommandDef | undefined =>
+  commandsFor(view, recorded, settings).find((c) => c.key === key) ?? (settings ? undefined : HOTKEY_ONLY.find((c) => c.key === key));
 
 // ---------------------------------------------------------------- the strip
 // One row of keys above the command card, the same in every view: the four lenses, 1-4. With no

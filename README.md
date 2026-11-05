@@ -142,9 +142,9 @@ Default output directory is `docs/screenshots/`.
 
 Key **I** (a slot on the command card) opens the traffic inspector and proxy over whatever view you are in: every request and
 response between the browser and the site, http and websocket, whole — status, size, time, headers
-and bodies. Arm the proxy (`A`) and every request stops there: read it, edit its method, address,
-headers or body, then forward it (`F`) or drop it (`D`). `H` holds everything as it arrives, `L`
-sends the whole queue on, `Esc` closes the panel.
+and bodies. Arm the proxy and every request stops there: read it, edit its method, address, headers or
+body, then forward it or drop it; hold everything as it arrives, or send the whole queue on. The
+actions are the panel's own buttons; the command card is untouched. `I` or `Esc` closes it.
 
 The panel works and is tested end to end, but the proxy does not listen on a port yet: the traffic
 it opens on is a sample capture, replaced by the owned browser's recording as it is fed. The

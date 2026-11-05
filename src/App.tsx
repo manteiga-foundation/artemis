@@ -60,19 +60,12 @@ function Hotkeys() {
         play('click');
         return true;
       }
-      // I opens the Interceptor from the card; while it is open its own card holds the keys, so
-      // I closes it from here (as 1 did when it lived on the strip).
-      if (k === 'I' && s.interceptorOpen) {
-        closeInterceptor();
-        play('click');
-        return true;
-      }
       if (k === 'Escape' && s.interceptorOpen) {
         closeInterceptor();
         play('click');
         return true;
       }
-      const cmd = commandByKey(s.view, k, s.recorded, s.settingsOpen, s.interceptorOpen);
+      const cmd = commandByKey(s.view, k, s.recorded, s.settingsOpen);
       if (cmd) {
         runCommand(cmd, play);
         return true;

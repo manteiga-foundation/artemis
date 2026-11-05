@@ -70,8 +70,7 @@ export function CommandCard() {
   const keyboardInPage = useStore((s) => s.keyboardInPage);
   const recorded = useStore((s) => s.recorded);
   const settingsOpen = useStore((s) => s.settingsOpen);
-  const interceptorOpen = useStore((s) => s.interceptorOpen);
-  const commands = commandsFor(view, recorded, settingsOpen, interceptorOpen);
+  const commands = commandsFor(view, recorded, settingsOpen);
   useIlluminator(panelRef);
   // In an external browser the console cannot hear keys pressed inside the framed website.
   const hint = hover
@@ -95,16 +94,14 @@ export function CommandCard() {
               </>
             ) : settingsOpen ? (
               'SETTINGS'
-            ) : interceptorOpen ? (
-              'INTERCEPTOR'
             ) : (
               VIEW_BY_ID.get(view)!.label.toUpperCase()
             )}
           </span>
         </div>
-        <div className="cmd-grid" data-view-commands={interceptorOpen ? 'interceptor' : settingsOpen ? 'settings' : view}>
+        <div className="cmd-grid" data-view-commands={settingsOpen ? 'settings' : view}>
           {commands.map((c) => (
-            <CommandButton key={`${view}-${interceptorOpen ? 'interceptor-' : settingsOpen ? 'settings-' : ''}${c.key}`} cmd={c} onHover={setHover} />
+            <CommandButton key={`${view}-${settingsOpen ? 'settings-' : ''}${c.key}`} cmd={c} onHover={setHover} />
           ))}
         </div>
         <div className={`cmd-hint${keyboardInPage && !hover && !isOwnedBrowser() ? ' is-warn' : ''}`}>{hint}</div>
