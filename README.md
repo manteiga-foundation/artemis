@@ -19,7 +19,7 @@ Web intelligence console: understand the depths of a web application by using it
 - **Genuine browser.** The site runs unmodified in a window Artemis owns; sign-in, MFA and dialogs
   behave as in Chrome.
 - **Interceptor.** Every request and response, http and websocket, whole: status, size, time,
-  headers, bodies. Arm the proxy, hold a request, edit it, forward it or drop it, on key 1.
+  headers, bodies. Arm the proxy, hold a request, edit it, forward it or drop it, on key I.
 - **Autopilot.** Flies the application branch by branch while you watch, never signing out.
 - **Live cosmos.** Every page, flow and request mapped as it happens; `V` dives between the page and
   the whole.
@@ -37,7 +37,6 @@ What is emulated, so the interface can be designed and tested before its functio
 an ordinary browser (`bun run dev`) the Cosmos is a generated network of about 2,000 nodes; the
 Interceptor's panel and every action on a held request work, but its proxy does not listen on a port
 yet, so the traffic it shows is a sample capture until the owned browser's recorder fills it; the
-Browser view's Annotate, Snapshot, Flow, Links, DOM and Clear commands answer as placeholders; the
 header's `T/S`, `N/S` and `R/S` are a simulated feed; and in the configuration view only the sound
 default is live. `docs/status.md` keeps the full list and the roadmap.
 
@@ -141,7 +140,7 @@ Default output directory is `docs/screenshots/`.
 
 ## The Interceptor
 
-Key **1** opens the traffic inspector and proxy over whatever view you are in: every request and
+Key **I** (a slot on the command card) opens the traffic inspector and proxy over whatever view you are in: every request and
 response between the browser and the site, http and websocket, whole — status, size, time, headers
 and bodies. Arm the proxy (`A`) and every request stops there: read it, edit its method, address,
 headers or body, then forward it (`F`) or drop it (`D`). `H` holds everything as it arrives, `L`

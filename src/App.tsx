@@ -20,7 +20,7 @@ import { SITE_EVENT, SITE_FEED_READY, type SiteEvent } from './site-events';
 import { usePerfSampler } from './metrics';
 import { closeSettings, toggleSettings } from './settings-session';
 import { autopilotFromShell } from './autopilot';
-import { closeInterceptor, openInterceptor, toggleInterceptor, trafficFromFeed } from './interceptor-session';
+import { closeInterceptor, trafficFromFeed } from './interceptor-session';
 import { trafficFromSiteEvents } from './interceptor';
 
 function Hotkeys() {
@@ -51,17 +51,19 @@ function Hotkeys() {
       }
       // The strip's digits rest while the configuration view is open.
       if (s.settingsOpen && (k === 'ArrowLeft' || k === 'ArrowRight' || /^[1-9]$/.test(k))) return false;
-      // The strip's digits. 1 opens and closes the Interceptor (a panel over the stage, not a lens);
-      // 2-5 pick a lens, and picking one closes the panel.
+      // The strip's digits pick a lens (1-4); picking one closes the Interceptor, whose panel
+      // covers the cosmos the lens is about.
       if (stripByKey(k)) {
         const item = stripByKey(k)!;
-        if (item.lens === null) {
-          toggleInterceptor();
-          play('click');
-          return true;
-        }
         if (s.interceptorOpen) closeInterceptor();
         if (item.lens !== s.lens) controller.setLens(item.lens);
+        play('click');
+        return true;
+      }
+      // I opens the Interceptor from the card; while it is open its own card holds the keys, so
+      // I closes it from here (as 1 did when it lived on the strip).
+      if (k === 'I' && s.interceptorOpen) {
+        closeInterceptor();
         play('click');
         return true;
       }
@@ -78,11 +80,8 @@ function Hotkeys() {
       if (s.settingsOpen && (k === 'ArrowLeft' || k === 'ArrowRight')) return false;
       if (k === 'ArrowLeft' || k === 'ArrowRight') {
         const item = stripByKey(stepStrip(k === 'ArrowLeft' ? -1 : 1))!;
-        if (item.lens === null) openInterceptor();
-        else {
-          if (s.interceptorOpen) closeInterceptor();
-          controller.setLens(item.lens);
-        }
+        if (s.interceptorOpen) closeInterceptor();
+        controller.setLens(item.lens);
         play('click');
         return true;
       }

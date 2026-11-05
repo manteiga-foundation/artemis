@@ -73,11 +73,13 @@ describe('red is hers', () => {
   });
 });
 
-describe('she plays on D in the Cosmos', () => {
-  test('D is Artemis in the Cosmos, emulated and recorded alike; the Browser keeps the autopilot', () => {
-    expect(commandByKey('cosmos', 'D')!.name).toBe('Artemis');
-    expect(commandByKey('cosmos', 'D', true)!.name).toBe('Artemis');
+describe('she plays on P', () => {
+  test('P is Artemis in every view, emulated and recorded alike; D stays the autopilot', () => {
+    expect(commandByKey('cosmos', 'P')!.name).toBe('Artemis');
+    expect(commandByKey('cosmos', 'P', true)!.name).toBe('Artemis');
+    expect(commandByKey('browser', 'P')!.name).toBe('Artemis');
     expect(commandByKey('browser', 'D')!.name).toBe('Autopilot');
+    expect(commandByKey('cosmos', 'D')!.name).toBe('Autopilot');
   });
 
   test('D starts her at the core and says so; D again stands her down, keeping the trail', () => {

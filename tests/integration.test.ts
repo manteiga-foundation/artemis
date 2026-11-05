@@ -76,7 +76,8 @@ test('after engaging, the console is in the browser view; V pulls back to the co
     expect(await page.getAttribute('.app', 'data-view')).toBe('browser');
     expect(await cssVar(page, '--base')).toBe('#005d2c');
     expect(await page.locator('.browser-surface').count()).toBe(1);
-    expect(await anyCount(page, 'button', 'Annotate (A)')).toBe(1);
+    expect(await anyCount(page, 'button', 'Target (A)')).toBe(1);
+    expect(await anyCount(page, 'button', 'Annotate (A)')).toBe(0);
     expect(await anyCount(page, 'button', 'Vision (V)')).toBe(0);
     // The lens strip belongs to every view, the Browser included: it is how the auditor picks the
     // perspective the pull-back will open in.
@@ -89,8 +90,10 @@ test('after engaging, the console is in the browser view; V pulls back to the co
     expect(await page.getAttribute('.app', 'data-view')).toBe('cosmos');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
     expect(await cssVar(page, '--base')).toBe('#1034a6');
-    await visible(page, 'Artemis (D)');
+    await visible(page, 'Artemis (P)');
     expect(await anyCount(page, 'button', 'Depth (D)')).toBe(0);
+    // One card in every view: the same nine, in the same places.
+    expect(await page.locator('.cmd-grid .cmd-btn').evaluateAll((b) => b.map((e) => e.getAttribute('aria-label')))).toEqual(['Target (A)', 'Stop (S)', 'Autopilot (D)', 'View (V)', 'Focus (F)', 'Interceptor (I)', 'Artemis (P)', 'Regenerate (R)', 'Clear (X)']);
     expect(await anyCount(page, 'tablist', 'Lenses')).toBe(1);
     expect(await page.locator('.hud-header').textContent()).toContain('COSMOS');
     expect(await page.locator('.hud-header').textContent()).not.toContain('PAGE');
@@ -394,11 +397,11 @@ test('lenses keep working from the keyboard inside the cosmos, and the strip sta
 
     await page.keyboard.press('v');
     await page.waitForFunction('window.__artemis().viewTransition === null', { timeout: 4000 });
-    await page.keyboard.press('2');
+    await page.keyboard.press('1');
     expect(await page.getByRole('tab', { name: /Clusters/ }).getAttribute('aria-selected')).toBe('true');
-    await page.keyboard.press('3');
+    await page.keyboard.press('2');
     expect(await page.getByRole('tab', { name: /Hubs/ }).getAttribute('aria-selected')).toBe('true');
-    await page.keyboard.press('4');
+    await page.keyboard.press('3');
     expect(await page.getByRole('tab', { name: /Routes/ }).getAttribute('aria-selected')).toBe('true');
     expect(await stateOf(page)).toMatchObject({ view: 'cosmos', lens: 'routes' });
     // A lens tab closes the Interceptor and takes its lens in the same press.
@@ -413,7 +416,7 @@ test('lenses keep working from the keyboard inside the cosmos, and the strip sta
   }
 }, 30000);
 
-test('key 1 is the Interceptor: the panel opens over the stage with the traffic, and 1 or Esc closes it', async () => {
+test('I is the Interceptor, on the card: the panel opens over the stage with the traffic, and I, Esc or a lens closes it', async () => {
   const { page, errors } = await engaged();
   try {
     const strip = page.getByRole('tablist', { name: 'Lenses' });
@@ -421,13 +424,21 @@ test('key 1 is the Interceptor: the panel opens over the stage with the traffic,
     // Nothing is picked at the start: Overview is gone as a lens, so no tab is selected.
     expect(await page.locator('.tab[aria-selected="true"]').count()).toBe(0);
     const labels = await page.locator('.tab-label').allTextContents();
-    expect(labels.map((t) => t.replace(/^\d/, ''))).toEqual(['Interceptor', 'Clusters', 'Hubs', 'Routes', 'Anomalies']);
+    expect(labels).toEqual(['1Clusters', '2Hubs', '3Routes', '4Anomalies']);
+    // The Interceptor is on the card, in the middle row, lit while open.
+    const button = page.getByRole('button', { name: 'Interceptor (I)' });
+    await button.waitFor({ state: 'visible' });
+    expect(await page.locator('.cmd-grid .cmd-btn').nth(5).getAttribute('aria-label')).toBe('Interceptor (I)');
+    expect(await button.getAttribute('aria-pressed')).toBe('false');
 
-    await page.keyboard.press('1');
+    await page.keyboard.press('i');
     await page.waitForFunction('window.__artemis().interceptorOpen === true');
     const dialog = page.getByRole('dialog', { name: 'Interceptor' });
     await dialog.waitFor({ state: 'visible', timeout: 5000 });
-    expect(await page.getByRole('tab', { name: /Interceptor/ }).getAttribute('aria-selected')).toBe('true');
+    // Its own card took over; the strip has no Interceptor tab and sits on no lens.
+    expect(await page.getByRole('tab', { name: /Interceptor/ }).count()).toBe(0);
+    expect(await page.locator('.tab[aria-selected="true"]').count()).toBe(0);
+    await page.getByRole('button', { name: 'Arm (A)' }).waitFor({ state: 'visible' });
     // The panel sits over the live page: the point at the centre of the site's slot now belongs to
     // the panel, not to the page. The entry screen's overlay covers the stage while it fades, so
     // wait for it to go first (it keeps the clicks until then). In the owned browser the shell also
@@ -455,15 +466,22 @@ test('key 1 is the Interceptor: the panel opens over the stage with the traffic,
     expect(stats).toContain('ERR');
     expect(stats).toContain('WS');
 
-    // Closing with the same key, then with Escape.
-    await page.keyboard.press('1');
+    // Closing with the same key, then with Escape, then with a lens (the panel covers the cosmos).
+    await page.keyboard.press('i');
     await page.waitForFunction('window.__artemis().interceptorOpen === false');
     await dialog.waitFor({ state: 'detached', timeout: 3000 });
     expect(await page.locator('.browser-slot').isVisible()).toBe(true);
-    await page.keyboard.press('1');
+    expect(await button.getAttribute('aria-pressed')).toBe('false');
+    await button.click();
     await page.waitForFunction('window.__artemis().interceptorOpen === true');
+    expect(await page.getByRole('button', { name: 'Interceptor (I)' }).count()).toBe(0);
     await page.keyboard.press('Escape');
     await page.waitForFunction('window.__artemis().interceptorOpen === false');
+    await page.keyboard.press('i');
+    await page.waitForFunction('window.__artemis().interceptorOpen === true');
+    await page.keyboard.press('4');
+    await page.waitForFunction('window.__artemis().interceptorOpen === false');
+    expect(await stateOf(page)).toMatchObject({ lens: 'anomalies' });
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
@@ -474,7 +492,7 @@ test('the Interceptor inspects, edits, forwards and drops a held request, and ar
   const { page, errors } = await engaged();
   try {
     await page.getByRole('tablist', { name: 'Lenses' }).waitFor({ state: 'visible', timeout: 5000 });
-    await page.keyboard.press('1');
+    await page.keyboard.press('i');
     await page.getByRole('dialog', { name: 'Interceptor' }).waitFor({ state: 'visible', timeout: 5000 });
 
     // A held request is selected at the start and read whole: request line, headers, body.
@@ -804,15 +822,15 @@ test('while the autopilot is on, a glow runs around the edges of the screen, bre
   }
 }, 40000);
 
-test('autopilot (the sketch): D in the old bulb slot with a yoke and three squares; each press steps the speed; outside the owned browser it says where it flies', async () => {
+test('autopilot (the sketch): D third on the top row with a yoke and three squares, in every view; each press steps the speed; outside the owned browser it says where it flies', async () => {
   const { page, errors } = await engaged();
   try {
     const d = page.getByRole('button', { name: 'Autopilot (D)' });
     await d.waitFor({ state: 'visible' });
-    // Top-right slot of the card; Highlight is gone and DOM moved to O.
+    // Top-right slot of the card (A S D); the Browser view's placeholders are gone.
     expect(await page.locator('.cmd-grid .cmd-btn').nth(2).getAttribute('aria-label')).toBe('Autopilot (D)');
     expect(await page.getByRole('button', { name: 'Highlight (H)' }).count()).toBe(0);
-    await page.getByRole('button', { name: 'DOM (O)' }).waitFor({ state: 'visible' });
+    expect(await page.getByRole('button', { name: 'DOM (O)' }).count()).toBe(0);
     const lit = () => d.locator('.cmd-pip.is-on').count();
     expect([await d.locator('.cmd-pip').count(), await lit()]).toEqual([3, 0]);
     // The squares sit under the yoke, inside the button.
@@ -836,10 +854,11 @@ test('autopilot (the sketch): D in the old bulb slot with a yoke and three squar
       if (n === 1) expect(((await stateOf(page)) as { status: string }).status).toContain('flies in the owned browser');
     }
 
-    // In the Cosmos, D is Artemis (Player Two): the machine acting, in both views.
+    // In the Cosmos the card is the same: D still the autopilot, Artemis (Player Two) on P.
     await page.keyboard.press('v');
     await page.waitForFunction(() => (window as unknown as { __artemis: () => { viewTransition: unknown; view: string } }).__artemis().view === 'cosmos' && !(window as unknown as { __artemis: () => { viewTransition: unknown } }).__artemis().viewTransition);
-    await page.getByRole('button', { name: 'Artemis (D)' }).waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Artemis (P)' }).waitFor({ state: 'visible' });
+    expect(await page.locator('.cmd-grid .cmd-btn').nth(2).getAttribute('aria-label')).toBe('Autopilot (D)');
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
@@ -1016,7 +1035,7 @@ test('labels stay put while the cosmos grows (no flash), and both players togeth
     await page.waitForFunction('window.__artemis().view === "cosmos" && window.__artemis().viewTransition === null', { timeout: 4000 });
     await page.waitForFunction(() => [...document.querySelectorAll('.hub-label')].some((e) => (e as HTMLElement).style.opacity === '1'));
     // Artemis reads along; her reticle is a label of the same family.
-    await page.keyboard.press('d');
+    await page.keyboard.press('p');
     await page.waitForFunction('window.__artemis().agent.on === true');
     await page.waitForFunction(() => !!document.querySelector('.p2-mark.is-here'));
     // Mark every shown label and watch its opacity: a growth must neither replace nor hide it.

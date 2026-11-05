@@ -65,7 +65,7 @@ await page.keyboard.press(',');
 await page.waitForTimeout(400);
 
 // The Interceptor over the cosmos: the traffic, a held request read whole, the proxy armed.
-await page.keyboard.press('1');
+await page.keyboard.press('i');
 await page.getByRole('dialog', { name: 'Interceptor' }).waitFor({ state: 'visible' });
 await page.waitForTimeout(900);
 await shot(page, 'interceptor');
@@ -73,7 +73,7 @@ await page.getByRole('button', { name: 'Arm proxy' }).click();
 await page.getByRole('tab', { name: 'RESPONSE' }).click();
 await page.waitForTimeout(700);
 await shot(page, 'interceptor-armed-response');
-await page.keyboard.press('1');
+await page.keyboard.press('i');
 await page.waitForTimeout(400);
 await page.close();
 
@@ -100,7 +100,7 @@ await page.evaluate('document.activeElement && document.activeElement.blur && do
 await page.keyboard.press(',');
 await page.waitForTimeout(400);
 // The Interceptor at the narrower size: the two columns stack rather than shrink sideways.
-await page.keyboard.press('1');
+await page.keyboard.press('i');
 await page.getByRole('dialog', { name: 'Interceptor' }).waitFor({ state: 'visible' });
 await page.waitForTimeout(900);
 await shot(page, 'interceptor-1280');

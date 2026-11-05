@@ -98,8 +98,11 @@ describe('the autopilot control', () => {
     expect(d.isActive!({ ...getState(), autopilot: 1 })).toBe(true);
   });
 
-  test('D is the machine acting in both views: the autopilot here, Artemis (Player Two) in the Cosmos', () => {
-    expect(commandByKey('cosmos', 'D')!.name).toBe('Artemis');
-    expect(commandByKey('cosmos', 'D', true)!.name).toBe('Artemis');
+  test('D is the autopilot in every view, Artemis (Player Two) is P', () => {
+    for (const view of ['cosmos', 'browser', 'page'] as const) {
+      expect(commandByKey(view, 'D')!.name).toBe('Autopilot');
+      expect(commandByKey(view, 'D', true)!.name).toBe('Autopilot');
+      expect(commandByKey(view, 'P')!.name).toBe('Artemis');
+    }
   });
 });

@@ -2456,21 +2456,6 @@ html:has(.debug) #root {
   margin-left: 0;
 }
 
-/* The strip's first tab is the Interceptor, not a lens: it reads as the console's own instrument,
-   the same in every view, so the eye finds it in the same place. */
-.tab.is-interceptor .tab-num {
-  color: var(--alert);
-}
-
-.tab.is-interceptor.is-active .tab-num {
-  color: var(--white);
-}
-
-.tab.is-interceptor.is-active {
-  --arwes-frames-bg-color: color-mix(in srgb, var(--alert) 42%, transparent);
-  --arwes-frames-line-color: color-mix(in srgb, var(--alert) 85%, transparent);
-}
-
 /* Wide enough for the request line and the response beside the list; below that the two columns
    stack, the list above the detail, so neither has to scroll sideways. */
 @media (max-width: 1180px) {

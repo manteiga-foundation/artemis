@@ -6,37 +6,32 @@ import { getState, useStore } from '../store';
 import { useSfx } from '../sfx';
 import { speedLabel } from '../autopilot';
 import { STRIP } from '../commands';
-import { toggleInterceptor } from '../interceptor-session';
+import { closeInterceptor } from '../interceptor-session';
 
 /**
- * The key the `<< >>` steppers land on, wrapping. With the Interceptor closed and no lens picked
- * the strip sits on nothing, so the first step is out of that neutral state into the Interceptor.
+ * The key the `<< >>` steppers land on, wrapping. With no lens picked the strip sits on nothing,
+ * so the first step is out of that neutral state onto the first (or last) lens.
  */
 export function stepStrip(dir: 1 | -1): string {
-  const { interceptorOpen, lens } = getState();
-  const at = STRIP.findIndex((s) => (s.lens === null ? interceptorOpen : !interceptorOpen && s.lens === lens));
+  const { lens } = getState();
+  const at = STRIP.findIndex((s) => s.lens === lens);
   const from = at < 0 ? (dir > 0 ? STRIP.length - 1 : 0) : at;
   return STRIP[(from + dir + STRIP.length) % STRIP.length].key;
 }
 
 /**
- * The strip: one row of keys. 1 is the Interceptor, a panel over the stage; 2-5 pick a lens. With
- * the Interceptor closed and no lens picked the strip sits on nothing: the graph read plainly.
+ * The strip: one row of keys, the four lenses on 1-4. With no lens picked the strip sits on
+ * nothing: the graph read plainly. Picking a lens closes the Interceptor if it is open (the
+ * lenses are about the cosmos, which the panel covers).
  */
 export function TabStrip() {
   const lens = useStore((s) => s.lens);
-  const open = useStore((s) => s.interceptorOpen);
   const play = useSfx();
 
   const pick = (key: string) => {
     const item = STRIP.find((s) => s.key === key);
     if (!item) return;
-    if (item.lens === null) {
-      toggleInterceptor();
-      play('click');
-      return;
-    }
-    if (open) toggleInterceptor();
+    closeInterceptor();
     if (item.lens !== getState().lens) controller.setLens(item.lens);
     play('click');
   };
@@ -48,15 +43,15 @@ export function TabStrip() {
       </button>
       <div className="tabs">
         {STRIP.map((item, i) => {
-          const active = item.lens === null ? open : !open && item.lens === lens;
+          const active = item.lens === lens;
           return (
             <Animator key={item.key}>
-              <Animated className={`tab-cell${item.lens === null ? ' is-interceptor' : ''}`} animated={['fade', ['y', 8, 0]]}>
+              <Animated className="tab-cell" animated={['fade', ['y', 8, 0]]}>
                 <button
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  className={`tab${active ? ' is-active' : ''}${item.lens === null ? ' is-interceptor' : ''}`}
+                  className={`tab${active ? ' is-active' : ''}`}
                   onMouseEnter={() => play('hover')}
                   onClick={() => pick(item.key)}
                 >

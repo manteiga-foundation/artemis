@@ -2,17 +2,12 @@ import type { IconType } from 'react-icons';
 import {
   GiBowArrow,
   GiStopSign,
-  GiCheckedShield,
   GiCrosshair,
   GiLinkedRings,
   GiBowman,
   GiCycle,
   GiBroom,
-  GiStairs,
   GiNotebook,
-  GiPhotoCamera,
-  GiPathDistance,
-  GiFamilyTree,
   GiRadarSweep,
   GiCheckMark,
   GiMagnifyingGlass,
@@ -26,7 +21,8 @@ import {
   GiPaperPlane,
   GiFastForwardButton,
   GiSandsOfTime,
-  GiCrossMark
+  GiCrossMark,
+  GiRadarDish
 } from 'react-icons/gi';
 import { FaLayerGroup } from 'react-icons/fa6';
 import { controller, type CommandResult } from './graph/controller';
@@ -49,6 +45,7 @@ import { LENSES, type LensId } from './store';
 import {
   armTraffic,
   closeInterceptor,
+  toggleInterceptor,
   dropSelected,
   focusTrafficEditor,
   focusTrafficSearch,
@@ -71,8 +68,10 @@ export interface CommandDef {
   pips?: (s: UIState) => number;
 }
 
-// 3x3 command card, RTS-style, row-major. In every view A and S hold the top row and V the
-// middle row, the positions drawn in the paper sketch. The remaining six slots adapt to the view.
+// 3x3 command card, RTS-style, row-major: one card in every view (the maintainer's unification,
+// after the Browser view's placeholders went). A, S, D hold the top row (Target, Stop, Autopilot),
+// V, F, I the middle (View, Focus, Interceptor), P, R, X the bottom (Artemis, Regenerate or Scope,
+// Clear). Only V's hint and the recorded session's Scope vary.
 
 const viewCommand = (from: ViewId): CommandDef => {
   const to = VIEW_BY_ID.get(nextView(from))!;
@@ -104,15 +103,6 @@ const stop: CommandDef = {
   isActive: (s) => s.paused
 };
 
-const hold: CommandDef = {
-  key: 'H',
-  name: 'Hold',
-  hint: 'Pin the selected node in place (toggle).',
-  Icon: GiCheckedShield,
-  run: () => controller.hold(),
-  isActive: (s) => s.selected !== null && s.pinned.includes(s.selected)
-};
-
 const focus: CommandDef = {
   key: 'F',
   name: 'Focus',
@@ -121,6 +111,7 @@ const focus: CommandDef = {
   run: () => controller.focus()
 };
 
+// Links left the card when the Interceptor took its slot; the layer keeps its key (L).
 const links: CommandDef = {
   key: 'L',
   name: 'Links',
@@ -138,71 +129,8 @@ const clear: CommandDef = {
   run: () => controller.clear()
 };
 
-const COSMOS_COMMANDS: CommandDef[] = [
-  target,
-  stop,
-  hold,
-  viewCommand('cosmos'),
-  focus,
-  links,
-  {
-    // Player Two. D is the machine acting in both views: the autopilot flies the site in the
-    // Browser; here Artemis reads the cosmos beside the operator, in red.
-    key: 'D',
-    name: 'Artemis',
-    hint: 'Let Artemis play: she reads the cosmos node by node, in red, and marks what she finds.',
-    Icon: GiBowman,
-    run: () => controller.agent(),
-    isActive: (s) => s.agent.on
-  },
-  {
-    key: 'R',
-    name: 'Regenerate',
-    hint: 'Generate a new network topology.',
-    Icon: GiCycle,
-    run: () => controller.regenerate()
-  },
-  clear
-];
-
-const PAGE_COMMANDS: CommandDef[] = [
-  target,
-  stop,
-  hold,
-  viewCommand('page'),
-  focus,
-  links,
-  {
-    key: 'D',
-    name: 'Depth',
-    hint: 'Show connections of connections (two hops) or direct connections only.',
-    Icon: GiStairs,
-    run: () => controller.depth(),
-    isActive: (s) => s.pageHops === 2
-  },
-  {
-    key: 'R',
-    name: 'Route',
-    hint: 'Trace the route from this page back to the core (toggle).',
-    Icon: GiPathDistance,
-    run: () => controller.route(),
-    isActive: (s) => s.lens === 'routes'
-  },
-  clear
-];
-
-// The browser view's commands are interface placeholders: each answers on the console so the
-// card, hotkeys and hints can be designed now; behaviour attaches when the live page does.
-const stub = (key: string, name: string, hint: string, Icon: IconType): CommandDef => ({
-  key,
-  name,
-  hint,
-  Icon,
-  run: () => controller.placeholder(name)
-});
-
-// The autopilot (the user's sketch: a yoke, three squares for the speed, hotkey D) took the bulb's
-// slot; Highlight went, and DOM moved from D to O. Only in the Browser view for now.
+// The autopilot (the user's sketch: a yoke, three squares for the speed, hotkey D), third on the
+// top row in every view: the machine flying the site.
 const autopilot: CommandDef = {
   key: 'D',
   name: 'Autopilot',
@@ -216,23 +144,69 @@ const autopilot: CommandDef = {
   pips: (s) => s.autopilot
 };
 
-const BROWSER_COMMANDS: CommandDef[] = [
-  stub('A', 'Annotate', 'Pin a note to an element on the page.', GiNotebook),
-  stub('S', 'Snapshot', 'Capture the page as it is now.', GiPhotoCamera),
+// The Interceptor on the card (I): the traffic inspector and proxy, a panel over the stage. It
+// opens from here; while it is open its own card takes over and I closes it again (App).
+const interceptor: CommandDef = {
+  key: 'I',
+  name: 'Interceptor',
+  hint: 'Open the Interceptor: every request and response, with the proxy to hold, edit, forward and drop.',
+  Icon: GiRadarDish,
+  run: () => {
+    toggleInterceptor();
+    return { ok: true, message: getState().status };
+  },
+  isActive: (s) => s.interceptorOpen
+};
+
+// Player Two (P): Artemis reads the cosmos beside the operator, in red.
+const artemis: CommandDef = {
+  key: 'P',
+  name: 'Artemis',
+  hint: 'Let Artemis play: she reads the cosmos node by node, in red, and marks what she finds.',
+  Icon: GiBowman,
+  run: () => controller.agent(),
+  isActive: (s) => s.agent.on
+};
+
+const regenerate: CommandDef = {
+  key: 'R',
+  name: 'Regenerate',
+  hint: 'Generate a new network topology.',
+  Icon: GiCycle,
+  run: () => controller.regenerate()
+};
+
+// The recorded session (owned browser) has nothing to regenerate; its slot holds Scope instead.
+const scope: CommandDef = {
+  key: 'E',
+  name: 'Scope',
+  hint: 'Show or hide what lies outside the review scope: other hosts and their pages.',
+  Icon: GiRadarSweep,
+  run: () => controller.scope(),
+  isActive: (s) => !s.showExternal
+};
+
+const cardCommands = (view: ViewId, recorded: boolean): CommandDef[] => [
+  target,
+  stop,
   autopilot,
-  viewCommand('browser'),
-  stub('F', 'Flow', 'Mark this page as a step in a flow.', GiPathDistance),
-  stub('L', 'Links', 'List the outbound links on this page.', GiLinkedRings),
-  stub('O', 'DOM', 'Inspect the element tree.', GiFamilyTree),
-  stub('R', 'Reload', 'Reload the page.', GiCycle),
-  stub('X', 'Clear', 'Remove annotations and highlights.', GiBroom)
+  viewCommand(view),
+  focus,
+  interceptor,
+  artemis,
+  recorded ? scope : regenerate,
+  clear
 ];
 
-const SETS: Record<ViewId, CommandDef[]> = {
-  cosmos: COSMOS_COMMANDS,
-  page: PAGE_COMMANDS,
-  browser: BROWSER_COMMANDS
+const CARD_SETS = new Map<string, CommandDef[]>();
+const cardSet = (view: ViewId, recorded: boolean) => {
+  const id = `${view}:${recorded}`;
+  if (!CARD_SETS.has(id)) CARD_SETS.set(id, cardCommands(view, recorded));
+  return CARD_SETS.get(id)!;
 };
+
+// Commands with a key but no slot: layers the operator toggles without looking.
+const HOTKEY_ONLY: CommandDef[] = [links];
 
 // The Interceptor's card (key 1): the proxy and the queue in the six slots under A, S, V. A arms,
 // S holds the next request, V closes as it closes the configuration view; the rest walk the held
@@ -342,17 +316,6 @@ const interceptorSet = (view: ViewId) => {
   return INTERCEPTOR_SETS.get(view)!;
 };
 
-// The recorded cosmos (owned browser) has nothing to regenerate; its slot holds Scope instead.
-const scope: CommandDef = {
-  key: 'E',
-  name: 'Scope',
-  hint: 'Show or hide what lies outside the review scope: other hosts and their pages.',
-  Icon: GiRadarSweep,
-  run: () => controller.scope(),
-  isActive: (s) => !s.showExternal
-};
-const RECORDED_COSMOS_COMMANDS: CommandDef[] = COSMOS_COMMANDS.map((c) => (c.key === 'R' ? scope : c));
-
 // The configuration view keeps the card: A applies, S searches, V closes back to the view it was
 // opened over; the rest edit the draft. Each answers on the console like any command.
 const settingsCommand = (key: string, name: string, hint: string, Icon: IconType, act: () => unknown, isActive?: CommandDef['isActive']): CommandDef => ({
@@ -387,31 +350,28 @@ const settingsSet = (view: ViewId) => {
 };
 
 export const commandsFor = (view: ViewId, recorded = false, settings = false, interceptor = false): CommandDef[] =>
-  interceptor ? interceptorSet(view) : settings ? settingsSet(view) : recorded && view === 'cosmos' ? RECORDED_COSMOS_COMMANDS : SETS[view];
+  interceptor ? interceptorSet(view) : settings ? settingsSet(view) : cardSet(view, recorded);
 
+/** The command a key runs: the card shown, then (in a view, not over a panel) the hotkey-only ones. */
 export const commandByKey = (view: ViewId, key: string, recorded = false, settings = false, interceptor = false): CommandDef | undefined =>
-  commandsFor(view, recorded, settings, interceptor).find((c) => c.key === key);
+  commandsFor(view, recorded, settings, interceptor).find((c) => c.key === key) ?? (settings || interceptor ? undefined : HOTKEY_ONLY.find((c) => c.key === key));
 
 // ---------------------------------------------------------------- the strip
-// One row of keys above the command card, the same in every view. Key 1 is the Interceptor: it is
-// a panel over the stage, not a lens, so pressing it again (or Escape) closes it. Keys 2-5 pick a
-// lens; with the Interceptor closed the strip sits on no lens at all, the plain reading of the
-// graph (`overview` in the store).
+// One row of keys above the command card, the same in every view: the four lenses, 1-4. With no
+// lens picked the strip sits on no tab at all, the plain reading of the graph (`overview` in the
+// store). The Interceptor used to lead it as key 1; it lives on the card now (I).
 
 export interface StripItem {
   /** The digit printed on the tab. */
   key: string;
   label: string;
-  /** The lens the tab picks; null for the Interceptor, which is a panel. */
-  lens: LensId | null;
+  /** The lens the tab picks. */
+  lens: LensId;
 }
 
-export const STRIP: StripItem[] = [
-  { key: '1', label: 'Interceptor', lens: null },
-  ...LENSES.map((l, i) => ({ key: String(i + 2), label: l.label, lens: l.id }))
-];
+export const STRIP: StripItem[] = LENSES.map((l, i) => ({ key: String(i + 1), label: l.label, lens: l.id }));
 
-/** The lens tabs of the strip (everything but the Interceptor). */
-export const stripLenses = (): { id: LensId; label: string }[] => STRIP.filter((s) => s.lens !== null).map((s) => ({ id: s.lens!, label: s.label }));
+/** The lens tabs of the strip. */
+export const stripLenses = (): { id: LensId; label: string }[] => STRIP.map((s) => ({ id: s.lens, label: s.label }));
 
 export const stripByKey = (key: string): StripItem | undefined => STRIP.find((s) => s.key === key);

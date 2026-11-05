@@ -24,15 +24,17 @@ Stack: Bun, Vite, React 18, `@arwes/react` (alpha), `@cosmos.gl/graph` (WebGL gr
 - **View** - the console's mode: Browser (home after Engage) and Cosmos are shown; Page is kept
   in code but hidden (`hidden` in `src/views.ts`). `V` pulls back from the Browser to the Cosmos,
   landing on the current page (selected, zoomed in on), and returns to the Browser.
-- **Lens** - a perspective inside a view: Clusters, Hubs, Routes, Anomalies (`2-5`). With no lens
+- **Lens** - a perspective inside a view: Clusters, Hubs, Routes, Anomalies (`1-4`). With no lens
   picked the graph is read plainly; that neutral state stays `overview` in the store but is not a tab.
-- **Interceptor** - the traffic inspector and proxy (`1`), a panel over the current view rather than
-  part of the V cycle: every request and response, http and websocket, whole, with the proxy armed,
-  holding, editing, forwarding and dropping. Its own card takes the six slots under A, S and V while
-  it is open. It is the feature Artemis is measured against Burp Suite on, so its form is part of the
-  feature, not decoration after it.
-- **Layer** - an independent toggle (Links, labels, annotations).
-- **Command card** - the 3x3 grid; A and S keep the top row, V the middle row, in every view.
+- **Interceptor** - the traffic inspector and proxy (`I`, a slot on the command card), a panel over
+  the current view rather than part of the V cycle: every request and response, http and websocket,
+  whole, with the proxy armed, holding, editing, forwarding and dropping. Its own card takes the six
+  slots under A, S and V while it is open. It is the feature Artemis is measured against Burp Suite
+  on, so its form is part of the feature, not decoration after it.
+- **Layer** - an independent toggle (Links on `L`, the Backdrop on `B`, labels, annotations).
+- **Command card** - the 3x3 grid, one card in every view: A Target, S Stop, D Autopilot on the top
+  row ("ASD"); V View, F Focus, I Interceptor in the middle; P Artemis, R Regenerate (E Scope when
+  recorded), X Clear below. Only commands with a function hold a slot.
 - **Owned browser** - the Electron shell `bun run artemis` launches: the website as a genuine native
   page, the console in a transparent window over it.
 - **Dive** - the depth transition between views.
@@ -154,7 +156,7 @@ tests/harness.ts        fake window + renderer for controller tests;  tests/vite
 - Shipped sound files are Arwes free samples: development only. The console plays by action
   (`src/sounds.ts`); `/debug` applies per-action picks live via localStorage; final picks become
   `DEFAULT_ACTION_SOUNDS`. The target voice is the `soft` family: StarCraft-spirit, gentle.
-- Icons: Game-icons via `react-icons/gi`; the View glyph is Font Awesome `FaLayerGroup`. Credits
+- Icons: Game-icons via `react-icons/gi` (the Interceptor's radar dish, the maintainer's pick of twelve rendered in the button); the View glyph is Font Awesome `FaLayerGroup`. Credits
   in the README.
 
 ## Where things stand

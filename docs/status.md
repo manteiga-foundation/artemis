@@ -69,13 +69,11 @@ each slice that changes it.
   capture (`seedTraffic`, 16 requests shaped like a real session, http and websocket, a 404, a 503,
   a failure, two held, one dropped), and when the owned browser's recorder feeds real traffic it
   gives way to that. Observed traffic is history and cannot be edited, forwarded or dropped.
-- The Browser view commands Annotate, Snapshot, Flow, Links, DOM, Reload (card) and Clear answer
-  as interface placeholders.
 - The header's `T/S`, `N/S`, `R/S` are a simulated feed (`useTelemetry` in `src/hooks.ts`); the
   page facts panel (title, forms) waits for the live page.
 - The configuration view's options other than the sound default, including the whole Autopilot
   category.
-- Player Two (D in the Cosmos): Artemis reads the cosmos in red beside the operator and marks the
+- Player Two (P): Artemis reads the cosmos in red beside the operator and marks the
   emulated anomalies as findings; the walk and the findings are emulated (`docs/console.md`,
   "Player Two"). The real agent comes later.
 
@@ -129,8 +127,8 @@ shapes later; the backend never dictates them.
   findings when she reaches them); findings and the trail survive her standing down.
 - She never takes the camera: Player One owns it. The edge glow breathes red while she plays, as
   it breathes gold for the autopilot.
-- Key: `D` in the Cosmos view ("Artemis"), the same key that flies the site in the Browser view:
-  D is the machine acting, in both views. Disperse leaves the card (Regenerate stays on R).
+- Key: `P` ("Artemis", Player Two) in every view since the card was unified (2026-11-05); D is
+  the autopilot everywhere. Before that she was D in the Cosmos. Disperse left the card.
 - Store: `agent: { on, at, trail, note, findings }`; controller: `agent()` toggle, `agentStep()`,
   `agentVisit(i)`; the emulated walk is deterministic (unvisited neighbours first, anomalies
   preferred, backtracking along the trail).

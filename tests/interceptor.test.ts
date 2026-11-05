@@ -264,13 +264,11 @@ describe('the recording feeds the same panel', () => {
   });
 });
 
-describe('the strip: key 1 is the Interceptor, keys 2-5 are the lenses', () => {
-  test('the strip leads with the Interceptor and keeps the four named lenses', () => {
-    expect(STRIP[0].key).toBe('1');
-    expect(STRIP[0].label).toBe('Interceptor');
-    expect(STRIP[0].lens).toBeNull();
-    expect(STRIP.slice(1).map((s) => s.key)).toEqual(['2', '3', '4', '5']);
-    expect(STRIP.slice(1).map((s) => s.label)).toEqual(['Clusters', 'Hubs', 'Routes', 'Anomalies']);
+describe('the strip: the four lenses, keys 1-4; the Interceptor lives on the card (I)', () => {
+  test('the strip is the four named lenses, numbered from 1', () => {
+    expect(STRIP.map((s) => s.key)).toEqual(['1', '2', '3', '4']);
+    expect(STRIP.map((s) => s.label)).toEqual(['Clusters', 'Hubs', 'Routes', 'Anomalies']);
+    expect(STRIP.every((s) => s.lens !== null)).toBe(true);
   });
 
   test('Overview is no longer a named lens: it is the neutral state the panel closes back to', () => {

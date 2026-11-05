@@ -63,7 +63,7 @@ test('/debug is a page of its own: every sound can be played, actions can be ass
     await page.getByRole('button', { name: 'Engage', exact: true }).click();
     await page.waitForFunction('window.__artemis().engaged === true');
     await page.waitForFunction(() => document.body.dataset.lastPlayed === 'file:intro'); // engage sound, default
-    const annotate = page.getByRole('button', { name: 'Annotate (A)' });
+    const annotate = page.getByRole('button', { name: 'Target (A)' });
     await annotate.waitFor({ state: 'visible' });
     await annotate.hover();
     await page.waitForFunction(() => document.body.dataset.lastPlayed === 'synth:soft-hover');

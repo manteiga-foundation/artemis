@@ -22,21 +22,24 @@ afterEach(() => {
   restoreWindow();
 });
 
-describe('the command card adapts to the view', () => {
-  test('every view offers nine commands with unique hotkeys', () => {
+describe('one command card in every view', () => {
+  const UNIFIED_KEYS = ['A', 'S', 'D', 'V', 'F', 'I', 'P', 'R', 'X'];
+  const UNIFIED_NAMES = ['Target', 'Stop', 'Autopilot', 'View', 'Focus', 'Interceptor', 'Artemis', 'Regenerate', 'Clear'];
+
+  test('every view offers the same nine commands: A S D on the top row, V F I in the middle, P R X below', () => {
     for (const v of VIEWS) {
       const cmds = commandsFor(v.id);
-      expect(cmds).toHaveLength(9);
+      expect(cmds.map((c) => c.key)).toEqual(UNIFIED_KEYS);
+      expect(cmds.map((c) => c.name)).toEqual(UNIFIED_NAMES);
       expect(new Set(cmds.map((c) => c.key)).size).toBe(9);
     }
   });
 
-  test('A and S keep the top row and V the middle row, as drawn in the sketch, in every view', () => {
+  test('the recorded session swaps Regenerate for Scope (E) in every view, since the card is one', () => {
     for (const v of VIEWS) {
-      const keys = commandsFor(v.id).map((c) => c.key);
-      expect(keys[0]).toBe('A');
-      expect(keys[1]).toBe('S');
-      expect(keys[3]).toBe('V');
+      const cmds = commandsFor(v.id, true);
+      expect(cmds.map((c) => c.key)).toEqual(['A', 'S', 'D', 'V', 'F', 'I', 'P', 'R', 'X'].map((k) => (k === 'R' ? 'E' : k)));
+      expect(cmds[7].name).toBe('Scope');
     }
   });
 
@@ -59,32 +62,52 @@ describe('the command card adapts to the view', () => {
     expect(commandByKey('cosmos', 'F')!.hint).toMatch(/fit/i);
   });
 
-  test('page view: D toggles the connection depth between one and two hops', () => {
+  test('the Page view keeps its depth logic in the controller, without a card of its own', () => {
     attach();
     setState({ view: 'page' });
-    const d = commandByKey('page', 'D')!;
-    expect(d.name).toBe('Depth');
+    expect(commandByKey('page', 'D')!.name).toBe('Autopilot');
     expect(getState().pageHops).toBe(1);
-    d.run();
+    controller.depth();
     expect(getState().pageHops).toBe(2);
-    expect(d.isActive!(getState())).toBe(true);
-    d.run();
+    controller.depth();
     expect(getState().pageHops).toBe(1);
   });
 
-  test('browser view commands: Autopilot (D) in the old bulb slot, DOM on O; the rest are placeholders that still answer', () => {
+  test('I is the Interceptor: it opens and closes the panel from the card and is lit while open', () => {
+    attach();
+    const i = commandByKey('browser', 'I')!;
+    expect(i.name).toBe('Interceptor');
+    expect(i.isActive!(getState())).toBe(false);
+    i.run();
+    expect(getState().interceptorOpen).toBe(true);
+    expect(i.isActive!(getState())).toBe(true);
+    // While it is open its own card takes over, so the hotkey closes it from the console (App).
+    expect(commandByKey('browser', 'I', false, false, true)).toBeUndefined();
+  });
+
+  test('Links left the card but keeps its key: L toggles the layer in a view, never over the settings or the Interceptor', () => {
+    attach();
+    expect(commandsFor('cosmos').map((c) => c.name)).not.toContain('Links');
+    const l = commandByKey('cosmos', 'L')!;
+    expect(l.name).toBe('Links');
+    const before = getState().linksOn;
+    l.run();
+    expect(getState().linksOn).toBe(!before);
+    expect(commandByKey('cosmos', 'L', false, true)).toBeUndefined();
+    expect(commandByKey('cosmos', 'L', false, false, true)!.name).toBe('Forward all');
+    // Hold left with no key: pinning stays in the controller for later.
+    expect(commandByKey('cosmos', 'H')).toBeUndefined();
+  });
+
+  test('the Browser view has no placeholders any more: its card is the same card', () => {
     attach();
     setState({ view: 'browser' });
-    const cmds = commandsFor('browser');
-    expect(cmds.map((c) => c.name)).toEqual(['Annotate', 'Snapshot', 'Autopilot', 'View', 'Flow', 'Links', 'DOM', 'Reload', 'Clear']);
-    expect(cmds.map((c) => c.key)).toEqual(['A', 'S', 'D', 'V', 'F', 'L', 'O', 'R', 'X']);
-    const r = commandByKey('browser', 'A')!.run();
-    expect(r.ok).toBe(true);
-    expect(getState().status).toContain('Annotate');
+    expect(commandsFor('browser').map((c) => c.name)).not.toContain('Annotate');
+    expect(commandByKey('browser', 'A')!.name).toBe('Target');
   });
 });
 
-describe('the Interceptor takes key 1', () => {
+describe('the Interceptor card', () => {
   test('its card holds nine unique keys with A, S on the top row and V in the middle', () => {
     const cmds = commandsFor('browser', false, false, true);
     expect(cmds).toHaveLength(9);
@@ -110,7 +133,7 @@ describe('the Interceptor takes key 1', () => {
   });
 
   test('the view card is untouched by it: the Interceptor set is its own', () => {
-    expect(commandsFor('browser').map((c) => c.name)[0]).toBe('Annotate');
+    expect(commandsFor('browser').map((c) => c.name)[0]).toBe('Target');
     expect(commandsFor('browser', false, true).map((c) => c.name)[0]).toBe('Apply');
     expect(commandsFor('browser', false, false, true).map((c) => c.name)[0]).toBe('Arm');
   });
