@@ -138,10 +138,49 @@ Frames: `docs/screenshots/dive-*.png`.
 | Header: `T/S  N/S  R/S  Links  Nodes  ~~~  13:11`, double rule | `src/components/Header.tsx` — brand + view badge, live counters, sparkline, sim state, mute, clock |
 | Centre stage | `src/components/Stage.tsx` — `GraphCanvas` + `HubLabels` (Cosmos) or `BrowserSurface` (Browser) |
 | Bottom-left "map" / "scope" | `src/components/MiniMap.tsx` — second cosmos.gl instance, viewport rectangle, click/drag to pan |
-| Bottom-right 3x3 grid with hotkey letters | `src/components/CommandCard.tsx`, per-view sets in `src/commands.tsx` |
+| Bottom-right 3x3 grid with hotkey letters | `src/components/CommandCard.tsx`, the one card (and the settings card) in `src/commands.tsx` |
 | Lens tab bar (chamfered caps, active underline, dashed rail, `<< >>`) | `src/components/Console.tsx` (`TabStrip`); in every view, the four lenses on `1-4` |
 | The Interceptor: traffic list, request/response detail, proxy controls | `src/components/InterceptorSurface.tsx`; state in `src/store.ts`, data in `src/interceptor.ts`, actions in `src/interceptor-session.ts` |
 | Two overlapping views (second sketch) | `src/views.ts` (view model, palettes) + `Stage` (dive) |
+
+## Map
+
+The repository by file, kept here rather than in AGENTS.md because it changes with most slices.
+
+```
+src/views.ts            ViewSpec, order, palettes            src/store.ts         UIState
+src/commands.tsx        the command card, the settings card, the lens strip   src/graph/controller.ts  graph + commands
+src/components/Stage.tsx  the dive                           src/components/BrowserSurface.tsx  the website frame
+src/metrics.ts          FPS sampler (header readouts)        src/quality.ts       graph pixel-ratio budget
+src/settings.ts         settings: categories, defaults, search  src/settings-session.ts  the draft, Apply, close
+src/interceptor.ts      the traffic: sample capture, recording, reading it (pure)
+src/interceptor-session.ts  arm, hold, edit, forward, drop; the panel's session
+src/components/InterceptorSurface.tsx  the traffic panel (I)
+src/autopilot.ts        the D control, reports from the shell  server/autopilot.ts  flight plan (pure)
+src/page-load.ts        the address field's loading bar (phases, progress)
+server/autopilot-driver.ts  flies the site (Playwright)     shell/autopilot-state.ts  speed, actor, disengage
+server/site-dialogs.ts  the site's dialogs: operator's, or answered while flying
+src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/           /debug page, synth presets
+shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
+server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
+server/recorder.ts      session recorder (Playwright traffic, preload actions)  server/session-store.ts  SQLite schema + policy
+server/har.ts           the live HAR and exportHar (a view of the database)
+server/cli.ts, server/terminal.ts  the launcher's arguments, welcome and notifications
+server/site-feed.ts     recorder events -> console, snapshot on reload    src/site-events.ts   the event contract
+src/site-model.ts       events -> live cosmos (pages, endpoints, services) src/scope.ts         review scope (shared)
+src/recents.ts          the entry screen's recently engaged list
+server/owned-browser.ts the earlier framed owned Chromium (no longer launched)
+server/machine.ts       machine CPU/memory/process-tree feed
+tests/harness.ts        fake window + renderer for controller tests;  tests/vite.ts  isolated Vite
+```
+
+## Accessible names (the test API)
+
+Tests find elements by role and accessible name, so these change only together with the tests:
+textbox "Web App", button "Engage", tablist "Lenses", the command buttons "<Name> (<Key>)" ("Target
+(A)", "Autopilot (D)", "View (V)", "Interceptor (I)", "Artemis (P)" and the rest of the card), the
+header's "Panels (C)" and "Settings (,)", dialog "Interceptor", progressbars "Page loading" and
+"Autopilot progress".
 
 ## Commands
 
