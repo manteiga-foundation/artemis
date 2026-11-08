@@ -4,11 +4,6 @@ This file is the working contract for anyone (person or agent) changing this rep
 short on purpose: the README has the setup steps, `docs/console.md` the notes on what is built, and
 this explains how we build it.
 
-It holds only what changes rarely: the purpose, the vocabulary, the loop, the conventions, the
-standing decisions and when to stop. Facts that move with the slices (hotkeys, the command card's
-layout, accessible names, the file map) live in `docs/console.md`, which is updated with every slice;
-this file points there instead of repeating them, so it never says something that is no longer true.
-
 ## What Artemis is
 
 A product-understanding console for a Product Manager, a Product Auditor and a UX/UI expert: what
@@ -26,27 +21,26 @@ Stack: Bun, Vite, React 18, `@arwes/react` (alpha), `@cosmos.gl/graph` (WebGL gr
 
 ## Vocabulary (fixed, use these words)
 
-The words are stable; their keys and places are in `docs/console.md` ("Vocabulary", "Commands").
-
 - **View** - the console's mode: Browser (home after Engage) and Cosmos are shown; Page is kept
-  in code but hidden (`hidden` in `src/views.ts`). Pulling back from the Browser lands the Cosmos
-  on the current page (selected, zoomed in on); the same command returns to the Browser.
-- **Lens** - a perspective inside a view: Clusters, Hubs, Routes, Anomalies. With no lens picked
-  the graph is read plainly; that neutral state stays `overview` in the store but is not a tab.
-- **Interceptor** - the traffic inspector and proxy, a panel over the current view rather than
-  part of the V cycle: every request and response, http and websocket, whole, with the proxy armed,
-  holding, editing, forwarding and dropping. It is the feature Artemis is measured against Burp
-  Suite on, so its form is part of the feature, not decoration after it.
-- **Layer** - an independent toggle drawn over a view (links, labels, annotations, the backdrop).
-- **Command card** - the 3x3 grid of commands, the same card in every view. Only commands with a
-  function hold a slot; a panel over the stage does not reshape it (only the configuration view
-  has a card of its own).
+  in code but hidden (`hidden` in `src/views.ts`). `V` pulls back from the Browser to the Cosmos,
+  landing on the current page (selected, zoomed in on), and returns to the Browser.
+- **Lens** - a perspective inside a view: Clusters, Hubs, Routes, Anomalies (`1-4`). With no lens
+  picked the graph is read plainly; that neutral state stays `overview` in the store but is not a tab.
+- **Interceptor** - the traffic inspector and proxy (`I`, a slot on the command card), a panel over
+  the current view rather than part of the V cycle: every request and response, http and websocket,
+  whole, with the proxy armed, holding, editing, forwarding and dropping. Its own card takes the six
+  slots under A, S and V while it is open. It is the feature Artemis is measured against Burp Suite
+  on, so its form is part of the feature, not decoration after it.
+- **Layer** - an independent toggle (Links on `L`, the Backdrop on `B`, labels, annotations).
+- **Command card** - the 3x3 grid, one card in every view: A Target, S Stop, D Autopilot on the top
+  row ("ASD"); V View, F Focus, I Interceptor in the middle; P Artemis, R Regenerate (E Scope when
+  recorded), X Clear below. Only commands with a function hold a slot.
 - **Owned browser** - the Electron shell `bun run artemis` launches: the website as a genuine native
   page, the console in a transparent window over it.
 - **Dive** - the depth transition between views.
-- **Configuration view** - the settings, opened over the current view, not part of the V cycle;
-  changes wait in a draft until Apply. It and the Interceptor both take the stage, so each closes
-  the other as it opens.
+- **Configuration view** - the settings (`,` or the header cog), opened over the current view, not
+  part of the V cycle; changes wait in a draft until Apply. It and the Interceptor both take the
+  stage, so each closes the other as it opens.
 
 ## How we work: the methodology
 
@@ -66,37 +60,16 @@ Every slice follows the same loop. Do not skip steps because a change looks smal
 4. **Look at it.** Take screenshots (`scripts/screenshots*.ts`, 1440x900 and 1280x800, mid-dive
    frames when motion is the point) and inspect them, by eye or with a vision model. Treat what
    you see as a lead and confirm with a DOM/CSS probe before changing code.
-5. **Document.** `docs/console.md` (vocabulary, views, command table, map, accessible names, test
-   list, decisions), `docs/status.md` (built, next, open questions), screenshots into
+5. **Document.** `docs/console.md` (vocabulary, views, command table, test list, decisions), `docs/status.md`
+   (built, next, open questions), screenshots into
    `docs/screenshots/`, a commit per slice with a descriptive message. Never push or rewrite
    history unless asked.
-6. **Report honestly:** what changed, what is verified (counts and commands), what was not, one
-   real finding or trade-off, next candidates. Plain text, no emojis.
+6. **Report honestly:** what changed, what is verified (counts and commands), one real finding
+   or trade-off, next candidates. Plain text, no emojis.
 
 When something is uncertain (is X feasible? which colour? which sound?), do not argue it:
 **spike it** in scratch with measured numbers, or **render every candidate in context** (icons in
 the real button chrome, sounds on `/debug`, palettes on a contrast sheet) and let the maintainer pick.
-
-## Stop and ask the maintainer
-
-These are not judgement calls for whoever is changing the code. Stop, say what you found, and wait.
-
-- **Pushing, publishing or rewriting history**: never push, force-push, rebase shared history or
-  publish a release unless asked in so many words.
-- **A new dependency** (runtime or dev), or a major version change of one already used. A package
-  manager refusing a package (age, audit, licence) is reported, never bypassed.
-- **Changing an accessible name, a hotkey or a word of the vocabulary**: they are the test API and
-  the maintainer's language; change them only when asked, and with the tests.
-- **Re-opening a standing decision** (below), or building something the maintainer parked.
-- **Deleting** files, branches, session data (`data/`), the shell profile, or anything you did not
-  create in this slice, including untracked scratch in `scripts/`.
-- **A test that fails for a reason you cannot tie to your change**: re-run it alone, read the
-  machine's load, and report it. Never skip, weaken or delete a test to get green.
-- **A gate you could not run** (no GPU, a loaded machine, a missing browser): say so in the report;
-  the slice is not done until it has run.
-- **Secrets and client data**: never read, print or commit `.env`, credentials or a client's session
-  database; client hosts and names stay out of tracked files (use `intranet.example`, `shop.example`).
-- **Edits to this file**: propose them; the maintainer approves each one.
 
 ## Commands
 
@@ -126,8 +99,8 @@ Playwright's Chromium: `bunx playwright install chromium`. GPU in headless on ma
 - Palettes are CSS custom properties set on `.app` from the *shown* view (`src/views.ts`). New CSS
   uses `var(--token)` and `color-mix`; never a literal hex or rgba (it leaks when the palette
   switches).
-- Accessible names are the test API (the current list is in `docs/console.md`, "Accessible
-  names"). Change them only with the tests.
+- Accessible names are the test API: textbox "Web App", button "Engage", buttons "View (V)",
+  "Depth (D)", "Annotate (A)", "Panels (C)", tablist "Lenses". Change them only with the tests.
 - `window.__artemis = getState` is exposed in DEV by `main.tsx`; tests and scripts read it.
   Never `import('/src/store.ts')` from a test (Vite HMR history makes a second instance).
 - The shell bridge is `window.artemisShell` (shell/console-preload.ts, typed in `src/shell.ts`);
@@ -140,7 +113,31 @@ Playwright's Chromium: `bunx playwright install chromium`. GPU in headless on ma
 
 ## Map
 
-The repository by file is in `docs/console.md` ("Map"); it changes with most slices.
+```
+src/views.ts            ViewSpec, order, palettes            src/store.ts         UIState
+src/commands.tsx        per-view command sets                src/graph/controller.ts  graph + commands
+src/components/Stage.tsx  the dive                           src/components/BrowserSurface.tsx  the website frame
+src/metrics.ts          FPS sampler (header readouts)        src/quality.ts       graph pixel-ratio budget
+src/settings.ts         settings: categories, defaults, search  src/settings-session.ts  the draft, Apply, close
+src/interceptor.ts      the traffic: sample capture, recording, reading it (pure)
+src/interceptor-session.ts  arm, hold, edit, forward, drop; the panel's session
+src/components/InterceptorSurface.tsx  the traffic panel (key 1)
+src/autopilot.ts        the D control, reports from the shell  server/autopilot.ts  flight plan (pure)
+src/page-load.ts        the address field's loading bar (phases, progress)
+server/autopilot-driver.ts  flies the site (Playwright)     shell/autopilot-state.ts  speed, actor, disengage
+server/site-dialogs.ts  the site's dialogs: operator's, or answered while flying
+src/sounds.ts, sfx.tsx  sound definitions / playing          src/debug/           /debug page, synth presets
+shell/main.ts           the owned browser: Electron shell     shell/*-preload.ts   console bridge, site hotkeys
+server/shell.ts         build + launch the shell (Playwright) src/shell.ts, src/resume.ts  console side, reload memory
+server/recorder.ts      session recorder (Playwright traffic, preload actions)  server/session-store.ts  SQLite schema + policy
+server/har.ts           the live HAR and exportHar (a view of the database)
+server/cli.ts, server/terminal.ts  the launcher's arguments, welcome and notifications
+server/site-feed.ts     recorder events -> console, snapshot on reload    src/site-events.ts   the event contract
+src/site-model.ts       events -> live cosmos (pages, endpoints, services) src/scope.ts         review scope (shared)
+server/owned-browser.ts the earlier framed owned Chromium (no longer launched)
+server/machine.ts       machine CPU/memory/process-tree feed
+tests/harness.ts        fake window + renderer for controller tests;  tests/vite.ts  isolated Vite
+```
 
 ## Standing decisions (do not re-litigate without the maintainer)
 
@@ -148,20 +145,19 @@ The repository by file is in `docs/console.md` ("Map"); it changes with most sli
   Artemis's. It is the Electron shell (spike 003, confirmed by the maintainer with a real MFA sign-in):
   the site is an unmodified native page; nothing rewrites its headers or cookies; only an
   isolated-world preload runs in it. Where Electron departs from Chrome, the shell restores
-  Chrome's rule (a page cannot close the tab it was opened in: `--blink-settings`). The framed owned
-  browser (blanks Microsoft sign-in) and the streamed tab (imitates input and widgets, spike 002)
-  were set aside; injecting HUD panels into the site's DOM was rejected. "Sign in with Google"
-  blocked in embedded browsers is accepted.
+  Chrome's rule (a page cannot close the tab it was opened in: `--blink-settings`). The framed owned browser (blanks Microsoft sign-in) and the
+  streamed tab (imitates input and widgets, spike 002) were set aside; injecting HUD panels into
+  the site's DOM was rejected. "Sign in with Google" blocked in embedded browsers is accepted.
 - Browser view: the website fills the stage edge to edge from a glass address strip under the header
-  to the bottom; panels float over it on their own glass; no full-width scrim and no tint over the
-  page by default (they hid or darkened the part of the page people need).
+  to the bottom; panels float over it on their own glass; no full-width scrim (it hid the part of
+  the page people need).
 - Visuals and animations are not traded for speed without a measurement that points at them. Read
   the machine first (`uptime`, `vm_stat` wired memory); measure with interleaved A/B rounds.
 - Shipped sound files are Arwes free samples: development only. The console plays by action
   (`src/sounds.ts`); `/debug` applies per-action picks live via localStorage; final picks become
   `DEFAULT_ACTION_SOUNDS`. The target voice is the `soft` family: StarCraft-spirit, gentle.
-- Icons: Game-icons via `react-icons/gi`, the View glyph Font Awesome `FaLayerGroup`; each pick is
-  the maintainer's from candidates rendered in the real button. Credits in the README.
+- Icons: Game-icons via `react-icons/gi` (the Interceptor's radar dish, the maintainer's pick of twelve rendered in the button); the View glyph is Font Awesome `FaLayerGroup`. Credits
+  in the README.
 
 ## Where things stand
 
