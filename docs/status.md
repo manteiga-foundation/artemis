@@ -104,8 +104,8 @@ product manager, tester or UX reviewer actually has.
    or PCI DSS) comes later, because hard-coded heuristics would put wrong labels in the database.
 
 For the installer, next: Linux and Windows (the owned browser verified on each; `install.ps1` for
-Windows), CI running `tests/install.test.ts` on a macOS runner too, and a tagged release so the
-default can move from `main` to the latest tag. The address is `https://artemis.n30.ai/install.sh`:
+Windows), CI running `tests/install.test.ts` on a macOS runner too, and moving the default from
+`main` to the latest tag (v0.2.0 is the first; `ARTEMIS_VERSION=v0.2.0` installs it today). The address is `https://artemis.n30.ai/install.sh`:
 GitHub Pages (legacy build from `main`, root) behind Cloudflare serves the repository's own
 `install.sh`, so it answers once the commit is pushed (404 before).
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { autopilotNotices, certificateNotice, helpText, parseArtemisArgs, settleSpeeds, usage, USAGE } from '../server/cli';
+import { autopilotNotices, certificateNotice, consoleServerCommand, helpText, parseArtemisArgs, settleSpeeds, usage, USAGE } from '../server/cli';
 import { colorMode, notice, plain, welcome, type ColorMode } from '../server/terminal';
 
 // `bun run artemis [website] [--autopilot slow|regular|max]`: what the launcher accepts, and how
@@ -58,6 +58,13 @@ describe('the launcher’s arguments', () => {
     const help = run('--help');
     expect(help.exitCode).toBe(0);
     expect(help.stdout.toString()).toContain('-a, --autopilot <level>');
+  });
+
+  test('the console server starts quietly: Bun runs Vite itself, one port, no echoed command line', () => {
+    const cmd = consoleServerCommand('/opt/bun/bin/bun', 5179, '/home/a/.artemis/app');
+    expect(cmd).toEqual(['/opt/bun/bin/bun', '/home/a/.artemis/app/node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5179', '--strictPort', '--logLevel', 'warn']);
+    expect(cmd.filter((a) => a === '--port')).toHaveLength(1);
+    expect(cmd).not.toContain('run');
   });
 });
 

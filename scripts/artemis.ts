@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { launchShell } from '../server/shell';
-import { autopilotNotices, certificateNotice, helpText, LEVELS, parseArtemisArgs, settleSpeeds, usage, type Level } from '../server/cli';
+import { autopilotNotices, certificateNotice, consoleServerCommand, helpText, LEVELS, parseArtemisArgs, settleSpeeds, usage, type Level } from '../server/cli';
 import { colorMode, notice, welcome, type NoticeKind } from '../server/terminal';
 
 // Installed by install.sh, the `artemis` command sets ARTEMIS_COMMAND and ARTEMIS_HOME: the
@@ -53,8 +53,9 @@ let vite: ReturnType<typeof Bun.spawn> | null = null;
 if (!(await up())) {
   say('artemis', `Starting the console on ${appUrl}`);
   // Vite's own banner and per-request lines would bury the notifications; warnings still show.
-  vite = Bun.spawn(['bun', 'run', 'dev', '--port', String(port), '--strictPort', '--logLevel', 'warn'], {
-    cwd: new URL('..', import.meta.url).pathname,
+  const appRoot = new URL('..', import.meta.url).pathname;
+  vite = Bun.spawn(consoleServerCommand(process.execPath, port, appRoot), {
+    cwd: appRoot,
     stdout: 'inherit',
     stderr: 'inherit'
   });

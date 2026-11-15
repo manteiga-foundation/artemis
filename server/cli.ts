@@ -34,6 +34,15 @@ Environment: ARTEMIS_PORT, ARTEMIS_PROFILE_DIR, ARTEMIS_SESSIONS_DIR, ARTEMIS_SH
 
 export const USAGE = usage('bun run artemis');
 
+/**
+ * The console's development server as the launcher starts it: Vite's own entry run by Bun (no
+ * `bun run` wrapper echoing its command line, no second `--port` from the package script, and no
+ * need for Node on the machine), with warnings only so the launcher's notifications stay readable.
+ */
+export function consoleServerCommand(bun: string, port: number, appRoot: string): string[] {
+  return [bun, `${appRoot.replace(/\/$/, '')}/node_modules/vite/bin/vite.js`, '--host', '127.0.0.1', '--port', String(port), '--strictPort', '--logLevel', 'warn'];
+}
+
 /** `--help`: the usage, then where this run keeps the profile (logins) and the recorded sessions. */
 export function helpText(o: { command: string; profile: string; sessions: string }): string {
   return `${usage(o.command)}\n\nProfile   ${o.profile}\nSessions  ${o.sessions}`;

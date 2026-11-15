@@ -16,7 +16,7 @@
 # ~/.artemis/sessions; an update (`artemis update`, or this command again) never touches them.
 # To remove Artemis: delete ~/.artemis and ~/.local/bin/artemis.
 #
-# Environment: ARTEMIS_VERSION (a tag such as v0.1.0; default: main), ARTEMIS_SOURCE (a tarball
+# Environment: ARTEMIS_VERSION (a tag such as v0.2.0; default: main), ARTEMIS_SOURCE (a tarball
 # URL instead of GitHub's), ARTEMIS_BUN_INSTALLER (instead of https://bun.sh/install), NO_COLOR.
 #
 # Read it before you run it: curl -fsSL <the URL above> -o install.sh && less install.sh
@@ -85,13 +85,25 @@ main() {
   mv "$top" "$stage"
   rm -rf "$work"
 
-  # 3. Dependencies
+  # 3. Dependencies. Their tools' own output goes to a log, shown only if a step fails.
   step "Installing dependencies"
-  (cd "$stage" && "$bun" install --frozen-lockfile </dev/null) || { rm -rf "$stage"; fail "bun install failed"; }
+  log="$home/install.log"
+  : >"$log"
+  quiet() {
+    what="$1"
+    shift
+    (cd "$stage" && "$@" </dev/null >>"$log" 2>&1) || {
+      cat "$log" >&2
+      rm -rf "$stage"
+      fail "$what (the full output is above, and in $log)"
+    }
+  }
+  quiet "bun install failed" "$bun" install --frozen-lockfile
   # Electron's binary would otherwise download on the first launch.
-  (cd "$stage" && "$bun" node_modules/electron/install.js </dev/null) || { rm -rf "$stage"; fail "Electron could not be downloaded"; }
+  quiet "Electron could not be downloaded" "$bun" node_modules/electron/install.js
   # Run with Bun itself: `bun x` honours the CLI's `#!/usr/bin/env node`, and many Macs have no Node.
-  (cd "$stage" && "$bun" node_modules/playwright/cli.js install ffmpeg </dev/null >/dev/null) || { rm -rf "$stage"; fail "Playwright's ffmpeg could not be installed"; }
+  quiet "Playwright's ffmpeg could not be installed" "$bun" node_modules/playwright/cli.js install ffmpeg
+  rm -f "$log"
 
   # Swap: the new copy in, the old one out.
   if [ -d "$home/app" ]; then

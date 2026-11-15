@@ -84,6 +84,11 @@ describe('the one-command install', () => {
       const run = piped(await readFile(join(root, 'install.sh'), 'utf8'));
       if (run.status !== 0) console.log(run.stdout, run.stderr);
       expect(run.status).toBe(0);
+      // Only its own steps: no package lists from bun install, no download bars.
+      expect(run.stdout).not.toContain('packages installed');
+      expect(run.stdout).not.toMatch(/^\+ /m);
+      const lines = run.stdout.split('\n').filter((l) => l.trim());
+      expect(lines.length).toBeLessThanOrEqual(10);
       expect(existsSync(join(home, 'app', 'package.json'))).toBe(true);
       expect(existsSync(join(home, 'app', 'node_modules', 'playwright'))).toBe(true);
       // Nothing left to fetch on the first launch: Electron's binary is in place.
@@ -161,6 +166,25 @@ describe('the one-command install', () => {
       const broken = piped(await readFile(join(root, 'install.sh'), 'utf8'), { ARTEMIS_SOURCE: `file://${join(tmp, 'missing.tar.gz')}` });
       expect(broken.status).not.toBe(0);
       expect(broken.stderr + broken.stdout).toMatch(/download/i);
+      expect(artemis(['--help']).status).toBe(0);
+    },
+    INSTALL
+  );
+
+  test(
+    'a failed dependency install shows what bun install said, and leaves the installed version working',
+    async () => {
+      // A source whose lockfile disagrees with its manifest: `bun install --frozen-lockfile` refuses.
+      const tree = join(tmp, 'bad', 'artemis-main');
+      await mkdir(tree, { recursive: true });
+      await writeFile(join(tree, 'package.json'), JSON.stringify({ name: 'artemis', dependencies: { 'left-pad': '1.3.0' } }));
+      await writeFile(join(tree, 'bun.lock'), JSON.stringify({ lockfileVersion: 1, workspaces: { '': { name: 'artemis' } }, packages: {} }));
+      const bad = join(tmp, 'bad.tar.gz');
+      expect(spawnSync('tar', ['-czf', bad, '-C', join(tmp, 'bad'), 'artemis-main']).status).toBe(0);
+      const broken = piped(await readFile(join(root, 'install.sh'), 'utf8'), { ARTEMIS_SOURCE: `file://${bad}` });
+      expect(broken.status).not.toBe(0);
+      expect(broken.stderr).toContain('bun install failed');
+      expect(broken.stderr).toMatch(/lockfile/i);
       expect(artemis(['--help']).status).toBe(0);
     },
     INSTALL
