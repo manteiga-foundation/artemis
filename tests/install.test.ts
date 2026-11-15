@@ -44,6 +44,13 @@ const env = (extra: Record<string, string> = {}) => ({
 const piped = (script: string, extra?: Record<string, string>) =>
   spawnSync('sh', [], { input: script, env: env(extra), encoding: 'utf8', timeout: INSTALL });
 
+// The same, without blocking: a server in this process (a stand-in for GitHub) can answer it.
+async function pipedAsync(script: string, extra?: Record<string, string>) {
+  const proc = Bun.spawn(['sh'], { stdin: new Blob([script]), env: env(extra), stdout: 'pipe', stderr: 'pipe' });
+  const [stdout, stderr, status] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  return { stdout, stderr, status };
+}
+
 const artemis = (args: string[], extra?: Record<string, string>) =>
   spawnSync(join(bin, 'artemis'), args, { env: env(extra), encoding: 'utf8', timeout: INSTALL });
 
@@ -156,6 +163,66 @@ describe('the one-command install', () => {
       const help = spawnSync(join(fresh, '.local', 'bin', 'artemis'), ['--help'], { env: env(bare), encoding: 'utf8' });
       expect(help.status).toBe(0);
       expect(help.stdout).toContain(join(fresh, '.artemis', 'sessions'));
+    },
+    INSTALL
+  );
+
+  test(
+    'by default it installs the latest release, found the way GitHub says it (releases/latest redirects to the tag); ARTEMIS_VERSION=main installs development',
+    async () => {
+      // A stand-in for github.com with the two addresses the script uses.
+      const tarball = await readFile(source);
+      const repo = '/manteiga-foundation/artemis';
+      const asked: string[] = [];
+      let port = 0;
+      const github = Bun.serve({
+        hostname: '127.0.0.1',
+        port: 0,
+        fetch(req): Response {
+          const path = new URL(req.url).pathname;
+          asked.push(path);
+          if (path === `${repo}/releases/latest`) return Response.redirect(`http://127.0.0.1:${port}${repo}/releases/tag/v9.8.7`, 302);
+          if (path === `${repo}/releases/tag/v9.8.7`) return new Response('the release page');
+          if (path === `${repo}/archive/refs/tags/v9.8.7.tar.gz` || path === `${repo}/archive/refs/heads/main.tar.gz`) return new Response(tarball);
+          return new Response('not found', { status: 404 });
+        }
+      });
+      port = github.port!;
+      try {
+        const script = await readFile(join(root, 'install.sh'), 'utf8');
+        const base = { ARTEMIS_SOURCE: '', ARTEMIS_GITHUB: `http://127.0.0.1:${github.port}` };
+        const latest = await pipedAsync(script, base);
+        if (latest.status !== 0) console.log(latest.stdout, latest.stderr);
+        expect(latest.status).toBe(0);
+        expect(latest.stdout).toContain('Downloading Artemis v9.8.7');
+        expect(asked).toContain(`${repo}/archive/refs/tags/v9.8.7.tar.gz`);
+        expect(asked).not.toContain(`${repo}/archive/refs/heads/main.tar.gz`);
+
+        asked.length = 0;
+        const dev = await pipedAsync(script, { ...base, ARTEMIS_VERSION: 'main' });
+        expect(dev.status).toBe(0);
+        expect(dev.stdout).toContain('Downloading Artemis main');
+        expect(asked).toEqual([`${repo}/archive/refs/heads/main.tar.gz`]);
+      } finally {
+        github.stop(true);
+      }
+    },
+    INSTALL
+  );
+
+  test(
+    'when the latest release cannot be found it stops and says how to install anyway, leaving the installed version working',
+    async () => {
+      const github = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('down', { status: 503 }) });
+      try {
+        const run = await pipedAsync(await readFile(join(root, 'install.sh'), 'utf8'), { ARTEMIS_SOURCE: '', ARTEMIS_GITHUB: `http://127.0.0.1:${github.port}` });
+        expect(run.status).not.toBe(0);
+        expect(run.stderr).toContain('the latest release could not be found');
+        expect(run.stderr).toContain('ARTEMIS_VERSION=');
+        expect(artemis(['--help']).status).toBe(0);
+      } finally {
+        github.stop(true);
+      }
     },
     INSTALL
   );

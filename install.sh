@@ -5,7 +5,7 @@
 #
 # What it does, and nothing else:
 #   1. Bun: uses the one on your PATH (or ~/.bun), or installs it with Bun's own installer.
-#   2. Artemis: downloads the source tarball into ~/.artemis/app (a staged copy, swapped in only
+#   2. Artemis: downloads the latest release into ~/.artemis/app (a staged copy, swapped in only
 #      once it is complete, so a failed download or install leaves the version you had).
 #   3. Its dependencies: `bun install` (Electron included) and Playwright's ffmpeg (the session
 #      videos need it).
@@ -16,8 +16,10 @@
 # ~/.artemis/sessions; an update (`artemis update`, or this command again) never touches them.
 # To remove Artemis: delete ~/.artemis and ~/.local/bin/artemis.
 #
-# Environment: ARTEMIS_VERSION (a tag such as v0.2.0; default: main), ARTEMIS_SOURCE (a tarball
-# URL instead of GitHub's), ARTEMIS_BUN_INSTALLER (instead of https://bun.sh/install), NO_COLOR.
+# Environment: ARTEMIS_VERSION (latest, the default: the newest release; a tag such as v0.2.0; or
+# main, the development branch), ARTEMIS_SOURCE (a tarball URL instead of GitHub's),
+# ARTEMIS_BUN_INSTALLER (instead of https://bun.sh/install), NO_COLOR. A version goes to sh:
+#   curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=main sh
 #
 # Read it before you run it: curl -fsSL <the URL above> -o install.sh && less install.sh
 
@@ -37,12 +39,23 @@ fail() {
 main() {
   home="$HOME/.artemis"
   bin="$HOME/.local/bin"
-  version="${ARTEMIS_VERSION:-main}"
-  case "$version" in
-    main) source_url="https://github.com/$REPO/archive/refs/heads/main.tar.gz" ;;
-    *) source_url="https://github.com/$REPO/archive/refs/tags/$version.tar.gz" ;;
-  esac
-  source_url="${ARTEMIS_SOURCE:-$source_url}"
+  version="${ARTEMIS_VERSION:-latest}"
+  github="${ARTEMIS_GITHUB:-https://github.com}"
+  source_url="${ARTEMIS_SOURCE:-}"
+  if [ -z "$source_url" ] && [ "$version" = latest ]; then
+    # GitHub answers releases/latest with a redirect to the newest release's tag page.
+    landed="$(curl -fsSL -o /dev/null -w '%{url_effective}' "$github/$REPO/releases/latest" </dev/null 2>/dev/null || true)"
+    case "$landed" in
+      */releases/tag/?*) version="${landed##*/releases/tag/}" ;;
+      *) fail "the latest release could not be found ($github/$REPO/releases/latest); to install anyway, pick one: curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=main sh" ;;
+    esac
+  fi
+  if [ -z "$source_url" ]; then
+    case "$version" in
+      main) source_url="$github/$REPO/archive/refs/heads/main.tar.gz" ;;
+      *) source_url="$github/$REPO/archive/refs/tags/$version.tar.gz" ;;
+    esac
+  fi
 
   case "$(uname -s)" in
     Darwin) ;;
@@ -77,7 +90,7 @@ main() {
   work="$home/.download"
   rm -rf "$stage" "$work"
   mkdir -p "$work"
-  step "Downloading Artemis ($version)"
+  step "Downloading Artemis $version"
   curl -fsSL "$source_url" -o "$work/artemis.tar.gz" </dev/null || { rm -rf "$work"; fail "the download failed: $source_url"; }
   tar -xzf "$work/artemis.tar.gz" -C "$work" || { rm -rf "$work"; fail "the download is not a tarball: $source_url"; }
   top="$(find "$work" -mindepth 1 -maxdepth 1 -type d | head -n 1)"

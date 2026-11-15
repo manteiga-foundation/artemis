@@ -79,11 +79,17 @@ One command:
 curl -fsSL https://artemis.n30.ai/install.sh | sh
 ```
 
-It installs Artemis into `~/.artemis` and the `artemis` command into `~/.local/bin` (added to your
-PATH once). Your profile (the logins of the sites you review) is `~/.artemis/profile` and the
-recorded sessions `~/.artemis/sessions`; `artemis update` fetches the latest version and keeps
-both. To remove Artemis, delete `~/.artemis` and `~/.local/bin/artemis`. The script is short and
-commented: read it first with `curl -fsSL <the same URL> -o install.sh`.
+It installs the latest release of Artemis into `~/.artemis` and the `artemis` command into
+`~/.local/bin` (added to your PATH once). Your profile (the logins of the sites you review) is
+`~/.artemis/profile` and the recorded sessions `~/.artemis/sessions`; `artemis update` fetches the
+latest release and keeps both. To remove Artemis, delete `~/.artemis` and `~/.local/bin/artemis`.
+The script is short and commented: read it first with `curl -fsSL <the same URL> -o install.sh`.
+A given release, or the development branch:
+
+```sh
+curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=v0.2.0 sh
+curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=main sh
+```
 
 ```sh
 artemis example.com                  # open the website in the browser Artemis owns
