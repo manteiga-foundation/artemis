@@ -209,7 +209,7 @@ const pages: Record<string, { w: number; h: number; body: string }> = {
       <h1 style="font-size:54px">Understand the <em>depths</em> of a web application by using it.</h1>
       <p style="font-size:19px;line-height:1.45;color:${C.frost};max-width:540px">A genuine browser, an autopilot that flies the application, a live map of every page and flow, and sessions you can take to any tool.</p>
     </div>
-    <div style="position:absolute;left:64px;bottom:44px">${foot('<i></i><span>macOS · Bun · Electron · Playwright</span>')}</div>
+    <div style="position:absolute;left:64px;bottom:44px">${foot('<i></i><span>macOS · Linux</span>')}</div>
     <div class="label" style="position:absolute;right:32px;bottom:34px;font-size:10px;color:${C.sky}">Cosmos · emulated network</div>` },
   features: { w: 1280, h: 420, body: `
     <div style="position:absolute;left:48px;top:36px;right:48px;display:grid;grid-template-columns:repeat(4,1fr);gap:26px">
