@@ -12,28 +12,35 @@
 // However it ends (closing the window, Cmd+Q, Ctrl+C or closing the terminal), the session is
 // saved whole: database, videos and HAR. A second Ctrl+C quits without waiting.
 //
-// Environment: ARTEMIS_PORT (console port, default 5173), ARTEMIS_PROFILE_DIR and
-// ARTEMIS_SESSIONS_DIR (override data/shell-profile and data/sessions), ARTEMIS_SHELL_HIDDEN=1.
+// Environment: ARTEMIS_PORT (console port, default 5173), ARTEMIS_HOME (the installed home: profile
+// and sessions inside it), ARTEMIS_PROFILE_DIR and ARTEMIS_SESSIONS_DIR (override either),
+// ARTEMIS_COMMAND (how the usage names the command), ARTEMIS_SHELL_HIDDEN=1.
 import { readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { launchShell } from '../server/shell';
-import { autopilotNotices, certificateNotice, LEVELS, parseArtemisArgs, settleSpeeds, USAGE, type Level } from '../server/cli';
+import { autopilotNotices, certificateNotice, helpText, LEVELS, parseArtemisArgs, settleSpeeds, usage, type Level } from '../server/cli';
 import { colorMode, notice, welcome, type NoticeKind } from '../server/terminal';
 
-const args = parseArtemisArgs(process.argv.slice(2));
+// Installed by install.sh, the `artemis` command sets ARTEMIS_COMMAND and ARTEMIS_HOME: the
+// profile and the sessions then live in that home, beside the app an update replaces.
+const command = process.env.ARTEMIS_COMMAND || 'bun run artemis';
+const home = process.env.ARTEMIS_HOME;
+const profile = process.env.ARTEMIS_PROFILE_DIR ?? (home ? join(home, 'profile') : new URL('../data/shell-profile', import.meta.url).pathname);
+const sessionsDir = process.env.ARTEMIS_SESSIONS_DIR ?? (home ? join(home, 'sessions') : new URL('../data/sessions', import.meta.url).pathname);
+
+const args = parseArtemisArgs(process.argv.slice(2), command);
 if ('error' in args) {
-  console.error(`Artemis: ${args.error}\n\n${USAGE}`);
+  console.error(`Artemis: ${args.error}\n\n${usage(command)}`);
   process.exit(2);
 }
 if (args.help) {
-  console.log(USAGE);
+  console.log(helpText({ command, profile, sessions: sessionsDir }));
   process.exit(0);
 }
 
 const port = Number(process.env.ARTEMIS_PORT ?? 5173);
 const appUrl = `http://127.0.0.1:${port}`;
-const profile = process.env.ARTEMIS_PROFILE_DIR ?? new URL('../data/shell-profile', import.meta.url).pathname;
-const sessionsDir = process.env.ARTEMIS_SESSIONS_DIR ?? new URL('../data/sessions', import.meta.url).pathname;
 const version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 const mode = colorMode(process.env, !!process.stdout.isTTY);

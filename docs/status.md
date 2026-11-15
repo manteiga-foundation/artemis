@@ -6,6 +6,11 @@ each slice that changes it.
 
 ## Built
 
+- A one-command install on macOS: `curl -fsSL .../install.sh | sh` installs Bun if missing, the
+  app into `~/.artemis/app` (staged, swapped in only when complete), Electron's binary and
+  Playwright's ffmpeg, and an `artemis` command on the PATH; profile and sessions live in
+  `~/.artemis` beside the app, and `artemis update` replaces the app and keeps them
+  (`docs/console.md`, "The one-command install"). Linux installs with a note; Windows refuses.
 - Two shown views, Browser (home after Engage) and Cosmos, with their palettes and the dive between
   them; the Page view is hidden, not removed. Pulling back from the Browser opens the Cosmos on the
   current page, selected and zoomed in on; an operator camera move cancels the first layout's
@@ -97,6 +102,17 @@ product manager, tester or UX reviewer actually has.
 5. Categorisation, then more autopilot. No LLMs or new dependencies for now; strong open-source
    tools are welcome. A small model for categorisation (and compliance mapping such as NIST CSF 2.0
    or PCI DSS) comes later, because hard-coded heuristics would put wrong labels in the database.
+
+For the installer, next: Linux and Windows (the owned browser verified on each; `install.ps1` for
+Windows), CI running `tests/install.test.ts` on a macOS runner too, and a tagged release so the
+default can move from `main` to the latest tag. The address is `https://artemis.n30.ai/install.sh`:
+GitHub Pages (legacy build from `main`, root) behind Cloudflare serves the repository's own
+`install.sh`, so it answers once the commit is pushed (404 before).
+
+Pre-existing flake, not from the installer: `tests/autopilot-flight.test.ts` "a one-address
+application whose menu is built on demand" opens 2 or 3 of the 4 `App?comp=` screens by click
+(expected 4); measured 0 of 3 passes on the committed tree 1ce324c and 1 of 3 with the installer
+slice, at load average 3-4. To investigate on its own.
 
 For the shell, in order: session save and restore through cookies behind one API; a snapshot of
 the site riding the dive; find in page, zoom, downloads, permission prompts, popups as tabs (today

@@ -19,15 +19,25 @@ export const LEVELS: Record<Exclude<Level, 0>, { name: string; does: string }> =
   3: { name: 'max', does: 'the next page as soon as one has loaded' }
 };
 
-export const USAGE = `Usage: bun run artemis [website] [--autopilot slow|regular|max]
+export function usage(command: string): string {
+  const update = command === 'artemis' ? `\n  ${command} update          fetch the latest Artemis; the profile and the sessions stay\n` : '\n';
+  return `Usage: ${command} [website] [--autopilot slow|regular|max]
 
   website                 the web application to open (example.com, https://app.example.com/login)
   -a, --autopilot <level> fly the site on its own once it has loaded: slow (about 10 s a page,
                           scrolling), regular (about 3 s a page) or max (as fast as pages load);
                           1, 2 and 3 work too. A hand on the site takes the controls back.
   -h, --help              this help
-
+${update}
 Environment: ARTEMIS_PORT, ARTEMIS_PROFILE_DIR, ARTEMIS_SESSIONS_DIR, ARTEMIS_SHELL_HIDDEN=1, NO_COLOR.`;
+}
+
+export const USAGE = usage('bun run artemis');
+
+/** `--help`: the usage, then where this run keeps the profile (logins) and the recorded sessions. */
+export function helpText(o: { command: string; profile: string; sessions: string }): string {
+  return `${usage(o.command)}\n\nProfile   ${o.profile}\nSessions  ${o.sessions}`;
+}
 
 const levelOf = (value: string): Level | null => {
   const v = value.trim().toLowerCase();
@@ -35,7 +45,7 @@ const levelOf = (value: string): Level | null => {
   return null;
 };
 
-export function parseArtemisArgs(argv: string[]): ArtemisArgs | { error: string } {
+export function parseArtemisArgs(argv: string[], command = 'bun run artemis'): ArtemisArgs | { error: string } {
   const sites: string[] = [];
   let autopilot: Level = 0;
   let help = false;
@@ -54,7 +64,7 @@ export function parseArtemisArgs(argv: string[]): ArtemisArgs | { error: string 
   if (sites.length > 1) return { error: `one website at a time: ${sites.join(', ')}` };
   const website = sites.length ? normalizeTarget(sites[0]) : null;
   if (sites.length && !website) return { error: `not a web address: "${sites[0]}"` };
-  if (autopilot && !website) return { error: `the autopilot needs a website to fly: bun run artemis <website> --autopilot ${LEVELS[autopilot as Exclude<Level, 0>].name}` };
+  if (autopilot && !website) return { error: `the autopilot needs a website to fly: ${command} <website> --autopilot ${LEVELS[autopilot as Exclude<Level, 0>].name}` };
   return { website, autopilot, help };
 }
 

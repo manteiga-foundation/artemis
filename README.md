@@ -59,15 +59,13 @@ git ignores; see `SECURITY.md`.
 
 ## Requirements
 
-- [Bun](https://bun.sh) 1.4 or newer (runtime, package manager, test runner).
-- A Chromium for Playwright (tests):
+macOS with `curl` and `tar` (both ship with it). The installer brings the rest: [Bun](https://bun.sh)
+1.4 or newer if it is missing, Electron and Playwright's ffmpeg. For development from a clone: Bun,
+and a Chromium for Playwright (tests):
 
 ```sh
 bunx playwright install chromium
 ```
-
-- Electron, for the browser Artemis owns, comes with `bun install`; its binary is fetched the first
-  time it starts.
 
 Artemis is developed and fully tested on macOS; the owned browser and the GPU flags used by the
 tests are tuned for it (Metal via ANGLE). On Linux the CI job runs the type-check, the build and the
@@ -75,8 +73,28 @@ unit tests; the owned browser and the browser tests have not been run there yet.
 
 ## Install
 
+One command:
+
 ```sh
-git clone git@github.com:manteiga-foundation/artemis.git
+curl -fsSL https://artemis.n30.ai/install.sh | sh
+```
+
+It installs Artemis into `~/.artemis` and the `artemis` command into `~/.local/bin` (added to your
+PATH once). Your profile (the logins of the sites you review) is `~/.artemis/profile` and the
+recorded sessions `~/.artemis/sessions`; `artemis update` fetches the latest version and keeps
+both. To remove Artemis, delete `~/.artemis` and `~/.local/bin/artemis`. The script is short and
+commented: read it first with `curl -fsSL <the same URL> -o install.sh`.
+
+```sh
+artemis example.com                  # open the website in the browser Artemis owns
+artemis example.com --autopilot max  # and fly it on its own
+artemis --help
+```
+
+For development, from a clone:
+
+```sh
+git clone https://github.com/manteiga-foundation/artemis.git
 cd artemis
 bun install
 ```
@@ -106,7 +124,8 @@ autopilot's flight, closing, the files saved. `NO_COLOR=1` for plain text.
 
 ![The launcher's terminal](docs/screenshots/terminal.png)
 
-Its profile (cookies, logins) persists under `data/shell-profile`, which is ignored by git.
+Its profile (cookies, logins) persists under `data/shell-profile`, which is ignored by git (the
+installed `artemis` keeps it in `~/.artemis/profile` instead).
 
 Experiments page (sounds, with a per-action picker): http://127.0.0.1:5173/debug
 

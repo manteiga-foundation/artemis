@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { autopilotNotices, certificateNotice, parseArtemisArgs, settleSpeeds, USAGE } from '../server/cli';
+import { autopilotNotices, certificateNotice, helpText, parseArtemisArgs, settleSpeeds, usage, USAGE } from '../server/cli';
 import { colorMode, notice, plain, welcome, type ColorMode } from '../server/terminal';
 
 // `bun run artemis [website] [--autopilot slow|regular|max]`: what the launcher accepts, and how
@@ -35,6 +35,18 @@ describe('the launcher’s arguments', () => {
     expect(parseArtemisArgs(['--help'])).toMatchObject({ help: true });
     expect(parseArtemisArgs(['-h'])).toMatchObject({ help: true });
     expect(USAGE).toContain('--autopilot slow|regular|max');
+  });
+
+  test('the usage names the command as it was run, and --help says where the profile and the sessions live', () => {
+    expect(USAGE).toStartWith('Usage: bun run artemis [website]');
+    expect(usage('artemis')).toStartWith('Usage: artemis [website]');
+    expect(usage('artemis')).toContain('artemis update');
+    expect(usage('bun run artemis')).not.toContain('artemis update');
+    const help = helpText({ command: 'artemis', profile: '/home/a/.artemis/profile', sessions: '/home/a/.artemis/sessions' });
+    expect(help).toStartWith(usage('artemis'));
+    expect(help).toMatch(/\nProfile\s+\/home\/a\/\.artemis\/profile\n/);
+    expect(help).toMatch(/\nSessions\s+\/home\/a\/\.artemis\/sessions$/);
+    expect(parseArtemisArgs(['--autopilot', 'max'], 'artemis')).toEqual({ error: 'the autopilot needs a website to fly: artemis <website> --autopilot max' });
   });
 
   test('the real command refuses before starting anything (exit 2, the reason and the usage); --help exits 0', () => {
