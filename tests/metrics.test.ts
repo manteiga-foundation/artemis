@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { summarizeFrames } from '../src/metrics';
-import { cpuBusyPct, parseVmStat, processTreeUsage, type CpuTimes } from '../server/machine';
+import { cpuBusyPct, parseMeminfo, parseVmStat, processTreeUsage, type CpuTimes } from '../server/machine';
 
 describe('frame statistics (in the page)', () => {
   test('fps and the worst frame come from the frame deltas of the last window', () => {
@@ -42,6 +42,18 @@ Pages occupied by compressor:                 150000.
     const m = parseVmStat(text);
     expect(m.pageSize).toBe(16384);
     expect(m.usedBytes).toBe((126423 + 1127750 + 150000) * 16384);
+  });
+
+  test('on Linux memory in use is total minus available (the kernel\'s own estimate), not minus free: the page cache is not in use', () => {
+    const text = `MemTotal:       16303104 kB
+MemFree:          812344 kB
+MemAvailable:    9817900 kB
+Buffers:          402100 kB
+Cached:          8001200 kB
+SwapTotal:       4194300 kB
+`;
+    expect(parseMeminfo(text)).toEqual({ totalBytes: 16303104 * 1024, usedBytes: (16303104 - 9817900) * 1024 });
+    expect(parseMeminfo('garbage')).toBeNull();
   });
 
   test('process tree usage sums cpu and rss over the browser process and everything under it', () => {

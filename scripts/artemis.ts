@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { launchShell } from '../server/shell';
+import { sandboxNotice } from '../server/platform';
 import { autopilotNotices, certificateNotice, consoleServerCommand, helpText, LEVELS, parseArtemisArgs, settleSpeeds, usage, type Level } from '../server/cli';
 import { colorMode, notice, welcome, type NoticeKind } from '../server/terminal';
 
@@ -70,6 +71,11 @@ if (!(await up())) {
 await mkdir(profile, { recursive: true });
 const shell = await launchShell({ appUrl, userDataDir: profile, sessionsDir });
 say('artemis', 'Owned browser open');
+// Linux without a sandbox Chromium can use: the site's pages run without it, and the terminal says so.
+if (shell.sandbox === 'off') {
+  const n = sandboxNotice(new URL('..', import.meta.url).pathname);
+  say(n.kind, n.text);
+}
 for (const db of shell.recovered) say('recovered', `Videos of an interrupted session put back beside ${db}`);
 
 // The session's files, the moment they exist. Labels share one width, so every path in the run

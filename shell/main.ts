@@ -99,6 +99,10 @@ app.whenReady().then(() => {
     state.icon = ICON.getSize();
   }
   const win = new BaseWindow({ width: 1440, height: 900, title: 'Artemis', backgroundColor: '#02061a', show: !HIDDEN, ...(ICON.isEmpty() ? {} : { icon: ICON }) });
+  // On Linux and Windows Electron puts its default menu (File, Edit, View, Window) inside the
+  // window, a bar a browser does not have, and the console then sat over it, 24 px off the site.
+  // macOS keeps its menu in the system's bar.
+  if (process.platform !== 'darwin') win.removeMenu();
   const site = new WebContentsView({
     webPreferences: { preload: path.join(SHELL_DIR, 'site-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegrationInSubFrames: true }
   });

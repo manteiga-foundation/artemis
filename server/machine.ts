@@ -30,6 +30,15 @@ export function parseVmStat(text: string): { pageSize: number; usedBytes: number
   return { pageSize, usedBytes: used * pageSize };
 }
 
+/** Linux `/proc/meminfo`: in use = total - available (the kernel counts reclaimable cache as available). */
+export function parseMeminfo(text: string): { totalBytes: number; usedBytes: number } | null {
+  const kb = (label: string) => Number(new RegExp(`^${label}:\\s+(\\d+) kB`, 'm').exec(text)?.[1] ?? NaN);
+  const total = kb('MemTotal');
+  const available = kb('MemAvailable');
+  if (!Number.isFinite(total) || !Number.isFinite(available)) return null;
+  return { totalBytes: total * 1024, usedBytes: (total - available) * 1024 };
+}
+
 /**
  * From `ps -axo pid=,ppid=,%cpu=,rss=,command=` output: the browser process launched with the given
  * profile directory and every process beneath it (GPU, renderers, utilities). rss is in KiB.
@@ -82,6 +91,10 @@ async function memoryInUse(): Promise<number> {
   if (process.platform === 'darwin') {
     const text = await run(['vm_stat']);
     if (text) return parseVmStat(text).usedBytes;
+  }
+  if (process.platform === 'linux') {
+    const info = parseMeminfo(await Bun.file('/proc/meminfo').text().catch(() => ''));
+    if (info) return info.usedBytes;
   }
   return os.totalmem() - os.freemem();
 }

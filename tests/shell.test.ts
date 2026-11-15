@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
 import { launchShell, type Shell } from '../server/shell';
+import { linuxSandbox, readSandboxFacts } from '../server/platform';
+import { createRequire } from 'node:module';
 import { startVite, type ViteServer } from './vite';
 import { nativeDialogBoxes } from './native-dialogs';
 
@@ -418,6 +420,43 @@ describe('the owned browser is an Electron shell', () => {
     try {
       const state = await shell.state();
       expect(state.icon).toEqual({ width: 1024, height: 1024 });
+    } finally {
+      await shell.close();
+    }
+  }, 30000);
+
+  test("on Linux the site runs in Chromium's sandbox whenever the system allows it, and the shell says when it cannot; elsewhere the platform's sandbox is untouched", async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      const noSandbox = await shell.app.evaluate(({ app }) => app.commandLine.hasSwitch('no-sandbox'));
+      if (process.platform === 'linux') {
+        const expected = linuxSandbox(readSandboxFacts(createRequire(import.meta.url)('electron') as string));
+        expect(shell.sandbox).toBe(expected);
+        expect(noSandbox).toBe(expected === 'off');
+      } else {
+        expect(shell.sandbox).toBeNull();
+        expect(noSandbox).toBe(false);
+      }
+    } finally {
+      await shell.close();
+    }
+  }, 30000);
+
+  test('the console covers exactly the window\'s content, before and after the window is resized: no menu bar of Electron\'s own sits in the window on Linux or Windows', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      const read = () =>
+        shell.app.evaluate(({ BaseWindow, BrowserWindow }) => {
+          const base = BaseWindow.getAllWindows().find((w) => !(w instanceof BrowserWindow))!;
+          return { content: base.getContentBounds(), console: BrowserWindow.getAllWindows()[0].getBounds(), menuBar: process.platform === 'darwin' ? false : base.isMenuBarVisible() };
+        });
+      const first = await read();
+      expect(first.menuBar).toBe(false);
+      expect(first.console).toEqual(first.content);
+      await shell.app.evaluate(({ BaseWindow, BrowserWindow }) => BaseWindow.getAllWindows().find((w) => !(w instanceof BrowserWindow))!.setBounds({ x: 60, y: 40, width: 1280, height: 800 }));
+      let after = await read();
+      for (let i = 0; i < 20 && after.content.width !== after.console.width; i++) after = (await Bun.sleep(100), await read());
+      expect(after.console).toEqual(after.content);
     } finally {
       await shell.close();
     }

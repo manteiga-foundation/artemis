@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { mkdir, rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { startMachineFeed } from './machine';
+import { linuxSandbox, missingLibraries, readSandboxFacts, shellLaunchArgs, type LinuxSandbox } from './platform';
 import { startRecorder, type Recorder } from './recorder';
 import { startSiteFeed } from './site-feed';
 import { startAutopilot, type AutopilotEvent } from './autopilot-driver';
@@ -61,6 +62,8 @@ export interface CertificateError {
 
 export interface Shell {
   app: ElectronApplication;
+  /** Linux: how Chromium's sandbox runs ('off': the system allows neither way). Null elsewhere: the platform's own. */
+  sandbox: LinuxSandbox | null;
   /** The Artemis console. */
   console: Page;
   /** The website's page (about:blank until the console engages). */
@@ -123,10 +126,20 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   const scratch = o.sessionsDir ? join(o.sessionsDir, `.recording-${launchedAt}`) : null;
   const video = scratch && o.record?.video !== false ? { dir: join(scratch, 'video'), size: VIDEO_SIZE } : undefined;
   if (scratch) await mkdir(scratch, { recursive: true });
+  const electronPath = require('electron') as string;
+  if (process.platform === 'linux') {
+    const ldd = Bun.spawnSync(['ldd', electronPath], { stdout: 'pipe', stderr: 'ignore' });
+    const missing = missingLibraries(ldd.stdout.toString());
+    if (missing.length) throw new Error(`Electron cannot start: this system lacks ${missing.join(', ')}; install the packages that provide them (a desktop install has them all)`);
+  }
+  // Playwright launches Electron with --no-sandbox on Linux unless asked: ask whenever the system
+  // lets Chromium sandbox the site's pages (server/platform.ts), or Electron aborts at launch.
+  const sandbox = process.platform === 'linux' ? linuxSandbox(readSandboxFacts(electronPath)) : null;
   const app = await _electron.launch({
-    executablePath: require('electron') as string,
+    executablePath: electronPath,
+    chromiumSandbox: sandbox !== 'off',
     // The profile flag on the command line lets the machine feed find Artemis's process tree.
-    args: [main, `--user-data-dir=${o.userDataDir}`],
+    args: [main, `--user-data-dir=${o.userDataDir}`, ...shellLaunchArgs(process.platform)],
     env: {
       ...(process.env as Record<string, string>),
       ARTEMIS_APP_URL: o.appUrl,
@@ -268,6 +281,7 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
 
   return {
     app,
+    sandbox,
     console: consolePage,
     site,
     recorder,

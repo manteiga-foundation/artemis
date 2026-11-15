@@ -152,12 +152,14 @@ describe('the one-command install', () => {
       const fresh = join(tmp, 'fresh');
       await mkdir(fresh, { recursive: true });
       const installer = join(tmp, 'bun-install.sh');
-      await writeFile(installer, `mkdir -p "$HOME/.bun/bin" && ln -s "${process.execPath}" "$HOME/.bun/bin/bun"\n`);
+      // Like the real one, it draws curl's download bar on stderr: that stays in the log.
+      await writeFile(installer, `echo '######################################## 100.0%' >&2\nmkdir -p "$HOME/.bun/bin" && ln -s "${process.execPath}" "$HOME/.bun/bin/bun"\n`);
       const bare = { HOME: fresh, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', ARTEMIS_BUN_INSTALLER: `file://${installer}`, SHELL: '/bin/bash' };
       const run = piped(await readFile(join(root, 'install.sh'), 'utf8'), bare);
       if (run.status !== 0) console.log(run.stdout, run.stderr);
       expect(run.status).toBe(0);
       expect(run.stdout).toContain('Installing Bun');
+      expect(run.stdout + run.stderr).not.toContain('100.0%');
       const rc = await readFile(join(fresh, process.platform === 'darwin' ? '.bash_profile' : '.bashrc'), 'utf8');
       expect(rc).toContain(join(fresh, '.local', 'bin'));
       const help = spawnSync(join(fresh, '.local', 'bin', 'artemis'), ['--help'], { env: env(bare), encoding: 'utf8' });

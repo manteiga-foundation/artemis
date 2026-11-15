@@ -59,7 +59,7 @@ main() {
 
   case "$(uname -s)" in
     Darwin) ;;
-    Linux) say "Linux: the install is supported; the owned browser has not been verified on Linux yet." ;;
+    Linux) ;;
     MINGW* | MSYS* | CYGWIN*) fail "Windows is not supported yet." ;;
     *) fail "unsupported system: $(uname -s)" ;;
   esac
@@ -68,13 +68,16 @@ main() {
 
   # 1. Bun
   mkdir -p "$home"
+  # Tools' own output goes to a log, shown only if a step fails.
+  log="$home/install.log"
+  : >"$log"
   bun="$(command -v bun 2>/dev/null || true)"
   [ -n "$bun" ] || { [ -x "$HOME/.bun/bin/bun" ] && bun="$HOME/.bun/bin/bun"; } || true
   if [ -z "$bun" ]; then
     step "Installing Bun (bun.sh)"
     command -v unzip >/dev/null 2>&1 || fail "unzip is needed to install Bun"
     curl -fsSL "${ARTEMIS_BUN_INSTALLER:-https://bun.sh/install}" -o "$home/.bun-install.sh" </dev/null || fail "Bun's installer could not be downloaded"
-    bash "$home/.bun-install.sh" </dev/null >/dev/null || { rm -f "$home/.bun-install.sh"; fail "Bun's installer failed"; }
+    bash "$home/.bun-install.sh" </dev/null >>"$log" 2>&1 || { rm -f "$home/.bun-install.sh"; cat "$log" >&2; fail "Bun's installer failed (the full output is above, and in $log)"; }
     rm -f "$home/.bun-install.sh"
     bun="$HOME/.bun/bin/bun"
     [ -x "$bun" ] || fail "Bun was not found after installing it"
@@ -98,10 +101,8 @@ main() {
   mv "$top" "$stage"
   rm -rf "$work"
 
-  # 3. Dependencies. Their tools' own output goes to a log, shown only if a step fails.
+  # 3. Dependencies, quietly (the log above).
   step "Installing dependencies"
-  log="$home/install.log"
-  : >"$log"
   quiet() {
     what="$1"
     shift

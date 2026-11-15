@@ -55,21 +55,30 @@ git ignores; see `SECURITY.md`.
 ![cosmos.gl](https://img.shields.io/badge/cosmos.gl-3.4-071441?style=flat-square)
 ![Playwright](https://img.shields.io/badge/Playwright-1.63-2EAD33?style=flat-square&logo=playwright&logoColor=white)
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-macOS%20%28Linux%20partial%29-333333?style=flat-square&logo=apple&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-333333?style=flat-square)
 
 ## Requirements
 
-macOS with `curl` and `tar` (both ship with it). The installer brings the rest: [Bun](https://bun.sh)
-1.4 or newer if it is missing, Electron and Playwright's ffmpeg. For development from a clone: Bun,
+macOS, or a Linux desktop (X11; a Wayland session through Xwayland), with `curl` and `tar`. The installer brings the rest:
+[Bun](https://bun.sh) 1.4 or newer if it is missing, Electron and Playwright's ffmpeg. For development from a clone: Bun,
 and a Chromium for Playwright (tests):
 
 ```sh
 bunx playwright install chromium
 ```
 
-Artemis is developed and fully tested on macOS; the owned browser and the GPU flags used by the
-tests are tuned for it (Metal via ANGLE). On Linux the CI job runs the type-check, the build and the
-unit tests; the owned browser and the browser tests have not been run there yet.
+Artemis is developed on macOS. On Linux the owned browser runs as an X11 client (through Xwayland
+in a Wayland session, where a native Wayland app cannot place the console over the site) and has
+been verified under X11 on Ubuntu 24.04 and in a Linux container (`docs/spikes/005-linux-desktop.md`;
+input under GNOME's Wayland compositor is not measured yet); the CI
+job runs the type-check, the build and the unit tests there. On Ubuntu 23.10 and later, AppArmor
+keeps Chromium's sandbox from Electron until it is allowed once:
+
+```sh
+sudo sh ~/.artemis/app/scripts/linux-sandbox.sh
+```
+
+Until then Artemis opens sites without the sandbox and says so at every launch.
 
 ## Install
 
