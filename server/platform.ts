@@ -9,8 +9,19 @@ export function shellLaunchArgs(platform: NodeJS.Platform): string[] {
   // Electron runs as a native Wayland app in a Wayland session (Ubuntu's default), and a Wayland
   // app cannot place one of its windows: the console landed wherever the compositor put it, not
   // over the site. Through Xwayland it is an X11 client and sits exactly over the content.
-  if (platform === 'linux') return ['--ozone-platform=x11'];
+  // Where there is no GPU (a virtual display, a VM) Chromium gives no WebGL at all, and the cosmos
+  // is WebGL: let it fall back to SwiftShader, on the CPU. With a GPU the switch changes nothing.
+  if (platform === 'linux') return ['--ozone-platform=x11', '--enable-unsafe-swiftshader'];
   return [];
+}
+
+/**
+ * Said once WebGL's status is known (`app.getGPUFeatureStatus().webgl`): drawn on the CPU, the
+ * site's pages get WebGL too, where Chrome on the same machine would give them none.
+ */
+export function softwareGlNotice(webglStatus: string): { kind: 'warn'; text: string } | null {
+  if (webglStatus === 'enabled' || webglStatus === 'enabled_readback') return null;
+  return { kind: 'warn', text: 'No GPU for WebGL: the cosmos, and any WebGL the site uses, are drawn on the CPU (SwiftShader), where Chrome would leave the site without WebGL' };
 }
 
 /**

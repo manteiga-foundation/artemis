@@ -11,13 +11,16 @@
 #      videos need it).
 #   4. The `artemis` command in ~/.local/bin, and that folder on the PATH of new terminals (one
 #      line in your shell's rc file, added once).
+#   5. On Linux where AppArmor keeps Chromium's sandbox from Electron (Ubuntu 23.10 and later): it
+#      asks once to run scripts/linux-sandbox.sh with sudo (an AppArmor profile for Artemis's
+#      Electron, nothing else). Say no and Artemis still works, without the sandbox, and says so.
 #
 # Your profile (the reviewed sites' logins) is ~/.artemis/profile and the recorded sessions are
 # ~/.artemis/sessions; an update (`artemis update`, or this command again) never touches them.
 # To remove Artemis: delete ~/.artemis and ~/.local/bin/artemis.
 #
-# Environment: ARTEMIS_VERSION (latest, the default: the newest release; a tag such as v0.2.0; or
-# main, the development branch), ARTEMIS_SOURCE (a tarball URL instead of GitHub's),
+# Environment: ARTEMIS_VERSION (latest, the default: the newest release; a tag such as v0.3.0; or
+# main, the development branch), ARTEMIS_SANDBOX (yes or no: answers step 5 without asking), ARTEMIS_SOURCE (a tarball URL instead of GitHub's),
 # ARTEMIS_BUN_INSTALLER (instead of https://bun.sh/install), NO_COLOR. A version goes to sh:
 #   curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=main sh
 #
@@ -164,10 +167,42 @@ EOF
     fi
   fi
 
+  # 5. Chromium's sandbox for the sites Artemis opens (Linux). Where the system lets only the
+  # programs an AppArmor profile names create user namespaces (Ubuntu 23.10 and later), Electron
+  # needs Artemis's profile: one sudo step, scripts/linux-sandbox.sh, kept across updates. Asked
+  # here once; without it Artemis opens sites unsandboxed and says so at every launch.
+  # ARTEMIS_SANDBOX=yes or no answers without asking.
+  proc="${ARTEMIS_PROC:-/proc}"
+  profile="${ARTEMIS_APPARMOR_DIR:-/etc/apparmor.d}/artemis-electron"
+  sandbox_script="$home/app/scripts/linux-sandbox.sh"
+  sandbox_note=""
+  if [ "$(cat "$proc/sys/kernel/apparmor_restrict_unprivileged_userns" 2>/dev/null || echo 0)" = 1 ] \
+    && ! grep -qF "$home/app/node_modules/electron/dist/electron" "$profile" 2>/dev/null; then
+    answer="${ARTEMIS_SANDBOX:-ask}"
+    if [ "$answer" = ask ]; then
+      answer=no
+      # The script itself is curl's pipe on standard input: ask on the terminal, if there is one.
+      if (: </dev/tty) 2>/dev/null; then
+        printf "Chromium's sandbox needs one sudo step here (an AppArmor profile for Artemis's browser). Turn it on now? [Y/n] " >/dev/tty
+        read -r reply </dev/tty || reply=n
+        case "$reply" in "" | y | Y | yes | Yes | YES) answer=yes ;; esac
+      fi
+    fi
+    # sudo asks for the password on the terminal itself.
+    if [ "$answer" = yes ] && "${ARTEMIS_SUDO:-sudo}" sh "$sandbox_script" </dev/null >"$log" 2>&1; then
+      step "Chromium's sandbox is on"
+    else
+      if [ "$answer" = yes ]; then cat "$log" >&2; fi
+      sandbox_note="sudo sh $sandbox_script"
+    fi
+    rm -f "$log"
+  fi
+
   say ""
   step "Artemis installed: $bin/artemis"
   say "  Profile   $home/profile"
   say "  Sessions  $home/sessions"
+  [ -z "$sandbox_note" ] || say "  Sandbox   off until you run: $sandbox_note"
   say ""
   if [ "$on_path" = 0 ]; then
     say "Open a new terminal (or: export PATH=\"$bin:\$PATH\"), then:"

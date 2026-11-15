@@ -38,6 +38,10 @@ const env = (extra: Record<string, string> = {}) => ({
   ARTEMIS_SOURCE: `file://${source}`,
   SHELL: '/bin/zsh',
   NO_COLOR: '1',
+  // A system whose user namespaces are open (no sandbox step) unless a test says otherwise, so a
+  // Linux runner's own AppArmor policy never makes the install ask.
+  ARTEMIS_PROC: join(tmp, 'proc-open'),
+  ARTEMIS_APPARMOR_DIR: join(tmp, 'apparmor'),
   ...extra
 });
 
@@ -66,6 +70,12 @@ beforeAll(async () => {
   const files = listed.stdout.split('\n').filter((f) => f && !/^scripts\/__/.test(f) && f !== 'rt-auth-probe.mjs' && existsSync(join(root, f)));
   const tree = join(tmp, 'tree', 'artemis-main');
   for (const f of files) await cp(join(root, f), join(tree, f), { recursive: true });
+  // /proc as the installer reads it: user namespaces open, or restricted to AppArmor's profiles.
+  for (const [name, restrict] of [['proc-open', '0'], ['proc-restricted', '1']]) {
+    await mkdir(join(tmp, name, 'sys', 'kernel'), { recursive: true });
+    await writeFile(join(tmp, name, 'sys', 'kernel', 'apparmor_restrict_unprivileged_userns'), `${restrict}\n`);
+  }
+  await mkdir(join(tmp, 'apparmor'), { recursive: true });
   source = join(tmp, 'artemis.tar.gz');
   const tar = spawnSync('tar', ['-czf', source, '-C', join(tmp, 'tree'), 'artemis-main']);
   expect(tar.status).toBe(0);
@@ -225,6 +235,45 @@ describe('the one-command install', () => {
       } finally {
         github.stop(true);
       }
+    },
+    INSTALL
+  );
+
+  test(
+    "where the system keeps Chromium's sandbox from Electron (Ubuntu 23.10+), it offers the one sudo step: yes runs scripts/linux-sandbox.sh, no names it, and once the profile is there it asks nothing",
+    async () => {
+      const script = await readFile(join(root, 'install.sh'), 'utf8');
+      // sudo stands in as a script that records what it was asked to run.
+      const asked = join(tmp, 'sudo-asked');
+      const sudo = join(tmp, 'sudo');
+      await writeFile(sudo, `#!/bin/sh\nprintf '%s\\n' "$*" >> "${asked}"\n`);
+      spawnSync('chmod', ['+x', sudo]);
+      const restricted = { ARTEMIS_PROC: join(tmp, 'proc-restricted'), ARTEMIS_SUDO: sudo };
+      const sandboxScript = join(home, 'app', 'scripts', 'linux-sandbox.sh');
+
+      const yes = piped(script, { ...restricted, ARTEMIS_SANDBOX: 'yes' });
+      if (yes.status !== 0) console.log(yes.stdout, yes.stderr);
+      expect(yes.status).toBe(0);
+      expect(await readFile(asked, 'utf8')).toBe(`sh ${sandboxScript}\n`);
+      expect(yes.stdout).toContain("Chromium's sandbox");
+
+      const no = piped(script, { ...restricted, ARTEMIS_SANDBOX: 'no' });
+      expect(no.status).toBe(0);
+      expect(await readFile(asked, 'utf8')).toBe(`sh ${sandboxScript}\n`);
+      expect(no.stdout).toContain(`sudo sh ${sandboxScript}`);
+
+      // The profile names this Electron: nothing to ask, nothing to say.
+      await writeFile(join(tmp, 'apparmor', 'artemis-electron'), `profile artemis-electron ${join(home, 'app', 'node_modules', 'electron', 'dist', 'electron')} flags=(unconfined) {\n  userns,\n}\n`);
+      const done = piped(script, { ...restricted, ARTEMIS_SANDBOX: 'yes' });
+      expect(done.status).toBe(0);
+      expect(await readFile(asked, 'utf8')).toBe(`sh ${sandboxScript}\n`);
+      expect(done.stdout).not.toContain('sandbox');
+      await rm(join(tmp, 'apparmor', 'artemis-electron'));
+
+      // Where nothing restricts user namespaces there is no step at all.
+      const open = piped(script, { ARTEMIS_SUDO: sudo, ARTEMIS_SANDBOX: 'yes' });
+      expect(open.status).toBe(0);
+      expect(open.stdout).not.toContain('sandbox');
     },
     INSTALL
   );

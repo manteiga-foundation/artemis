@@ -82,6 +82,20 @@ Findings, each one fixed or decided in the product:
    to create a browser context and every later test in the file failed in milliseconds (the same
    cascade seen on the Mac under load). Not chased here: spike 004 ran these 24/24 in its image.
 
+9. **No GPU, no WebGL.** On Xvfb (or any machine without a working GPU driver) Chromium gives no
+   WebGL (`webgl: disabled_off`), and the cosmos is WebGL: the header counted 485 nodes over an
+   empty stage. Measured on the VM: `--ignore-gpu-blocklist` gives WebGL on Mesa's llvmpipe but
+   also overrides the blocklist on real GPUs; `--enable-unsafe-swiftshader` falls back to
+   SwiftShader only where there is no GPU. The shell passes the latter on Linux, and the terminal
+   says when WebGL runs on the CPU (the site gets it too, where Chrome would give none).
+10. **The sandbox step at install.** The installer asks on `/dev/tty` (the script itself is curl's
+   pipe) and runs `scripts/linux-sandbox.sh` with sudo; verified on the VM through a pseudo-terminal
+   (`script`): asked, answered, the profile written, no question on the next install.
+
+The installed `artemis` on the VM's virtual display (`run-artemis.sh`): books.toscrape.com flown at
+max, 20 pages, the cosmos and the Scope map drawn at 3 to 8 FPS on four virtual CPUs, V into the
+Cosmos, Ctrl+C saving the database, HAR and both videos (`docs/screenshots/linux-*.png`).
+
 ## Verdict: PARTIAL
 
 Validated on X11, including a real Ubuntu 24.04 with its AppArmor policy: the shell, real click

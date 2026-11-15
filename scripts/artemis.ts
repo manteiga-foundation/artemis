@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { launchShell } from '../server/shell';
-import { sandboxNotice } from '../server/platform';
+import { sandboxNotice, softwareGlNotice } from '../server/platform';
 import { autopilotNotices, certificateNotice, consoleServerCommand, helpText, LEVELS, parseArtemisArgs, settleSpeeds, usage, type Level } from '../server/cli';
 import { colorMode, notice, welcome, type NoticeKind } from '../server/terminal';
 
@@ -75,6 +75,11 @@ say('artemis', 'Owned browser open');
 if (shell.sandbox === 'off') {
   const n = sandboxNotice(new URL('..', import.meta.url).pathname);
   say(n.kind, n.text);
+}
+// Linux without a GPU (a virtual display): WebGL on the CPU, for the site too; said once.
+if (process.platform === 'linux') {
+  const gl = softwareGlNotice(await shell.webgl().catch(() => 'enabled'));
+  if (gl) say(gl.kind, gl.text);
 }
 for (const db of shell.recovered) say('recovered', `Videos of an interrupted session put back beside ${db}`);
 

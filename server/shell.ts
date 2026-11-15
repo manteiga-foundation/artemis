@@ -64,6 +64,8 @@ export interface Shell {
   app: ElectronApplication;
   /** Linux: how Chromium's sandbox runs ('off': the system allows neither way). Null elsewhere: the platform's own. */
   sandbox: LinuxSandbox | null;
+  /** How WebGL is drawn, as Chromium says (`getGPUFeatureStatus().webgl`): 'enabled' on a GPU. */
+  webgl(): Promise<string>;
   /** The Artemis console. */
   console: Page;
   /** The website's page (about:blank until the console engages). */
@@ -282,6 +284,7 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   return {
     app,
     sandbox,
+    webgl: () => app.evaluate(({ app: electron }) => electron.getGPUFeatureStatus().webgl),
     console: consolePage,
     site,
     recorder,

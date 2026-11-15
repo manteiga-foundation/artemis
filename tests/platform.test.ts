@@ -1,11 +1,22 @@
 import { describe, expect, test } from 'bun:test';
-import { linuxSandbox, missingLibraries, sandboxNotice, shellLaunchArgs, type SandboxFacts } from '../server/platform';
+import { linuxSandbox, missingLibraries, sandboxNotice, shellLaunchArgs, softwareGlNotice, type SandboxFacts } from '../server/platform';
 
 // What the owned browser needs from each desktop system, decided in one place (server/platform.ts)
 // and measured in docs/spikes/005-linux-desktop.md.
 describe('the shell on each desktop system', () => {
   test('on Linux it runs as an X11 client (Xwayland under Wayland): a Wayland app cannot place the console over the site', () => {
     expect(shellLaunchArgs('linux')).toContain('--ozone-platform=x11');
+  });
+
+  test('on Linux WebGL falls back to the CPU (SwiftShader) where there is no GPU, as on a virtual display: the cosmos is WebGL', () => {
+    expect(shellLaunchArgs('linux')).toContain('--enable-unsafe-swiftshader');
+  });
+
+  test('when WebGL runs on the CPU the terminal says so: the site gets it there too, where Chrome would give none', () => {
+    expect(softwareGlNotice('enabled')).toBeNull();
+    const n = softwareGlNotice('unavailable_software')!;
+    expect(n.kind).toBe('warn');
+    expect(n.text).toContain('SwiftShader');
   });
 
   test('macOS and Windows keep Electron as it is', () => {

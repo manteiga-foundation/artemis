@@ -16,8 +16,10 @@ each slice that changes it.
   X input on Ubuntu 24.04 and in a container (the console exactly over the content, clicks through
   over the site and kept over the panels, also after the window manager moves and resizes it) and
   the whole shell test file passing there. Chromium's sandbox is on whenever the system allows it;
-  on Ubuntu 23.10+ that takes `sudo sh ~/.artemis/app/scripts/linux-sandbox.sh` once (an AppArmor
-  profile), and until then every launch warns that the site runs without it.
+  on Ubuntu 23.10+ the installer asks once and runs `scripts/linux-sandbox.sh` with sudo (an
+  AppArmor profile); said no, every launch warns that the site runs without it. On a virtual
+  display without a GPU WebGL falls back to the CPU (said in the terminal): the installed
+  `artemis` flew a real site on Ubuntu 24.04 under Xvfb with the cosmos drawn.
 - Two shown views, Browser (home after Engage) and Cosmos, with their palettes and the dive between
   them; the Page view is hidden, not removed. Pulling back from the Browser opens the Cosmos on the
   current page, selected and zoomed in on; an operator camera move cancels the first layout's
@@ -113,8 +115,8 @@ product manager, tester or UX reviewer actually has.
 For the installer, next: Windows (`install.ps1`, the owned browser verified there) and CI running
 `tests/install.test.ts` on a macOS runner too. For Linux, next: input under GNOME's own Wayland
 compositor (Mutter through Xwayland; only Weston was measured, and its headless Xwayland crashes on
-synthetic input), the maintainer's own run on a Linux desktop, the browser tests in CI under Xvfb
-(the container already runs them), and whether the installer should offer the sandbox step itself. The one-liner installs the
+synthetic input), the maintainer's own run on a Linux desktop, and the browser tests in CI under
+Xvfb (the container already runs them). The one-liner installs the
 latest GitHub Release (v0.2.0 first): a release ships by tagging, pushing the tag and publishing a
 Release for it (`gh release create vX.Y.Z`); a bare tag is not "latest". The address is `https://artemis.n30.ai/install.sh`:
 GitHub Pages (legacy build from `main`, root) behind Cloudflare serves the repository's own

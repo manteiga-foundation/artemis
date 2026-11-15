@@ -442,6 +442,16 @@ describe('the owned browser is an Electron shell', () => {
     }
   }, 30000);
 
+  test('the console has WebGL (the cosmos is drawn with it) even on a display without a GPU, and the shell reports how it is drawn', async () => {
+    const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
+    try {
+      expect(await shell.console.evaluate(() => !!document.createElement('canvas').getContext('webgl2'))).toBe(true);
+      expect(typeof (await shell.webgl())).toBe('string');
+    } finally {
+      await shell.close();
+    }
+  }, 30000);
+
   test('the console covers exactly the window\'s content, before and after the window is resized: no menu bar of Electron\'s own sits in the window on Linux or Windows', async () => {
     const shell = await launchShell({ appUrl: vite.url, userDataDir: profileDir, hidden: true });
     try {

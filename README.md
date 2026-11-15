@@ -72,13 +72,19 @@ in a Wayland session, where a native Wayland app cannot place the console over t
 been verified under X11 on Ubuntu 24.04 and in a Linux container (`docs/spikes/005-linux-desktop.md`;
 input under GNOME's Wayland compositor is not measured yet); the CI
 job runs the type-check, the build and the unit tests there. On Ubuntu 23.10 and later, AppArmor
-keeps Chromium's sandbox from Electron until it is allowed once:
+keeps Chromium's sandbox from Electron until it is allowed once: the installer asks, and runs
+`scripts/linux-sandbox.sh` with sudo (an AppArmor profile for Artemis's Electron, nothing else,
+kept across updates). Said no? Artemis still works, says at every launch that sites run without
+the sandbox, and the same step can be taken later:
 
 ```sh
 sudo sh ~/.artemis/app/scripts/linux-sandbox.sh
 ```
 
-Until then Artemis opens sites without the sandbox and says so at every launch.
+It runs on a virtual display too (Xvfb, a VM without a GPU): WebGL then falls back to the CPU and
+the terminal says so.
+
+<img src="docs/screenshots/linux-cosmos-1600x1000.png" alt="Artemis on Ubuntu 24.04 on a virtual display: the cosmos of a site the autopilot flew" width="720">
 
 ## Install
 
@@ -96,7 +102,7 @@ The script is short and commented: read it first with `curl -fsSL <the same URL>
 A given release, or the development branch:
 
 ```sh
-curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=v0.2.0 sh
+curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=v0.3.0 sh
 curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=main sh
 ```
 
