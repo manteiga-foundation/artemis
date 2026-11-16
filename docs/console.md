@@ -711,6 +711,12 @@ in PowerShell; it does what `install.sh` does, in `%USERPROFILE%\.artemis`:
   folder on the user PATH once (and on the current window's, so `artemis` answers at once).
   `artemis update` runs the installer again (`ARTEMIS_INSTALLER`, a URL or a local file).
 
+Verified live after the v0.4.0 release: the one-liner from artemis.n30.ai installed v0.4.0 in the
+VM in four lines of its own; the installed `artemis books.toscrape.com --autopilot max` opened the
+owned browser with the console exactly over the site and flew 30 pages, and one Ctrl+C in its
+console saved the database, HAR and both videos (25 s, the videos' encoding) with nothing left
+running (`docs/screenshots/windows-browser-autopilot.png`).
+
 What the code does differently there:
 
 - Paths: every `new URL(..., import.meta.url).pathname` became `fileURLToPath(...)` (the pathname
