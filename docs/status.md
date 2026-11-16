@@ -117,8 +117,8 @@ product manager, tester or UX reviewer actually has.
    tools are welcome. A small model for categorisation (and compliance mapping such as NIST CSF 2.0
    or PCI DSS) comes later, because hard-coded heuristics would put wrong labels in the database.
 
-For Windows, next: an x64 machine (only ARM64 was measured), the maintainer's own run, and the
-browser tests on a Windows CI runner. For the installer, next: CI running
+For Windows, next: an x64 machine (only ARM64 was measured; the maintainer confirmed it works
+there) and the browser tests on a Windows CI runner. For the installer, next: CI running
 `tests/install.test.ts` on a macOS runner too. For Linux, next: input under GNOME's own Wayland
 compositor (Mutter through Xwayland; only Weston was measured, and its headless Xwayland crashes on
 synthetic input), the maintainer's own run on a Linux desktop, and the browser tests in CI under

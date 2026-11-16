@@ -132,18 +132,20 @@ tokens, typed values) and stay on your machine; see `SECURITY.md`.
 - `curl` and `tar` (Windows has both). The installer brings the rest: Bun 1.4 or newer, Electron
   and Playwright's ffmpeg, and on Windows the Microsoft Visual C++ Runtime if it is missing.
 
+On Windows, Artemis is verified on Windows 11 ARM64, by the test suite and the maintainer's own
+use: the one-liner installs it, the autopilot flies, and Ctrl+C saves the whole session. x64 is not
+measured yet. Details: `docs/console.md`, section "Windows".
+
 On Linux, Artemis is verified on Ubuntu 24.04 and in a Linux container. Input under GNOME's
 Wayland session is not measured yet. It also runs on a virtual display (Xvfb, or a VM without a
 GPU). There, the cosmos is drawn by the CPU and the terminal says so. Details:
 `docs/console.md`, section "Linux".
 
-On Windows, Artemis is verified on Windows 11 ARM64 in a Parallels VM. Details:
-`docs/console.md`, section "Windows".
-
 <p align="center">
-  <img src="docs/screenshots/linux-cosmos-1600x1000.png" alt="Artemis on Ubuntu 24.04 on a virtual display: the cosmos of a site the autopilot flew" width="720">
+  <img src="docs/screenshots/windows-browser-autopilot.png" alt="Artemis on Windows 11: the console over a bookshop while the autopilot flies it at max" width="49%">
+  <img src="docs/screenshots/linux-cosmos-1600x1000.png" alt="Artemis on Ubuntu 24.04 on a virtual display: the cosmos of a site the autopilot flew" width="49%">
   <br>
-  <sub>Ubuntu 24.04 on a virtual display: the cosmos of a bookshop the autopilot flew.</sub>
+  <sub>Windows 11: the autopilot flying a bookshop at max. Ubuntu 24.04 on a virtual display: the cosmos of the same bookshop.</sub>
 </p>
 
 ## Development
