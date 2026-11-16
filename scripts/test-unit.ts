@@ -4,6 +4,7 @@
 // new test file lands in one set or the other without a list to keep up to date.
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const BROWSER_IMPORT = /^\s*import\b[^;]*?\bfrom\s+['"](playwright|\.\/vite)['"]/m;
 
@@ -21,7 +22,7 @@ export async function unitTestFiles(root: string): Promise<string[]> {
 }
 
 if (import.meta.main) {
-  const root = new URL('..', import.meta.url).pathname;
+  const root = fileURLToPath(new URL('..', import.meta.url));
   const files = await unitTestFiles(root);
   const run = Bun.spawnSync(['bun', 'test', '--timeout', '60000', ...files.map((f) => `./${f}`)], { cwd: root, stdio: ['inherit', 'inherit', 'inherit'] });
   process.exit(run.exitCode ?? 1);

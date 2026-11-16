@@ -2,7 +2,7 @@
 // docs/spikes/005-linux-desktop.md). The decisions are pure, so the unit tests read them without
 // Electron; `readSandboxFacts` is the one place that looks at the machine.
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 
 /** Electron switches the shell is launched with on this system, beyond Artemis's own. */
 export function shellLaunchArgs(platform: NodeJS.Platform): string[] {
@@ -88,6 +88,6 @@ export function missingLibraries(lddOutput: string): string[] {
 export function sandboxNotice(appRoot: string): { kind: 'warn'; text: string } {
   return {
     kind: 'warn',
-    text: `Chromium's sandbox is off: this system does not let Electron use it, so the site's pages run without it. Turn it on once with: sudo sh ${join(appRoot, 'scripts/linux-sandbox.sh')}`
+    text: `Chromium's sandbox is off: this system does not let Electron use it, so the site's pages run without it. Turn it on once with: sudo sh ${posix.join(appRoot, 'scripts/linux-sandbox.sh')}`
   };
 }

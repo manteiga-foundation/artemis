@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
@@ -8,6 +8,8 @@ import { linuxSandbox, readSandboxFacts } from '../server/platform';
 import { createRequire } from 'node:module';
 import { startVite, type ViteServer } from './vite';
 import { nativeDialogBoxes } from './native-dialogs';
+import { removeTree } from './remove-tree';
+import { stillRunning } from './kill-tree';
 
 // The owned browser is an Electron shell: the website runs as a genuine, unmodified top-level
 // Chromium page (a native view), and the unchanged console sits over it in a transparent window.
@@ -77,7 +79,7 @@ beforeAll(async () => {
 afterAll(async () => {
   vite?.stop();
   site.stop(true);
-  await rm(profileDir, { recursive: true, force: true });
+  await removeTree(profileDir);
 });
 
 async function engage(page: Page, target: string) {
@@ -343,6 +345,11 @@ describe('the owned browser is an Electron shell', () => {
     } finally {
       await shell.close();
     }
+    // Closed with the box still up (Ctrl+C in the terminal does this), nothing of the browser is
+    // left running: on Windows Electron outlived Playwright's close, which ended only the shell
+    // Playwright starts it through.
+    for (let i = 0; i < 50 && stillRunning(profileDir); i++) await Bun.sleep(100);
+    expect(stillRunning(profileDir)).toBe(false);
   }, 60000);
 
   test('when the console stops hearing the pointer (macOS stops forwarding after a click in the site), the site hands it back: under a panel or out of the site view, clicks return to the console', async () => {
@@ -529,13 +536,13 @@ describe('the owned browser is an Electron shell', () => {
   }, 60000);
 
   test('a site whose certificate Chromium cannot trust still opens (an old intranet host), and never silently: the shell lists the origin, the error and the issuer, and tells the Bun side', async () => {
-    const certs = await mkdtemp(join(tmpdir(), 'artemis-cert-'));
-    const made = Bun.spawnSync(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(certs, 'key.pem'), '-out', join(certs, 'cert.pem'), '-days', '2', '-subj', '/CN=localhost']);
-    expect(made.exitCode).toBe(0);
+    // A self-signed certificate for localhost, made once with openssl and kept as a fixture so the
+    // test needs no openssl (Windows has none). It is a test key and protects nothing.
+    const fixtures = join(import.meta.dir, 'fixtures');
     const legacy = Bun.serve({
       hostname: 'localhost',
       port: 0,
-      tls: { key: Bun.file(join(certs, 'key.pem')), cert: Bun.file(join(certs, 'cert.pem')) },
+      tls: { key: Bun.file(join(fixtures, 'self-signed-localhost.key.pem')), cert: Bun.file(join(fixtures, 'self-signed-localhost.cert.pem')) },
       fetch: () => new Response('<!doctype html><title>Legacy</title><h1>Legacy intranet</h1>', { headers: { 'content-type': 'text/html' } })
     });
     const origin = `https://localhost:${legacy.port}`;
@@ -557,7 +564,6 @@ describe('the owned browser is an Electron shell', () => {
     } finally {
       await shell.close();
       legacy.stop(true);
-      await rm(certs, { recursive: true, force: true });
     }
   }, 60000);
 });

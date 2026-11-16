@@ -2,6 +2,7 @@
 // The website is read like the console's own field (src/target.ts); the autopilot's levels are
 // the console's speeds (src/autopilot.ts: 1 slow, 2 regular, 3 max), so the flag only presses D
 // for the operator, as many times as the level says.
+import { posix, win32 } from 'node:path';
 import { normalizeTarget } from '../src/target';
 import type { CertificateError } from './shell';
 
@@ -40,7 +41,9 @@ export const USAGE = usage('bun run artemis');
  * need for Node on the machine), with warnings only so the launcher's notifications stay readable.
  */
 export function consoleServerCommand(bun: string, port: number, appRoot: string): string[] {
-  return [bun, `${appRoot.replace(/\/$/, '')}/node_modules/vite/bin/vite.js`, '--host', '127.0.0.1', '--port', String(port), '--strictPort', '--logLevel', 'warn'];
+  // The app's own path style (a Windows home gives C:\...), whatever system reads this.
+  const path = /^[A-Za-z]:[\\/]|^\\\\/.test(appRoot) ? win32 : posix;
+  return [bun, path.join(appRoot, 'node_modules', 'vite', 'bin', 'vite.js'), '--host', '127.0.0.1', '--port', String(port), '--strictPort', '--logLevel', 'warn'];
 }
 
 /** `--help`: the usage, then where this run keeps the profile (logins) and the recorded sessions. */

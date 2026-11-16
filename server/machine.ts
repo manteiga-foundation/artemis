@@ -99,11 +99,25 @@ async function memoryInUse(): Promise<number> {
   return os.totalmem() - os.freemem();
 }
 
+/** One of Electron's processes as `app.getAppMetrics()` reports it: percent of one core, working set in KB. */
+export type AppMetric = { cpu: number; workingSetKB: number };
+export type TreeUsage = { processes: number; cpuPct: number; rssBytes: number };
+
+/** Windows has no `ps`: Artemis's process tree is Electron's own process list. */
+export function appMetricsUsage(metrics: AppMetric[]): TreeUsage {
+  return {
+    processes: metrics.length,
+    cpuPct: metrics.reduce((s, m) => s + m.cpu, 0),
+    rssBytes: metrics.reduce((s, m) => s + m.workingSetKB, 0) * 1024
+  };
+}
+
 /** One sample; `prev` is the previous CPU-times snapshot (pass the one returned last time). */
-export async function sampleMachine(prev: CpuTimes[], userDataDir: string): Promise<{ stats: MachineStats; cpu: CpuTimes[] }> {
+export async function sampleMachine(prev: CpuTimes[], userDataDir: string, appMetrics?: () => Promise<AppMetric[]>): Promise<{ stats: MachineStats; cpu: CpuTimes[] }> {
   const cpu = cpuTimes();
-  const [used, ps] = await Promise.all([memoryInUse(), run(['ps', '-axo', 'pid=,ppid=,%cpu=,rss=,command='])]);
-  const tree = processTreeUsage(ps, userDataDir);
+  const treeOf = async (): Promise<TreeUsage> =>
+    appMetrics && process.platform === 'win32' ? appMetricsUsage(await appMetrics()) : processTreeUsage(await run(['ps', '-axo', 'pid=,ppid=,%cpu=,rss=,command=']), userDataDir);
+  const [used, tree] = await Promise.all([memoryInUse(), treeOf()]);
   const total = os.totalmem();
   const gb = (b: number) => Math.round((b / 1073741824) * 10) / 10;
   return {
@@ -123,7 +137,7 @@ export async function sampleMachine(prev: CpuTimes[], userDataDir: string): Prom
 }
 
 /** Push machine stats into the console page every `intervalMs`. Returns a stop function. */
-export function startMachineFeed(page: Page, userDataDir: string, intervalMs = 2000): () => void {
+export function startMachineFeed(page: Page, userDataDir: string, intervalMs = 2000, appMetrics?: () => Promise<AppMetric[]>): () => void {
   let prev = cpuTimes();
   let stopped = false;
   const loop = async () => {
@@ -131,7 +145,7 @@ export function startMachineFeed(page: Page, userDataDir: string, intervalMs = 2
       await Bun.sleep(intervalMs);
       if (stopped) break;
       try {
-        const { stats, cpu } = await sampleMachine(prev, userDataDir);
+        const { stats, cpu } = await sampleMachine(prev, userDataDir, appMetrics);
         prev = cpu;
         await page.evaluate(`window.dispatchEvent(new CustomEvent(${JSON.stringify(MACHINE_EVENT)}, { detail: ${JSON.stringify(stats)} }))`);
       } catch {

@@ -10,7 +10,12 @@ each slice that changes it.
   app into `~/.artemis/app` (staged, swapped in only when complete), Electron's binary and
   Playwright's ffmpeg, and an `artemis` command on the PATH; profile and sessions live in
   `~/.artemis` beside the app, and `artemis update` replaces the app and keeps them
-  (`docs/console.md`, "The one-command install"). Windows refuses.
+  (`docs/console.md`, "The one-command install").
+- Windows (`docs/console.md` "Windows"): `irm https://artemis.n30.ai/install.ps1 | iex` installs
+  the same way into `%USERPROFILE%\.artemis` (and the Microsoft Visual C++ Runtime, asked first,
+  where it is missing); verified on Windows 11 ARM64 in a Parallels VM: the shell's test file whole,
+  the installer's own test, and one real Ctrl+C in the console saving the database, HAR and both
+  videos.
 - Linux (`docs/spikes/005-linux-desktop.md`, `docs/console.md` "Linux"): the owned browser runs as
   an X11 client (through Xwayland under Wayland) with no menu bar in its window; verified with real
   X input on Ubuntu 24.04 and in a container (the console exactly over the content, clicks through
@@ -112,7 +117,8 @@ product manager, tester or UX reviewer actually has.
    tools are welcome. A small model for categorisation (and compliance mapping such as NIST CSF 2.0
    or PCI DSS) comes later, because hard-coded heuristics would put wrong labels in the database.
 
-For the installer, next: Windows (`install.ps1`, the owned browser verified there) and CI running
+For Windows, next: an x64 machine (only ARM64 was measured), the maintainer's own run, and the
+browser tests on a Windows CI runner. For the installer, next: CI running
 `tests/install.test.ts` on a macOS runner too. For Linux, next: input under GNOME's own Wayland
 compositor (Mutter through Xwayland; only Weston was measured, and its headless Xwayland crashes on
 synthetic input), the maintainer's own run on a Linux desktop, and the browser tests in CI under

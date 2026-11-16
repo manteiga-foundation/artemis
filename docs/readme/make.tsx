@@ -11,14 +11,15 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { GiFamilyTree, GiRadarSweep, GiSave } from 'react-icons/gi';
 import { YokeIcon } from '../../src/icons';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const skipDive = process.argv.includes('--skip-dive');
 const port = args[0] ?? '5173';
 const site = args[1] ?? 'https://en.wikipedia.org/wiki/Main_Page';
-const dir = new URL('.', import.meta.url).pathname;
-const nm = new URL('../../node_modules/', import.meta.url).pathname;
-const docs = new URL('../screenshots/', import.meta.url).pathname;
+const dir = fileURLToPath(new URL('.', import.meta.url));
+const nm = fileURLToPath(new URL('../../node_modules/', import.meta.url));
+const docs = fileURLToPath(new URL('../screenshots/', import.meta.url));
 const work = await mkdtemp(join(tmpdir(), 'artemis-readme-'));
 const shots = `file://${work}/`;
 const icons: Record<string, string> = Object.fromEntries(
@@ -209,7 +210,7 @@ const pages: Record<string, { w: number; h: number; body: string }> = {
       <h1 style="font-size:54px">Understand the <em>depths</em> of a web application by using it.</h1>
       <p style="font-size:19px;line-height:1.45;color:${C.frost};max-width:540px">A genuine browser, an autopilot that flies the application, a live map of every page and flow, and sessions you can take to any tool.</p>
     </div>
-    <div style="position:absolute;left:64px;bottom:44px">${foot('<i></i><span>macOS · Linux</span>')}</div>
+    <div style="position:absolute;left:64px;bottom:44px">${foot('<i></i><span>macOS · Linux · Windows</span>')}</div>
     <div class="label" style="position:absolute;right:32px;bottom:34px;font-size:10px;color:${C.sky}">Cosmos · emulated network</div>` },
   features: { w: 1280, h: 420, body: `
     <div style="position:absolute;left:48px;top:36px;right:48px;display:grid;grid-template-columns:repeat(4,1fr);gap:26px">

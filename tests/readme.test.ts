@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // The README opens with the visuals (hero, the dive, the features) and keeps the technical sections
 // under them; every image it shows is in the repository and light enough for GitHub to serve.
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 const readme = await Bun.file(join(root, 'README.md')).text();
 const images = [...readme.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)|<img[^>]+src="([^"]+)"/g)].map((m) => m[1] ?? m[2]).filter((src) => !/^https?:/.test(src));
 

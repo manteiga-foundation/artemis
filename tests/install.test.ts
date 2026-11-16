@@ -4,6 +4,8 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { removeTree } from './remove-tree';
 
 // The one-command install, as a new user runs it: `curl -fsSL .../install.sh | sh`. The script
 // arrives on standard input, fetches Artemis as a release tarball (here a tarball of this working
@@ -12,7 +14,7 @@ import { join } from 'node:path';
 // app and never touches the profile (the reviewed sites' logins) or the recorded sessions.
 // Bun and the dependency caches are the machine's own, so a second run takes seconds.
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 const INSTALL = 300_000;
 
 let tmp: string;
@@ -59,6 +61,7 @@ const artemis = (args: string[], extra?: Record<string, string>) =>
   spawnSync(join(bin, 'artemis'), args, { env: env(extra), encoding: 'utf8', timeout: INSTALL });
 
 beforeAll(async () => {
+  if (process.platform === 'win32') return;
   tmp = await mkdtemp(join(tmpdir(), 'artemis-install-'));
   user = join(tmp, 'user');
   home = join(user, '.artemis');
@@ -82,10 +85,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (tmp) await rm(tmp, { recursive: true, force: true });
+  if (tmp) await removeTree(tmp);
 });
 
-describe('the one-command install', () => {
+// install.sh is for macOS and Linux; install-windows.test.ts covers install.ps1.
+describe.skipIf(process.platform === 'win32')('the one-command install', () => {
   test('one address everywhere: the README, the script’s own header and `artemis update` use artemis.n30.ai', async () => {
     const url = 'https://artemis.n30.ai/install.sh';
     const readme = await readFile(join(root, 'README.md'), 'utf8');

@@ -14,6 +14,12 @@ On macOS or Linux, one command:
 curl -fsSL https://artemis.n30.ai/install.sh | sh
 ```
 
+On Windows 10 or 11, in PowerShell:
+
+```powershell
+irm https://artemis.n30.ai/install.ps1 | iex
+```
+
 Then open a website:
 
 ```sh
@@ -28,11 +34,17 @@ artemis example.com --autopilot max  # and let the autopilot fly it
   <tr><td><b>Removes</b></td><td>Delete <code>~/.artemis</code> and <code>~/.local/bin/artemis</code></td></tr>
 </table>
 
+On Windows the same folders live in `%USERPROFILE%\.artemis`, and the command in
+`.artemis\bin`, which the installer adds to your user PATH.
+
 > [!NOTE]
 > On Ubuntu 23.10 and later, the installer asks once for sudo so that Chromium's sandbox can run.
 > It adds an AppArmor profile for Artemis's browser and nothing else. If you decline, Artemis
 > still works and reminds you at each launch. To turn the sandbox on later:
 > `sudo sh ~/.artemis/app/scripts/linux-sandbox.sh`
+>
+> On Windows, if the Microsoft Visual C++ Runtime is missing, the installer asks before it
+> installs Microsoft's own package. Windows then shows one administrator prompt.
 
 <details>
 <summary>Read the script first, or install a given version</summary>
@@ -47,8 +59,14 @@ curl -fsSL https://artemis.n30.ai/install.sh -o install.sh && less install.sh
 A given release, or the development branch:
 
 ```sh
-curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=v0.3.0 sh
+curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=v0.4.0 sh
 curl -fsSL https://artemis.n30.ai/install.sh | ARTEMIS_VERSION=main sh
+```
+
+On Windows, set the version first:
+
+```powershell
+$env:ARTEMIS_VERSION = 'v0.4.0'; irm https://artemis.n30.ai/install.ps1 | iex
 ```
 
 To work on Artemis itself, see [Development](#development).
@@ -80,7 +98,7 @@ To work on Artemis itself, see [Development](#development).
 <p>
   <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-e0b85c?style=flat-square">
   <a href="https://github.com/manteiga-foundation/artemis/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/manteiga-foundation/artemis?style=flat-square&color=005d2c&label=release"></a>
-  <img alt="Platform: macOS and Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-333333?style=flat-square">
+  <img alt="Platform: macOS, Linux and Windows" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-333333?style=flat-square">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1034a6?style=flat-square">
   <a href="https://github.com/manteiga-foundation/artemis/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/manteiga-foundation/artemis/actions/workflows/ci.yml/badge.svg"></a>
 </p>
@@ -109,14 +127,18 @@ tokens, typed values) and stay on your machine; see `SECURITY.md`.
 
 ## Requirements
 
-- **macOS**, or a **Linux desktop**: X11, or Wayland through Xwayland.
-- `curl` and `tar`. The installer brings the rest: Bun 1.4 or newer, Electron and Playwright's
-  ffmpeg.
+- **macOS**; a **Linux desktop**: X11, or Wayland through Xwayland; or **Windows 10** (1803 or
+  later) or **Windows 11**, x64 or ARM64.
+- `curl` and `tar` (Windows has both). The installer brings the rest: Bun 1.4 or newer, Electron
+  and Playwright's ffmpeg, and on Windows the Microsoft Visual C++ Runtime if it is missing.
 
 On Linux, Artemis is verified on Ubuntu 24.04 and in a Linux container. Input under GNOME's
 Wayland session is not measured yet. It also runs on a virtual display (Xvfb, or a VM without a
 GPU). There, the cosmos is drawn by the CPU and the terminal says so. Details:
 `docs/console.md`, section "Linux".
+
+On Windows, Artemis is verified on Windows 11 ARM64 in a Parallels VM. Details:
+`docs/console.md`, section "Windows".
 
 <p align="center">
   <img src="docs/screenshots/linux-cosmos-1600x1000.png" alt="Artemis on Ubuntu 24.04 on a virtual display: the cosmos of a site the autopilot flew" width="720">

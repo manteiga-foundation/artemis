@@ -7,9 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { launchShell } from '../server/shell';
+import { fileURLToPath } from 'node:url';
 
 const port = Number(process.argv[2] ?? 5173);
-const outDir = process.argv[3] ?? new URL('../docs/screenshots', import.meta.url).pathname;
+const outDir = process.argv[3] ?? fileURLToPath(new URL('../docs/screenshots', import.meta.url));
 const target = process.argv[4] ?? 'https://example.com/';
 await mkdir(outDir, { recursive: true });
 const profile = await mkdtemp(join(tmpdir(), 'artemis-shots-'));

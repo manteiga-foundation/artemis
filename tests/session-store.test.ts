@@ -1,7 +1,9 @@
+import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { copyFile, mkdir, rm } from 'node:fs/promises';
+import { copyFile, mkdir } from 'node:fs/promises';
 import { openSessionStore, keepsBody, isSensitiveHeader, inScope, MAX_BODY_BYTES, type SessionStore } from '../server/session-store';
+import { removeTree } from './remove-tree';
 
 // The session store: one SQLite database per session holding only observations (visits, actions,
 // requests, responses, bodies). Nothing here guesses what a page is.
@@ -147,7 +149,7 @@ describe('the session store', () => {
   });
 
   test('the session file is an ordinary SQLite database another process can open', () => {
-    const path = `${process.env.TMPDIR ?? '/tmp'}/artemis-store-${Date.now()}.sqlite`;
+    const path = `${tmpdir()}/artemis-store-${Date.now()}.sqlite`;
     const s = openSessionStore(path, { target: 'https://shop.example/', startedAt: T0 });
     s.startVisit({ t: T0, url: 'https://shop.example/', kind: 'document' });
     s.close();
@@ -159,7 +161,7 @@ describe('the session store', () => {
   test('a checkpoint puts everything written so far into the session file itself: a copy of the file alone holds it', async () => {
     // Writes land in the `-wal` side file first; a tool that copies or uploads only the
     // `.sqlite` would otherwise see an empty database until Artemis closes.
-    const dir = `${process.env.TMPDIR ?? '/tmp'}/artemis-ckpt-${Date.now()}`;
+    const dir = `${tmpdir()}/artemis-ckpt-${Date.now()}`;
     await mkdir(dir, { recursive: true });
     const s = openSessionStore(`${dir}/live.sqlite`, { target: 'https://shop.example/', startedAt: T0 });
     try {
@@ -179,7 +181,7 @@ describe('the session store', () => {
       }
     } finally {
       s.close();
-      await rm(dir, { recursive: true, force: true });
+      await removeTree(dir);
     }
   });
 });

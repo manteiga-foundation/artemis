@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openSessionStore } from '../server/session-store';
 import { recoverRecordings, writeManifest } from '../server/recordings';
+import { removeTree } from './remove-tree';
 
 // A session's videos are written while the app runs and only move next to its database when
 // Artemis closes properly. When it does not (killed, crashed, power cut), the next launch puts
@@ -15,7 +16,7 @@ beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'artemis-recover-'));
 });
 afterEach(async () => {
-  await rm(dir, { recursive: true, force: true });
+  await removeTree(dir);
 });
 
 const folder = async (name: string, files: Record<string, string>) => {

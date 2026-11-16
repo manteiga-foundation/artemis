@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { autopilotNotices, certificateNotice, consoleServerCommand, helpText, parseArtemisArgs, settleSpeeds, usage, USAGE } from '../server/cli';
 import { colorMode, notice, plain, welcome, type ColorMode } from '../server/terminal';
+import { fileURLToPath } from 'node:url';
 
 // `bun run artemis [website] [--autopilot slow|regular|max]`: what the launcher accepts, and how
 // it looks in the terminal (a large welcome, then one notification per event).
@@ -50,7 +51,7 @@ describe('the launcher’s arguments', () => {
   });
 
   test('the real command refuses before starting anything (exit 2, the reason and the usage); --help exits 0', () => {
-    const run = (...args: string[]) => Bun.spawnSync(['bun', 'run', 'scripts/artemis.ts', ...args], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, ARTEMIS_PORT: '1' } });
+    const run = (...args: string[]) => Bun.spawnSync(['bun', 'run', 'scripts/artemis.ts', ...args], { cwd: fileURLToPath(new URL('..', import.meta.url)), env: { ...process.env, ARTEMIS_PORT: '1' } });
     const refused = run('--autopilot', 'max');
     expect(refused.exitCode).toBe(2);
     expect(refused.stderr.toString()).toContain('Artemis: the autopilot needs a website to fly');
@@ -65,6 +66,8 @@ describe('the launcher’s arguments', () => {
     expect(cmd).toEqual(['/opt/bun/bin/bun', '/home/a/.artemis/app/node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5179', '--strictPort', '--logLevel', 'warn']);
     expect(cmd.filter((a) => a === '--port')).toHaveLength(1);
     expect(cmd).not.toContain('run');
+    // A Windows home gives a Windows path, not one with a stray slash.
+    expect(consoleServerCommand('C:\\Users\\a\\.bun\\bin\\bun.exe', 5179, 'C:\\Users\\a\\.artemis\\app\\')[1]).toBe('C:\\Users\\a\\.artemis\\app\\node_modules\\vite\\bin\\vite.js');
   });
 });
 

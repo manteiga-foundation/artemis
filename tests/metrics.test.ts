@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { summarizeFrames } from '../src/metrics';
-import { cpuBusyPct, parseMeminfo, parseVmStat, processTreeUsage, type CpuTimes } from '../server/machine';
+import { appMetricsUsage, cpuBusyPct, parseMeminfo, parseVmStat, processTreeUsage, type CpuTimes } from '../server/machine';
 
 describe('frame statistics (in the page)', () => {
   test('fps and the worst frame come from the frame deltas of the last window', () => {
@@ -69,5 +69,15 @@ SwapTotal:       4194300 kB
     expect(u.cpuPct).toBeCloseTo(23.5);
     expect(u.rssBytes).toBe((50000 + 80000 + 120000 + 5000) * 1024);
     expect(processTreeUsage(ps, '/tmp/missing')).toEqual({ processes: 0, cpuPct: 0, rssBytes: 0 });
+  });
+
+  test('on Windows (no ps) the tree is Electron\'s own process list: CPU percent and working set (KB) summed', () => {
+    const metrics = [
+      { cpu: 3.5, workingSetKB: 120000 },
+      { cpu: 12, workingSetKB: 300000 },
+      { cpu: 0.5, workingSetKB: 40000 }
+    ];
+    expect(appMetricsUsage(metrics)).toEqual({ processes: 3, cpuPct: 16, rssBytes: 460000 * 1024 });
+    expect(appMetricsUsage([])).toEqual({ processes: 0, cpuPct: 0, rssBytes: 0 });
   });
 });

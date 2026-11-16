@@ -2,12 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { needsBrowser, unitTestFiles } from '../scripts/test-unit';
+import { fileURLToPath } from 'node:url';
 
 // The continuous integration job runs on Linux without a GPU, a Chromium or an Electron: it
 // type-checks, builds and runs every test file that starts neither a browser nor a Vite server.
 // The rest (real Chromium, the Electron shell) stays local; a new test file is sorted by what it
 // imports, so it can never fall out of both sets.
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 
 describe('the tests the CI job runs', () => {
   test('a test file that imports Playwright or the isolated Vite server needs a browser; others do not', () => {

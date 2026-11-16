@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { linuxSandbox, missingLibraries, sandboxNotice, shellLaunchArgs, softwareGlNotice, type SandboxFacts } from '../server/platform';
 
 // What the owned browser needs from each desktop system, decided in one place (server/platform.ts)
 // and measured in docs/spikes/005-linux-desktop.md.
+const root = fileURLToPath(new URL('..', import.meta.url));
 describe('the shell on each desktop system', () => {
   test('on Linux it runs as an X11 client (Xwayland under Wayland): a Wayland app cannot place the console over the site', () => {
     expect(shellLaunchArgs('linux')).toContain('--ozone-platform=x11');
@@ -22,6 +26,18 @@ describe('the shell on each desktop system', () => {
   test('macOS and Windows keep Electron as it is', () => {
     expect(shellLaunchArgs('darwin')).toEqual([]);
     expect(shellLaunchArgs('win32')).toEqual([]);
+  });
+
+  test('no file path is made from a URL\'s pathname: on Windows that gives /C:/..., a path to nowhere', async () => {
+    const offenders: string[] = [];
+    for (const dir of ['server', 'scripts', 'shell', 'tests', 'docs/readme']) {
+      for (const name of await readdir(join(root, dir))) {
+        if (!/\.tsx?$/.test(name)) continue;
+        const text = await readFile(join(root, dir, name), 'utf8');
+        if (/import\.meta\.url\)\.pathname/.test(text)) offenders.push(`${dir}/${name}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
 

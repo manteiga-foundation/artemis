@@ -22,13 +22,14 @@ import { launchShell } from '../server/shell';
 import { sandboxNotice, softwareGlNotice } from '../server/platform';
 import { autopilotNotices, certificateNotice, consoleServerCommand, helpText, LEVELS, parseArtemisArgs, settleSpeeds, usage, type Level } from '../server/cli';
 import { colorMode, notice, welcome, type NoticeKind } from '../server/terminal';
+import { fileURLToPath } from 'node:url';
 
 // Installed by install.sh, the `artemis` command sets ARTEMIS_COMMAND and ARTEMIS_HOME: the
 // profile and the sessions then live in that home, beside the app an update replaces.
 const command = process.env.ARTEMIS_COMMAND || 'bun run artemis';
 const home = process.env.ARTEMIS_HOME;
-const profile = process.env.ARTEMIS_PROFILE_DIR ?? (home ? join(home, 'profile') : new URL('../data/shell-profile', import.meta.url).pathname);
-const sessionsDir = process.env.ARTEMIS_SESSIONS_DIR ?? (home ? join(home, 'sessions') : new URL('../data/sessions', import.meta.url).pathname);
+const profile = process.env.ARTEMIS_PROFILE_DIR ?? (home ? join(home, 'profile') : fileURLToPath(new URL('../data/shell-profile', import.meta.url)));
+const sessionsDir = process.env.ARTEMIS_SESSIONS_DIR ?? (home ? join(home, 'sessions') : fileURLToPath(new URL('../data/sessions', import.meta.url)));
 
 const args = parseArtemisArgs(process.argv.slice(2), command);
 if ('error' in args) {
@@ -54,7 +55,7 @@ let vite: ReturnType<typeof Bun.spawn> | null = null;
 if (!(await up())) {
   say('artemis', `Starting the console on ${appUrl}`);
   // Vite's own banner and per-request lines would bury the notifications; warnings still show.
-  const appRoot = new URL('..', import.meta.url).pathname;
+  const appRoot = fileURLToPath(new URL('..', import.meta.url));
   vite = Bun.spawn(consoleServerCommand(process.execPath, port, appRoot), {
     cwd: appRoot,
     stdout: 'inherit',
@@ -73,7 +74,7 @@ const shell = await launchShell({ appUrl, userDataDir: profile, sessionsDir });
 say('artemis', 'Owned browser open');
 // Linux without a sandbox Chromium can use: the site's pages run without it, and the terminal says so.
 if (shell.sandbox === 'off') {
-  const n = sandboxNotice(new URL('..', import.meta.url).pathname);
+  const n = sandboxNotice(fileURLToPath(new URL('..', import.meta.url)));
   say(n.kind, n.text);
 }
 // Linux without a GPU (a virtual display): WebGL on the CPU, for the site too; said once.

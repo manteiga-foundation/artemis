@@ -13,10 +13,11 @@ import { startAutopilot, type AutopilotEvent } from './autopilot-driver';
 import { watchSiteDialogs } from './site-dialogs';
 import { addArtifacts } from './session-store';
 import { recoverRecordings, writeManifest } from './recordings';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const SHELL_SRC = new URL('../shell/', import.meta.url).pathname;
-export const SHELL_OUT = new URL('../dist-shell/', import.meta.url).pathname;
+const SHELL_SRC = fileURLToPath(new URL('../shell/', import.meta.url));
+export const SHELL_OUT = fileURLToPath(new URL('../dist-shell/', import.meta.url));
 /** The app icon (rendered from public/icon.svg by scripts/icon.ts). */
 export const SHELL_ICON = SHELL_SRC + 'icon.png';
 
@@ -115,7 +116,7 @@ export interface SessionFiles {
 
 export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
   // Electron waits indefinitely on a console page that cannot load: check first, and say why.
-  const answers = await fetch(o.appUrl, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok).catch(() => false);
+  const answers = await fetch(o.appUrl, { signal: AbortSignal.timeout(15000) }).then((r) => r.ok).catch(() => false);
   if (!answers) throw new Error(`nothing answers on ${o.appUrl}: start the dev server (bun run dev), or use bun run artemis`);
   const main = await buildShell();
   const origin = new URL(o.appUrl).origin;
@@ -167,8 +168,14 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     await app.close();
     throw new Error(`the console never opened on ${o.appUrl}`);
   }
+  // On Windows Playwright starts Electron through a shell, and its close ends only that shell: a
+  // browser held open by a site's dialog box outlived it. Electron's own pid, to end it after.
+  const electronPid = process.platform === 'win32' ? await app.evaluate(() => process.pid).catch(() => 0) : 0;
   const consoleWindow = consolePage;
-  const stopFeed = startMachineFeed(consolePage, o.userDataDir);
+  // Windows has no `ps`: the header's ARTEMIS figures come from Electron's own process list there.
+  const stopFeed = startMachineFeed(consolePage, o.userDataDir, 2000, () =>
+    app.evaluate(({ app: electron }) => electron.getAppMetrics().map((m) => ({ cpu: m.cpu.percentCPUUsage, workingSetKB: m.memory.workingSetSize })))
+  );
   app.on('close', stopFeed);
   const site = () => app.windows().find((p) => !isConsole(p));
   let sitePage: Page | undefined = site();
@@ -254,6 +261,7 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
       await recorder?.stop();
       await app.evaluate(() => (globalThis as unknown as { __artemisApproveQuit?: () => void }).__artemisApproveQuit?.()).catch(() => {});
       await app.close();
+      await endOrphan(electronPid);
       if (o.sessionsDir) await finish();
     })());
   // The operator closed the window or quit: the shell waits for this close (shell/main.ts). The same
@@ -301,4 +309,19 @@ export async function launchShell(o: LaunchShellOptions): Promise<Shell> {
     state: () => app.evaluate(() => (globalThis as unknown as { __artemisShell: ShellState }).__artemisShell),
     close
   };
+}
+
+/** Waits up to three seconds for a closed Electron (Windows) to exit by itself, then ends its tree. */
+async function endOrphan(pid: number): Promise<void> {
+  if (!pid) return;
+  const alive = () => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  for (let i = 0; i < 30 && alive(); i++) await Bun.sleep(100);
+  if (alive()) Bun.spawnSync(['taskkill', '/F', '/T', '/PID', String(pid)]);
 }

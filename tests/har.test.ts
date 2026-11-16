@@ -1,11 +1,13 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openSessionStore, type RequestInput, type SessionStore } from '../server/session-store';
 import { exportHar, openLiveHar } from '../server/har';
 import { harProblems } from './har-spec';
+import { fileURLToPath } from 'node:url';
+import { removeTree } from './remove-tree';
 
 // The session's HAR, written live from the session database: a valid HAR 1.2 after every flush,
 // holding the whole session (headers, cookies, typed posts, nothing masked) so a testing tool can
@@ -14,7 +16,7 @@ import { harProblems } from './har-spec';
 const T0 = Date.UTC(2026, 9, 6, 17, 0, 0);
 const dirs: string[] = [];
 afterAll(async () => {
-  for (const d of dirs) await rm(d, { recursive: true, force: true });
+  for (const d of dirs) await removeTree(d);
 });
 
 async function session(): Promise<{ s: SessionStore; file: string; db: string }> {
@@ -253,7 +255,7 @@ describe('exportHar', () => {
     const r = s.recordRequest(get(T0 + 1, 'https://shop.example/api/me', v));
     s.completeRequest(r, { tEnd: T0 + 5, status: 200, headers: [], mimeType: 'application/json', body: new TextEncoder().encode('{}') });
     s.close();
-    const run = Bun.spawnSync(['bun', 'run', 'scripts/har.ts', db], { cwd: new URL('..', import.meta.url).pathname });
+    const run = Bun.spawnSync(['bun', 'run', 'scripts/har.ts', db], { cwd: fileURLToPath(new URL('..', import.meta.url)) });
     const out = db.replace(/\.sqlite$/, '.export.har');
     expect(run.exitCode).toBe(0);
     expect(run.stdout.toString()).toContain(`1 entries -> ${out}`);

@@ -1,11 +1,15 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { spawn } from 'node:child_process';
-import { copyFile, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startVite, type ViteServer } from './vite';
 import { harProblems } from './har-spec';
+import { fileURLToPath } from 'node:url';
+import { queryOutside } from './sqlite-outside';
+import { killTree, pressCtrlC, stillRunning } from './kill-tree';
+import { removeTree } from './remove-tree';
 
 // `bun run artemis` as the operator runs it, stopped as the operator stops it: one Ctrl+C in the
 // terminal. The terminal signals the whole foreground process group, so the package script's
@@ -58,14 +62,16 @@ afterAll(async () => {
   site.stop(true);
   walker.stop(true);
   flyer.stop(true);
-  await rm(dir, { recursive: true, force: true });
+  await removeTree(dir);
 });
 
-test('one Ctrl+C in the terminal saves the session whole: database, both videos and the HAR', async () => {
+// A terminal's Ctrl+C reaches the job's POSIX process group; on Windows it is a console control
+// event, the test after this one.
+test.skipIf(process.platform === 'win32')('one Ctrl+C in the terminal saves the session whole: database, both videos and the HAR', async () => {
   const sessions = join(dir, 'sessions');
   // Its own process group, like a terminal's foreground job, so the signal can go to all of it.
   const proc = spawn('bun', ['run', 'artemis', `http://localhost:${site.port}/`], {
-    cwd: new URL('..', import.meta.url).pathname,
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
     detached: true,
     env: {
       ...process.env,
@@ -86,7 +92,7 @@ test('one Ctrl+C in the terminal saves the session whole: database, both videos 
       // already gone
     }
     // Playwright starts Electron in its own process group: a failed run must not leave it behind.
-    if (signal === 'SIGKILL') Bun.spawnSync(['pkill', '-9', '-f', join(dir, 'profile')]);
+    if (signal === 'SIGKILL') killTree(proc.pid!, join(dir, 'profile'));
   };
   try {
     // The website was opened from the command line and its session started.
@@ -119,25 +125,65 @@ test('one Ctrl+C in the terminal saves the session whole: database, both videos 
   }
 }, 90000);
 
+test.skipIf(process.platform !== 'win32')('Windows: one Ctrl+C in the console saves the session whole: database, both videos and the HAR', async () => {
+  const root = join(dir, 'console');
+  const sessions = join(root, 'sessions');
+  const profile = join(root, 'profile');
+  const log = join(root, 'terminal.log');
+  await mkdir(root, { recursive: true });
+  // A console of its own, as a person's PowerShell or Windows Terminal window: Node's detached
+  // child on Windows has no console at all, so `start` opens one and the output goes to a file.
+  // The inner command whole in quotes, so the redirection is the inner console's, not `start`'s.
+  const proc = spawn('cmd', ['/c', 'start', '"artemis"', '/min', 'cmd', '/c', `"bun run artemis http://localhost:${site.port}/ > ${log} 2>&1"`], {
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
+    env: { ...process.env, ARTEMIS_PORT: new URL(vite.url).port, ARTEMIS_SHELL_HIDDEN: '1', ARTEMIS_PROFILE_DIR: profile, ARTEMIS_SESSIONS_DIR: sessions },
+    stdio: 'ignore',
+    windowsVerbatimArguments: true
+  });
+  await new Promise((resolve) => proc.on('exit', resolve));
+  const out = async () => (await Bun.file(log).exists() ? await Bun.file(log).text() : '');
+  const consolePid = () => {
+    const r = Bun.spawnSync(['powershell', '-NoProfile', '-Command', `(Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'cmd.exe' -and $_.CommandLine -and $_.CommandLine.Contains('${log}') } | Select-Object -First 1).ProcessId`]);
+    return Number(r.stdout.toString().trim()) || 0;
+  };
+  try {
+    const started = Date.now();
+    const database = async () => (await readdir(sessions).catch(() => [] as string[])).find((n) => n.endsWith('.sqlite'));
+    while (!(await database()) && Date.now() - started < 30000) await Bun.sleep(200);
+    expect(await database()).toBeDefined();
+    await Bun.sleep(1500);
+    expect(await out()).toContain('WEB APPLICATION INTELLIGENT CONSOLE');
+
+    expect(pressCtrlC(consolePid())).toBe(true); // one Ctrl+C
+    for (const until = Date.now() + 30000; Date.now() < until && !(await out()).includes('session saved'); ) await Bun.sleep(200);
+    expect(await out()).not.toContain('without saving');
+    expect(await out()).toContain('session saved');
+    // Then everything ends: the launcher, its console and the browser.
+    for (let i = 0; i < 100 && (consolePid() || stillRunning(profile)); i++) await Bun.sleep(100);
+    expect(stillRunning(profile)).toBe(false);
+
+    const files = await readdir(sessions);
+    const base = (await database())!.replace(/\.sqlite$/, '');
+    for (const ext of ['.site.webm', '.console.webm', '.har']) expect(files).toContain(`${base}${ext}`);
+    expect(files.filter((n) => n.startsWith('.'))).toEqual([]);
+  } finally {
+    const pid = consolePid();
+    if (pid) killTree(pid, profile);
+  }
+}, 90000);
+
 test('killed outright mid-session (kill -9), nothing browsed is lost: the session file on its own holds it', async () => {
   const root = join(dir, 'crash');
   const sessions = join(root, 'sessions');
   const profile = join(root, 'profile');
   const proc = spawn('bun', ['run', 'artemis', `http://localhost:${walker.port}/`], {
-    cwd: new URL('..', import.meta.url).pathname,
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
     detached: true,
     env: { ...process.env, ARTEMIS_PORT: new URL(vite.url).port, ARTEMIS_SHELL_HIDDEN: '1', ARTEMIS_PROFILE_DIR: profile, ARTEMIS_SESSIONS_DIR: sessions },
     stdio: ['ignore', 'ignore', 'ignore']
   });
   // Playwright starts Electron in its own process group: kill it by the test's own profile path.
-  const killAll = () => {
-    try {
-      process.kill(-proc.pid!, 'SIGKILL');
-    } catch {
-      // already gone
-    }
-    Bun.spawnSync(['pkill', '-9', '-f', profile]);
-  };
+  const killAll = () => killTree(proc.pid!, profile);
   // Both pages and both config calls completed; the body of the page still open. The first page's
   // body is not asked for: Chromium drops a page's bodies once it navigates, and under heavy load
   // Playwright's fetch can come after the walker moves on (600 ms later); the database then says
@@ -152,17 +198,23 @@ test('killed outright mid-session (kill -9), nothing browsed is lost: the sessio
     let live: unknown = null;
     while (Date.now() - started < 60000) {
       database ??= (await readdir(sessions).catch(() => [] as string[])).find((n) => n.endsWith('.sqlite'));
-      if (database) live = JSON.parse(Bun.spawnSync(['sqlite3', '-readonly', '-json', join(sessions, database), WALKED]).stdout.toString() || 'null');
+      if (database) {
+        try {
+          live = queryOutside(join(sessions, database), WALKED);
+        } catch {
+          live = null; // no tables yet
+        }
+      }
       if (JSON.stringify(live) === JSON.stringify(walked)) break;
       await Bun.sleep(200);
     }
     // Read live by another process while Artemis runs.
     if (JSON.stringify(live) !== JSON.stringify(walked) && database)
-      console.error('config rows:', Bun.spawnSync(['sqlite3', '-readonly', '-json', join(sessions, database), "SELECT url, status, t_end, res_body_hash, res_body_note FROM requests WHERE url LIKE '%/api/config%'"]).stdout.toString());
+      console.error('config rows:', JSON.stringify(queryOutside(join(sessions, database), "SELECT url, status, t_end, res_body_hash, res_body_note FROM requests WHERE url LIKE '%/api/config%'")));
     expect(live).toEqual(walked);
     await Bun.sleep(1500); // one second for the file itself to catch up, and some
     killAll();
-    for (let i = 0; i < 50 && Bun.spawnSync(['pgrep', '-f', profile]).exitCode === 0; i++) await Bun.sleep(100);
+    for (let i = 0; i < 50 && stillRunning(profile); i++) await Bun.sleep(100);
 
     // Only the `.sqlite`, as a backup, a sync folder or another machine would get it.
     const copy = join(root, 'copy.sqlite');
@@ -195,7 +247,7 @@ test('`--autopilot max` flies the site once it has loaded, and the terminal says
   const sessions = join(root, 'sessions');
   const profile = join(root, 'profile');
   const proc = spawn('bun', ['run', 'artemis', `http://localhost:${flyer.port}/`, '--autopilot', 'max'], {
-    cwd: new URL('..', import.meta.url).pathname,
+    cwd: fileURLToPath(new URL('..', import.meta.url)),
     detached: true,
     env: { ...process.env, ARTEMIS_PORT: new URL(vite.url).port, ARTEMIS_SHELL_HIDDEN: '1', ARTEMIS_PROFILE_DIR: profile, ARTEMIS_SESSIONS_DIR: sessions },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -203,14 +255,7 @@ test('`--autopilot max` flies the site once it has loaded, and the terminal says
   let out = '';
   proc.stdout!.on('data', (b) => (out += String(b)));
   const exited = new Promise<number | null>((resolve) => proc.on('exit', (code) => resolve(code)));
-  const killAll = () => {
-    try {
-      process.kill(-proc.pid!, 'SIGKILL');
-    } catch {
-      // already gone
-    }
-    Bun.spawnSync(['pkill', '-9', '-f', profile]);
-  };
+  const killAll = () => killTree(proc.pid!, profile);
   try {
     const started = Date.now();
     while (!/the site is covered/i.test(out) && Date.now() - started < 45000) await Bun.sleep(200);
@@ -222,12 +267,14 @@ test('`--autopilot max` flies the site once it has loaded, and the terminal says
 
     // Read live from the session database: the clicks that took it there are the autopilot's.
     const database = (await readdir(sessions)).find((n) => n.endsWith('.sqlite'))!;
-    const actors = Bun.spawnSync(['sqlite3', '-readonly', join(sessions, database), "SELECT DISTINCT actor FROM actions WHERE kind = 'click'"]).stdout.toString().trim();
+    const actors = queryOutside(join(sessions, database), "SELECT DISTINCT actor FROM actions WHERE kind = 'click'").map((r) => r.actor).join('\n');
     expect(actors).toBe('autopilot');
 
-    process.kill(-proc.pid!, 'SIGINT');
-    expect(await Promise.race([exited, Bun.sleep(30000).then(() => 'still running')])).toBe(0);
-    expect(out).toContain('session saved');
+    if (process.platform !== 'win32') {
+      process.kill(-proc.pid!, 'SIGINT');
+      expect(await Promise.race([exited, Bun.sleep(30000).then(() => 'still running')])).toBe(0);
+      expect(out).toContain('session saved');
+    }
   } finally {
     killAll();
   }

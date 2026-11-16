@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
@@ -8,6 +8,7 @@ import { launchShell, type Shell } from '../server/shell';
 import { applySiteEvents, emptySiteModel } from '../src/site-model';
 import { startVite, type ViteServer } from './vite';
 import { nativeDialogBoxes } from './native-dialogs';
+import { removeTree } from './remove-tree';
 
 // The autopilot flying for real in the owned browser (the user's notes): D steps the speed; at max
 // it covers the whole site branch by branch, each page once, two or three of each kind, never
@@ -133,8 +134,8 @@ afterAll(async () => {
   vite?.stop();
   site.stop(true);
   menuSite.stop(true);
-  await rm(profileDir, { recursive: true, force: true });
-  await rm(sessionsDir, { recursive: true, force: true });
+  await removeTree(profileDir);
+  await removeTree(sessionsDir);
 });
 
 async function engage(c: Page, target: string) {
@@ -335,8 +336,10 @@ describe('the autopilot in the owned browser', () => {
       await page.waitForURL((u) => u.pathname === '/tour/long', { timeout: 15000 });
       const scrolled = async () => (await page.evaluate('scrollY')) as number;
       const first = await scrolled();
-      await Bun.sleep(3000);
-      const later = await scrolled();
+      // Over a few seconds (a loaded machine, a VM, scrolls in smaller steps: Linux and Windows VMs
+      // made 120 to 180 px in a fixed three).
+      let later = first;
+      for (const until = Date.now() + 6000; Date.now() < until && later <= first + 200; await Bun.sleep(200)) later = await scrolled();
       expect(later).toBeGreaterThan(first + 200);
       // Still on the page: slow stays about ten seconds.
       expect(new URL(page.url()).pathname).toBe('/tour/long');

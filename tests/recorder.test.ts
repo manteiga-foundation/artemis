@@ -2,12 +2,14 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { copyFile, mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { chromium, type Page } from 'playwright';
 import { launchShell, type Shell } from '../server/shell';
 import { inScope } from '../server/session-store';
 import { harProblems } from './har-spec';
 import { startVite, type ViteServer } from './vite';
+import { queryOutside } from './sqlite-outside';
+import { removeTree } from './remove-tree';
 
 // The recorder: while the operator browses in the owned browser, every page view, action, request
 // and response goes into the session's SQLite file. Nothing is added to the site's page; actions
@@ -70,8 +72,8 @@ afterAll(async () => {
   vite?.stop();
   site.stop(true);
   third.stop(true);
-  await rm(profileDir, { recursive: true, force: true });
-  await rm(sessionsDir, { recursive: true, force: true });
+  await removeTree(profileDir);
+  await removeTree(sessionsDir);
 });
 
 async function sitePage(shell: Shell, prefix: string): Promise<Page> {
@@ -125,8 +127,7 @@ describe('the recorder', () => {
       // file, without its `-wal` and `-shm` companions).
       const LIVE = `SELECT (SELECT count(*) FROM visits) AS visits,
                            (SELECT count(*) FROM requests r JOIN bodies b ON b.hash = r.res_body_hash WHERE r.url LIKE '%/api/map') AS map`;
-      const outside = Bun.spawnSync(['sqlite3', '-readonly', '-json', path!, LIVE]);
-      expect(JSON.parse(outside.stdout.toString())).toEqual([{ visits: 3, map: 1 }]);
+      expect(queryOutside(path!, LIVE)).toEqual([{ visits: 3, map: 1 }]);
       const copy = join(tmpdir(), `artemis-copy-${Date.now()}.sqlite`);
       let alone: unknown = null;
       for (const until = Date.now() + 2500; Date.now() < until; await Bun.sleep(250)) {
@@ -232,7 +233,7 @@ describe('the recorder', () => {
       const rel = (u: string | number | null) => String(u).replace(siteUrl, '');
 
       expect(q('SELECT target, scope_host FROM sessions')).toEqual([{ target: `${siteUrl}/`, scope_host: 'localhost' }]);
-      const name = (f: string) => f.slice(f.lastIndexOf('/') + 1);
+      const name = (f: string) => basename(f);
       expect(q('SELECT kind, file FROM artifacts ORDER BY kind')).toEqual([
         { kind: 'har', file: name(`${base}.har`) },
         { kind: 'video-console', file: name(`${base}.console.webm`) },
@@ -343,7 +344,7 @@ describe('closing Artemis the way a person does keeps the recording whole', () =
       expect((db.query('SELECT ended_at FROM sessions').get() as { ended_at: number | null }).ended_at).not.toBeNull();
       db.close();
     } finally {
-      await rm(dir, { recursive: true, force: true });
+      await removeTree(dir);
     }
   };
 

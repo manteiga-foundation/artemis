@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Browser } from 'playwright';
 import { crossSiteCookie, ownBrowser, stripFrameAncestors } from '../server/owned-browser';
 import { startVite, type ViteServer } from './vite';
+import { removeTree } from './remove-tree';
 
 // A fixture "website" on localhost (cross-site to the app on 127.0.0.1).
 //   /open/      frames freely
@@ -56,7 +57,7 @@ afterAll(async () => {
   await plain?.close();
   vite?.stop();
   site.stop(true);
-  await rm(profileDir, { recursive: true, force: true });
+  await removeTree(profileDir);
 });
 
 describe('response rewriting', () => {
@@ -150,7 +151,9 @@ describe('the browser view shows the real website', () => {
       const m = (await page.evaluate('window.__artemis().machine')) as { cpuPct: number; memUsedPct: number; artemisCpuPct: number; artemisProcesses: number };
       expect(m.cpuPct).toBeGreaterThanOrEqual(0);
       expect(m.memUsedPct).toBeGreaterThan(0);
-      expect(m.artemisProcesses).toBeGreaterThan(0);
+      // The framed owned browser (no longer launched) counts its processes with `ps`, which Windows
+      // lacks; the Electron shell counts them from Electron's own list there (tests/shell.test.ts).
+      if (process.platform !== 'win32') expect(m.artemisProcesses).toBeGreaterThan(0);
       expect(await page.locator('.stat-cpu .stat-value').textContent()).toMatch(/^\d+%$/);
     } finally {
       await owned.close();

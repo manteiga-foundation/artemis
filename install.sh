@@ -63,7 +63,7 @@ main() {
   case "$(uname -s)" in
     Darwin) ;;
     Linux) ;;
-    MINGW* | MSYS* | CYGWIN*) fail "Windows is not supported yet." ;;
+    MINGW* | MSYS* | CYGWIN*) fail "on Windows, install from PowerShell: irm https://artemis.n30.ai/install.ps1 | iex" ;;
     *) fail "unsupported system: $(uname -s)" ;;
   esac
   command -v curl >/dev/null 2>&1 || fail "curl is needed"

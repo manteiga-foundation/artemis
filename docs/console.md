@@ -636,7 +636,8 @@ The installed command sets `ARTEMIS_HOME=~/.artemis` and `ARTEMIS_COMMAND=artemi
 `~/.artemis/profile` and the sessions `~/.artemis/sessions`, beside the app and never inside it, so
 `artemis update` (which runs the installer again) replaces the app and keeps both. The usage then
 names `artemis` and lists `artemis update`; `--help` ends with where the profile and the sessions
-are. Uninstall: delete `~/.artemis` and `~/.local/bin/artemis`. Windows refuses with a message.
+are. Uninstall: delete `~/.artemis` and `~/.local/bin/artemis`. On Windows `install.sh` points to
+`install.ps1` (section "Windows").
 Bun's own installer is as quiet as the rest (its download bar went to the terminal on a machine
 without Bun; now it goes to the log).
 
@@ -679,7 +680,7 @@ Ubuntu 24.04 VM). What the shell does differently there, decided in `server/plat
 - Before launching, `ldd` names any system library Electron lacks, instead of Playwright's crash.
 - Memory in use is total minus MemAvailable (`/proc/meminfo`), not minus MemFree.
 - The test helper for native dialog boxes (`tests/native-dialogs.ts`) lists the process's X
-  windows of type dialog on Linux (CoreGraphics on macOS).
+  windows of type dialog on Linux (CoreGraphics on macOS, EnumWindows on Windows).
 
 `tests/install.test.ts` pipes the script into `sh` as curl would, against a tarball of the working
 tree shaped like GitHub's, with a temporary HOME (the machine's Bun, Electron and Playwright
@@ -689,6 +690,62 @@ via `ARTEMIS_BUN_INSTALLER`), a failed download leaving the installed version wo
 CI's unit set. Verified by hand as well: the real installer from GitHub on a HOME without Bun
 (Bun 1.4.4 fetched, 152 packages, 249 MB), and the installed `artemis <site>` opening the owned
 browser, recording into `~/.artemis/sessions` and saving the session whole on Ctrl+C.
+
+### Windows
+
+Verified on Windows 11 ARM64 in a Parallels VM (Bun 1.4.4, the arm64 Electron), driven from the
+Mac through `prlctl` and a scheduled task in the signed-in desktop session, so the windows are real
+ones on a real desktop. The whole suite runs there: 302 pass, 11 skip (POSIX-only tests and
+`install.sh`'s), and 1 fail, `tests/ci.test.ts` pinning CI's Bun 1.4.2 against the VM's 1.4.4.
+The installer is `install.ps1`, run as `irm https://artemis.n30.ai/install.ps1 | iex`
+in PowerShell; it does what `install.sh` does, in `%USERPROFILE%\.artemis`:
+
+- Bun from the PATH or `~\.bun`, or Bun's own `install.ps1`; then the Microsoft Visual C++
+  Runtime when `System32\vcruntime140.dll` is missing. Bun's native modules need it (Electron's
+  installer loads one), and a fresh Windows on ARM did not have it: the installer asks
+  `[Y/n]`, downloads Microsoft's `vc_redist.<arch>.exe` and runs it quietly behind the one
+  administrator prompt (exit 0, 1638 already newer, 3010 restart pending are success).
+  `ARTEMIS_VCREDIST=yes|no` answers without asking; no prints where to get it and stops.
+- The download, staged and swapped in as on macOS (curl.exe and tar.exe, both in Windows since
+  10 1803), the dependencies quietly into `install.log`, `artemis.cmd` in `.artemis\bin`, and that
+  folder on the user PATH once (and on the current window's, so `artemis` answers at once).
+  `artemis update` runs the installer again (`ARTEMIS_INSTALLER`, a URL or a local file).
+
+What the code does differently there:
+
+- Paths: every `new URL(..., import.meta.url).pathname` became `fileURLToPath(...)` (the pathname
+  is `/C:/...` on Windows), and the console server's command joins Vite's path with the app's own
+  separator (`consoleServerCommand`).
+- Vite is spawned by its own entry (`node_modules/vite/bin/vite.js`) under Bun, in the launcher and
+  in the tests: killing a `bun run dev` wrapper left the server running on Windows.
+- The header's ARTEMIS figures (processes, CPU, memory) come from Electron's `app.getAppMetrics()`
+  on Windows, which has no `ps` (`appMetricsUsage` in `server/machine.ts`).
+- No menu bar in the window (`removeMenu()` off macOS, as on Linux), no `--ozone-platform`; the
+  sandbox is Chromium's own.
+- Ctrl+C: the launcher's console gets a console control event, not a signal to a process group.
+  Measured with a real `CTRL_C_EVENT` sent to the console Artemis runs in: "Saving the session",
+  then the database, HAR and both videos saved, Electron gone, exit 0, as on macOS
+  (`tests/artemis-cli.test.ts` runs Artemis in a console of its own and sends it the same way,
+  `pressCtrlC` in `tests/kill-tree.ts`).
+- Playwright starts Electron through a shell on Windows, and its close ends that shell: once, in a
+  full test run, Electron outlived it with a site's dialog box up. Artemis's close now waits up to
+  three seconds for Electron's own pid to exit and ends its tree if it has not (`endOrphan` in
+  `server/shell.ts`, Windows only); `tests/shell.test.ts` checks nothing of the browser is left
+  running after closing with the box up. The tests' window lister (`tests/native-dialogs.ts`, EnumWindows; a dialog box is a visible
+  `#32770` window) and cleanup (`taskkill /T`) take the whole tree.
+
+Test seams for Windows: `tests/install-windows.test.ts` evaluates `install.ps1` as `irm | iex`
+does, against a tarball of the working tree, with `USERPROFILE` moved to a temporary folder (the
+user PATH lives in the registry, so it is read before and put back after): installed and
+answering, the PATH entry once after two runs, update keeping the profile and the sessions, the
+Visual C++ Runtime missing and declined (`ARTEMIS_SYSTEM32`), a failed download leaving the
+installed version working. It is skipped elsewhere, as `tests/install.test.ts` is on Windows. The
+test helpers need nothing Windows lacks: the self-signed certificate is a fixture
+(`tests/fixtures/`), another process reads a session database with Bun (`tests/sqlite-outside.ts`,
+not the `sqlite3` command), and temporary folders are removed with retries
+(`tests/remove-tree.ts`: Electron's helper processes hold the profile for a moment after the app
+closes, and Bun's `rm` ignores `maxRetries`). The headless Chromium of the integration tests gets
+`--use-angle=metal` only on macOS.
 
 ### The launcher's terminal
 
@@ -842,8 +899,9 @@ actions yet), a pulse when a node is added, page titles and full-URL lists in a 
 - `tests/readme.test.ts` — the README opens with the visuals (hero, the dive as a GIF with its MP4, the features band) before the badges and the technical sections; every image it shows is in the repository, the GIF under 10 MB and the stills under 2 MB. The visuals come from `docs/readme/make.tsx` (a running dev server; the dive is a CDP screencast assembled by ffmpeg, and the script warns when the machine is too busy to capture 40 fps).
 - `tests/ci.test.ts` — what the CI job on Linux runs: a test file that imports Playwright or the isolated Vite server needs a browser and stays local, every other one is a unit file `bun run test:unit` runs (`scripts/test-unit.ts`), every test file lands in exactly one set (the seven browser files named); the workflow runs install with the frozen lockfile, check, build and the unit tests on `ubuntu-latest` with the Bun version in use and without the Electron binary download.
 - `tests/recordings.test.ts` — recovering an interrupted session from its folder's manifest: the videos move next to the database and are listed in it; a launch that never opened a website is removed; the recording in progress and folders without a manifest are left alone.
-- `tests/artemis-cli.test.ts` — `bun run artemis <site>` (the package script, its `bun run` wrapper included) in its own process group, given one SIGINT to the whole group as a terminal Ctrl+C does (the wrapper passes it on, so the launcher receives it twice): read as one press, exit 0, "session saved", the database, both videos and the HAR, no hidden folder (without the signal handling it exits 130, the reported symptom). Killed outright instead (`kill -9` to the launcher and its Electron) while a fixture site browses itself (Home reads its config, moves on to Next, which reads its own): another process read both page views and both config calls completed live, with the open page's body, and after the kill a copy of the `.sqlite` alone still holds them, with the session marked never ended (fails without the recorder's checkpoint: the file alone has no tables; checked again with the checkpoint made a no-op); the HAR beside it is valid and holds both config calls, the second with the session cookie Home set (fails with Playwright's HAR: none survives a kill). Before the Ctrl+C, the terminal already shows the welcome (subtitle, block letters) and the database's and the live HAR's full paths, printed the moment they were created (failed before: only "owned browser open", paths at close). `--autopilot max` on a four-page site where every page links to the others: the welcome says max and what it does, one "Engaged at max" (no slow or regular on the way: failed before `settleSpeeds`), "The site is covered: 3 pages visited", the live database's clicks all the autopilot's, then Ctrl+C saves it (failed before: no flag). A failed run's Electron is killed by its profile path (Playwright starts it in its own process group; two strays were found this way).
+- `tests/artemis-cli.test.ts` — `bun run artemis <site>` (the package script, its `bun run` wrapper included) in its own process group, given one SIGINT to the whole group as a terminal Ctrl+C does (the wrapper passes it on, so the launcher receives it twice): read as one press, exit 0, "session saved", the database, both videos and the HAR, no hidden folder (without the signal handling it exits 130, the reported symptom). Killed outright instead (`kill -9` to the launcher and its Electron) while a fixture site browses itself (Home reads its config, moves on to Next, which reads its own): another process read both page views and both config calls completed live, with the open page's body, and after the kill a copy of the `.sqlite` alone still holds them, with the session marked never ended (fails without the recorder's checkpoint: the file alone has no tables; checked again with the checkpoint made a no-op); the HAR beside it is valid and holds both config calls, the second with the session cookie Home set (fails with Playwright's HAR: none survives a kill). Before the Ctrl+C, the terminal already shows the welcome (subtitle, block letters) and the database's and the live HAR's full paths, printed the moment they were created (failed before: only "owned browser open", paths at close). `--autopilot max` on a four-page site where every page links to the others: the welcome says max and what it does, one "Engaged at max" (no slow or regular on the way: failed before `settleSpeeds`), "The site is covered: 3 pages visited", the live database's clicks all the autopilot's, then Ctrl+C saves it (failed before: no flag). A failed run's Electron is killed by its profile path (Playwright starts it in its own process group; two strays were found this way). On Windows the same Ctrl+C is a console control event sent to a console of Artemis's own (`start`), and it is followed by nothing left running.
 - `tests/install.test.ts` — the one-command install: `install.sh` piped into `sh` as curl does, against a tarball of the working tree shaped like GitHub's, with a temporary HOME: Artemis in `~/.artemis/app` with its dependencies and Electron's binary (nothing left to fetch on first launch), only the installer's own steps on screen (no package list, at most ten lines), the `artemis` command answering with the profile and sessions in `~/.artemis`; one PATH line in the rc file after two runs; `artemis update` replaces the app and keeps the profile and sessions; a machine without Bun gets it from Bun's installer (a stand-in) and the command finds it there; a failed download says so and leaves the installed version working; a failed `bun install` (a lockfile that disagrees with its manifest) prints what bun said and leaves the installed version working; by default the latest release, read from where a stand-in GitHub's `releases/latest` redirects (`ARTEMIS_GITHUB`), and `ARTEMIS_VERSION=main` the branch; no release found stops with how to install anyway; where AppArmor restricts user namespaces (a stand-in `/proc` via `ARTEMIS_PROC`, a stand-in sudo via `ARTEMIS_SUDO`) yes runs `sudo sh <app>/scripts/linux-sandbox.sh`, no names that command in the summary, and with the profile in place (`ARTEMIS_APPARMOR_DIR`) or user namespaces open there is no step; the README, the script's header and `artemis update` all use `https://artemis.n30.ai/install.sh`.
+- `tests/install-windows.test.ts` — the one-command install on Windows: `install.ps1` evaluated as `irm | iex` does, against a tarball of the working tree, with a temporary `USERPROFILE`: installed and answering, the user PATH entry once after two runs (the registry value put back after), `artemis update` keeping the profile and the sessions, the Visual C++ Runtime missing and declined stopping with Microsoft's link, a failed download leaving the installed version working. Windows only.
 - `tests/cli.test.ts` — the launcher's arguments: a website as typed (bare domains get https), the autopilot by name or number before or after it, refusals with their reasons (no website, unknown level, unknown option, two websites, not an address), `--help`; the usage names the command as it was run (`artemis` with `artemis update`, or `bun run artemis`) and `--help` ends with where the profile and the sessions are; the console server is Vite's own entry run by Bun, one `--port`, no `run` wrapper; the real command exits 2 with the reason and usage before starting anything, `--help` exits 0. The terminal: six rows of block letters spelling ARTEMIS, subtitle and version, the five fields, the Ctrl+C hint; with no website or autopilot, what to do instead; under 59 columns a one-line title whose lines fit; colour only where it can show (NO_COLOR, pipes), truecolor or 256 colours painting the same text; notifications as `time ◆ TAG message`. The flight's words (engaged, speed, off, progress every ten pages, covered, stopped, notes) and quick presses read as one change; the launcher's own presses held until the level it asked for arrives (however long they take), said at once when it gives up, after a minute at the latest. An untrusted certificate is a warning naming origin, reason, issuer and expiry.
 - `tests/har.test.ts` — the live HAR from the session database, checked against the HAR 1.2 specification's required fields (`tests/har-spec.ts`: types, ISO dates, page references, timings summing to `time`, underscore custom fields): valid from the first page on and after every flush, entries in completion order, titles arriving late; the session whole and unmasked (Cookie and Authorization headers as sent, request cookies parsed, Set-Cookie split per line and parsed with path, domain, Expires and Max-Age, HttpOnly, Secure; the URL-encoded post as text and params; query string; status text, HTTP version, wire sizes); text bodies as text, binary as base64, assets with size, type and a comment and no bytes, missing bodies saying why; timing phases (blocked, DNS, connect, TLS, wait, receive; mutation-checked); failed requests with `_error` and unanswered ones with a comment; `exportHar` in start order, also on a schema 1 session without the new columns; `bun run scripts/har.ts` writes `<session>.export.har` and says where.
 - `tests/site-model.test.ts` — events to drawing: pages keyed by address and query (tracking parameters aside, parameter order and fragment never counting; a one-address application's App.aspx?comp=... screens are pages of their own, labelled with their first parameter; outside the scope the path alone), linked in commit order, each under the page it was first reached from, the last one current; a page appears at its final address once its navigation commits, with the requests made meanwhile; every request a dot of its page, one per method and address (two pages calling the same endpoint get a dot each): API calls, the page's own files (subdomains in scope), outside requests marked external; errors and failures on the node that answered; replays change nothing, reset starts over; outside sign-in pages are external pages. The network: the core, sections, relays and dots, one line each; navigation outside the tree as cross links (routes); Scope drops external nodes and lines; anomalies; an empty recording. The geometry: the core at the centre and its pages evenly around it, the first straight up, then clockwise, even when one section holds far more than the others; no drawn line crosses another on a site with sections, sub-pages, a chain through a sign-in provider and back-and-forth navigation (checked segment by segment, with and without Scope; fails when sub-pages may spread around the full circle); every node on exactly one line, to its parent; each page's dots nearer their page than any other, none on top of another; sub-pages farther out than their parent, within 113 degrees of straight on; a walk is a straight line out from the core; Scope and recomputation move nothing; a site too big for the space (a 60-page flow) is drawn smaller, inside it, the core still at the centre; every node fixed.

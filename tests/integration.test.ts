@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { chromium, type Browser, type Page } from 'playwright';
+import { join } from 'node:path';
+import { consoleServerCommand } from '../server/cli';
 
 // Isolated Vite dev server on a free port, driven by a real (headless, GPU-enabled) Chromium.
 const reservation = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => new Response('reserve') });
@@ -9,8 +11,10 @@ let browser: Browser;
 let vite: ReturnType<typeof Bun.spawn>;
 
 beforeAll(async () => {
-  vite = Bun.spawn(['bun', 'run', 'dev', '--port', String(port), '--strictPort'], {
-    cwd: import.meta.dir + '/..',
+  // Vite's own entry run by this Bun, so killing it stops the server (on Windows a `bun run dev`
+  // wrapper's kill left the server running).
+  vite = Bun.spawn(consoleServerCommand(process.execPath, port, join(import.meta.dir, '..')), {
+    cwd: join(import.meta.dir, '..'),
     stdout: 'ignore',
     stderr: 'ignore'
   });
@@ -23,7 +27,8 @@ beforeAll(async () => {
     await Bun.sleep(100);
   }
   expect(ready).toBe(true);
-  browser = await chromium.launch({ headless: true, args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  // The GPU in headless Chromium: Metal through ANGLE on macOS; the platform's default elsewhere.
+  browser = await chromium.launch({ headless: true, args: [...(process.platform === 'darwin' ? ['--use-angle=metal'] : []), '--enable-gpu', '--ignore-gpu-blocklist'] });
 }, 30000);
 
 afterAll(async () => {

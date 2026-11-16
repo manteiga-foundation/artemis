@@ -3,8 +3,9 @@
 // Electron's nativeImage reads PNG, not SVG. Run after changing the SVG; the PNG is committed.
 //   bun run scripts/icon.ts
 import { chromium } from 'playwright';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../', import.meta.url));
 const svg = await Bun.file(root + 'public/icon.svg').text();
 const out = root + 'shell/icon.png';
 
